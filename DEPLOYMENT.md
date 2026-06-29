@@ -8,6 +8,7 @@
 | **Live URL** | https://voluble-tarsier-6746db.netlify.app |
 | **Netlify project** | voluble-tarsier-6746db |
 | **GitHub repo** | https://github.com/ionicshot-maker/Meal_Planner_Tablet |
+| **Default branch** | master |
 
 > **To rename the URL:** Log into [app.netlify.com](https://app.netlify.com), open the site, go to **Site configuration → General → Site details → Change site name**, type `angelo-meal-planner`. The URL will become `https://angelo-meal-planner.netlify.app`.
 
