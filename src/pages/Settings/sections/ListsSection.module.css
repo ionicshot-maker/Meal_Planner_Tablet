@@ -1,0 +1,40 @@
+.section { display: flex; flex-direction: column; gap: var(--space-4); max-width: 640px; }
+.sectionTitle { font-size: var(--text-xl); font-weight: 600; color: var(--color-text); }
+.subTitle { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); }
+.desc { font-size: var(--text-sm); color: var(--color-text-muted); }
+
+.tagCloud { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.tagRemove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+  line-height: 1;
+  padding: 0 2px;
+  transition: color var(--transition);
+}
+.tagRemove:hover { color: var(--color-danger); }
+
+.addRow { display: flex; gap: var(--space-2); align-items: flex-end; margin-top: var(--space-2); }
+.addRow > :first-child { flex: 1; }
+
+.tagGroups { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.groupHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
+.groupName { font-weight: 600; font-size: var(--text-sm); color: var(--color-text); }
+
+.empty { font-size: var(--text-xs); color: var(--color-text-muted); }

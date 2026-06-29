@@ -1,0 +1,154 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-wrap: wrap;
+  transition: background var(--transition);
+}
+.row:last-child { border-bottom: none; }
+.row:hover { background: var(--color-bg); }
+.checked { opacity: 0.55; }
+.partial { background: #FFF8E7; }
+[data-theme="dark"] .partial { background: rgba(255, 200, 80, 0.06); }
+
+.checkbox {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+.checkbox:hover { border-color: var(--color-accent); }
+.checkboxChecked { background: var(--color-accent); border-color: var(--color-accent); }
+.checkmark { color: #fff; font-size: 13px; font-weight: 700; line-height: 1; }
+
+.content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.name {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  font-weight: 500;
+}
+.checked .name { text-decoration: line-through; color: var(--color-text-muted); }
+
+.store {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.partialNote {
+  font-size: var(--text-xs);
+  color: #B8860B;
+  font-weight: 500;
+}
+
+.qty {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.partialBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+.partialBtn:hover { border-color: var(--color-warning); color: var(--color-warning); }
+
+.removeBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: 2px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition);
+}
+.removeBtn:hover { color: var(--color-danger); }
+
+/* Partial buy form — expands as a new "row" within the flex wrap */
+.partialForm {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0 var(--space-1) 30px;
+  flex-wrap: wrap;
+}
+
+.partialLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.partialInput {
+  width: 70px;
+  padding: 4px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  text-align: right;
+}
+.partialInput:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+
+.partialUnit {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.partialOf {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.partialSave {
+  padding: 4px var(--space-3);
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.partialSave:hover { background: var(--color-accent-hover); }
+
+.partialCancel {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: 4px;
+}
+.partialCancel:hover { color: var(--color-danger); }

@@ -1,0 +1,85 @@
+.page {
+  display: flex; flex-direction: column;
+  height: 100%; overflow: hidden;
+  background: var(--color-bg);
+}
+
+.titleRow {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.pageTitle { font-size: var(--text-xl); font-weight: 700; color: var(--color-text); margin: 0; }
+
+.weeklyBtn {
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500;
+  color: var(--color-text-muted); cursor: pointer; transition: all var(--transition);
+}
+.weeklyBtn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+/* Person tabs */
+.personTabs {
+  display: flex; gap: 0; overflow-x: auto;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.personTab {
+  display: flex; flex-direction: column; align-items: center;
+  padding: var(--space-2) var(--space-4);
+  background: none; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; white-space: nowrap;
+  transition: all var(--transition);
+  min-width: 80px;
+}
+.personTab:hover { background: var(--color-bg); }
+.personTabActive {
+  border-bottom-color: var(--color-accent);
+  background: var(--color-bg);
+}
+.personTabName { font-size: var(--text-sm); font-weight: 600; color: var(--color-text); }
+.personTabMode { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 1px; }
+.personTabActive .personTabName { color: var(--color-accent); }
+
+/* Date bar */
+.datebar {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.dateNavBtn {
+  background: none; border: none; font-size: 1.3rem;
+  color: var(--color-text-muted); cursor: pointer; padding: 0 var(--space-1);
+  line-height: 1; transition: color var(--transition);
+}
+.dateNavBtn:hover { color: var(--color-text); }
+.dateLabel {
+  font-size: var(--text-sm); font-weight: 600; color: var(--color-text); min-width: 120px; text-align: center;
+}
+.dateInput {
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  background: var(--color-bg); color: var(--color-text);
+  font-size: var(--text-xs); padding: 2px 4px; cursor: pointer;
+}
+.todayBtn {
+  margin-left: var(--space-1);
+  padding: 3px var(--space-3);
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); font-size: var(--text-xs); font-weight: 600;
+  color: var(--color-accent); cursor: pointer; transition: all var(--transition);
+}
+.todayBtn:hover { background: var(--color-selected); }
+
+/* Content */
+.content { flex: 1; overflow-y: auto; }
+
+.noPeople {
+  padding: var(--space-8) var(--space-5);
+  text-align: center; font-size: var(--text-sm); color: var(--color-text-muted); line-height: 1.6;
+}

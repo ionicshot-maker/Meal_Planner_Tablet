@@ -1,0 +1,56 @@
+.section { display: flex; flex-direction: column; gap: var(--space-4); max-width: 640px; }
+.sectionTitle { font-size: var(--text-xl); font-weight: 600; color: var(--color-text); }
+.subTitle { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); }
+
+.nameRow { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.sizeRow { display: flex; align-items: center; justify-content: space-between; }
+.sizeControl { display: flex; align-items: center; gap: var(--space-4); }
+.sizeValue { font-size: var(--text-xl); font-weight: 600; color: var(--color-text); min-width: 2rem; text-align: center; }
+.stepper {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background-color var(--transition);
+}
+.stepper:hover:not(:disabled) { background: var(--color-surface); }
+.stepper:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.fieldLabel { font-size: var(--text-sm); font-weight: 600; color: var(--color-text); }
+.fieldHint  { font-size: var(--text-xs); color: var(--color-text-muted); }
+
+.peopleHeader { display: flex; align-items: center; justify-content: space-between; }
+
+.empty { font-size: var(--text-sm); color: var(--color-text-muted); }
+
+.peopleList { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.personRow { display: flex; align-items: center; justify-content: space-between; }
+.personInfo { display: flex; align-items: center; gap: var(--space-3); }
+.personName { font-weight: 600; color: var(--color-text); }
+.personMode { font-size: var(--text-xs); color: var(--color-text-muted); text-transform: capitalize; }
+.paydayDot { width: 8px; height: 8px; border-radius: 50%; }
+.personActions { display: flex; gap: var(--space-2); }
+
+/* Person form */
+.personForm { display: flex; flex-direction: column; gap: var(--space-4); }
+.fieldGroup { display: flex; flex-direction: column; gap: var(--space-2); }
+.radioGroup { display: flex; flex-direction: column; gap: var(--space-2); }
+.radioLabel { display: flex; align-items: flex-start; gap: var(--space-2); cursor: pointer; font-size: var(--text-sm); }
+.radioLabel input { margin-top: 2px; accent-color: var(--color-accent); flex-shrink: 0; }
+.modeDesc { color: var(--color-text-muted); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+
+.paydaySection { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.paydayHeader { display: flex; align-items: center; justify-content: space-between; }
+.paydayFields { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.colorPicker { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+.colorSwatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: transform var(--transition); }
+.colorSwatch:hover { transform: scale(1.15); }
+.colorSelected { border-color: var(--color-text) !important; transform: scale(1.15); }

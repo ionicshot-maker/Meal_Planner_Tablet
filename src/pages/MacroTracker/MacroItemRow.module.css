@@ -1,0 +1,62 @@
+.row {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+  transition: background var(--transition);
+}
+.rowLogged { background: var(--color-surface); }
+
+.info { flex: 1; min-width: 0; }
+.labelRow { display: flex; align-items: center; gap: var(--space-2); }
+.itemName {
+  font-size: var(--text-sm); font-weight: 500; color: var(--color-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.leftoverBadge {
+  font-size: var(--text-xs); color: var(--color-text-muted);
+  background: var(--color-border); border-radius: var(--radius-sm);
+  padding: 1px 5px; white-space: nowrap;
+}
+
+.consumed {
+  font-size: var(--text-xs); color: var(--color-accent); font-weight: 500;
+  display: block; margin-top: 2px;
+}
+.noMacros {
+  font-size: var(--text-xs); color: var(--color-text-muted); font-style: italic; display: block; margin-top: 2px;
+}
+.unlogged {
+  font-size: var(--text-xs); color: var(--color-text-muted); display: block; margin-top: 2px;
+}
+
+.controls {
+  display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0;
+}
+.stepBtn {
+  width: 28px; height: 28px;
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); font-size: 1rem; font-weight: 700;
+  color: var(--color-text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition);
+}
+.stepBtn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+.servingsInput {
+  width: 52px;
+  padding: var(--space-1) 4px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  background: var(--color-surface); color: var(--color-text);
+  font-size: var(--text-sm); text-align: center;
+}
+.servingsInput:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+
+.deleteBtn {
+  width: 24px; height: 24px;
+  background: none; border: none;
+  font-size: 0.75rem; color: var(--color-text-muted);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm); transition: all var(--transition);
+  margin-left: var(--space-1);
+}
+.deleteBtn:hover { background: var(--color-danger); color: #fff; }

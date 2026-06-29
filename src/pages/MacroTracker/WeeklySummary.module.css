@@ -1,0 +1,62 @@
+.overlay {
+  position: fixed; inset: 0; background: var(--color-overlay); z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+.panel {
+  background: var(--color-surface); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg); width: min(640px, 95vw);
+  max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
+}
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border); flex-shrink: 0;
+}
+.title { font-size: var(--text-base); font-weight: 700; color: var(--color-text); }
+.closeBtn { background: none; border: none; font-size: 1rem; color: var(--color-text-muted); cursor: pointer; }
+.closeBtn:hover { color: var(--color-text); }
+
+.body { flex: 1; overflow-y: auto; padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4); }
+
+.loading { color: var(--color-text-muted); font-size: var(--text-sm); font-style: italic; }
+
+.table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.th {
+  text-align: right; padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--color-text-muted);
+  border-bottom: 2px solid var(--color-border);
+}
+.th:first-child { text-align: left; }
+.td {
+  text-align: right; padding: var(--space-2) var(--space-3);
+  color: var(--color-text); border-bottom: 1px solid var(--color-border);
+}
+.td:first-child { text-align: left; color: var(--color-text-muted); }
+.tr:hover td { background: var(--color-bg); }
+.trToday td { font-weight: 600; }
+.trEmpty td { color: var(--color-text-muted); }
+
+.avgRow td {
+  border-top: 2px solid var(--color-border);
+  background: var(--color-bg);
+}
+.goalRow td { color: var(--color-text-muted); font-size: var(--text-xs); }
+
+/* Weight */
+.weightSection { display: flex; flex-direction: column; gap: var(--space-2); }
+.weightTitle { font-size: var(--text-sm); font-weight: 700; color: var(--color-text); }
+.weightList { display: flex; flex-direction: column; gap: 4px; }
+.weightRow {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg); border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+.weightDate { color: var(--color-text-muted); }
+.weightVal { font-weight: 600; color: var(--color-text); }
+
+.noData {
+  text-align: center; color: var(--color-text-muted);
+  font-size: var(--text-sm); font-style: italic; padding: var(--space-6) 0;
+}

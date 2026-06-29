@@ -1,0 +1,10 @@
+.section { display: flex; flex-direction: column; gap: var(--space-4); max-width: 640px; }
+.sectionTitle { font-size: var(--text-xl); font-weight: 600; color: var(--color-text); }
+.subTitle { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); }
+.desc { font-size: var(--text-sm); color: var(--color-text-muted); }
+.hint { font-size: var(--text-xs); color: var(--color-text-muted); }
+.keyStored { font-size: var(--text-xs); color: var(--color-success); }
+.fieldGroup { display: flex; flex-direction: column; gap: var(--space-4); }
+.keyRow { display: flex; align-items: flex-end; gap: var(--space-2); }
+.keyRow > :first-child { flex: 1; }
+.showBtn { flex-shrink: 0; margin-bottom: 1px; }

@@ -1,0 +1,25 @@
+.section { display: flex; flex-direction: column; gap: var(--space-4); max-width: 640px; }
+.sectionTitle { font-size: var(--text-xl); font-weight: 600; color: var(--color-text); }
+.subTitle { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); }
+.desc { font-size: var(--text-sm); color: var(--color-text-muted); }
+.hint { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: var(--space-2); }
+
+.exportGroup { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.resetGroup { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+
+.importLabel { display: inline-flex; align-items: center; gap: var(--space-3); cursor: pointer; margin-top: var(--space-3); }
+.importBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--transition);
+}
+.importBtn:hover { background-color: var(--color-border); }
+.fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

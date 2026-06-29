@@ -1,0 +1,76 @@
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.panel {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: min(480px, 94vw);
+  padding: var(--space-8) var(--space-8);
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+}
+
+.icon { font-size: 3rem; line-height: 1; }
+
+.title {
+  font-size: var(--text-2xl); font-weight: 700; color: var(--color-text);
+  margin: 0;
+}
+
+.desc {
+  font-size: var(--text-sm); color: var(--color-text-muted);
+  line-height: 1.65; margin: 0;
+  max-width: 360px;
+}
+
+.nameInput {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-base);
+  font-family: inherit;
+  text-align: center;
+  transition: border-color var(--transition);
+}
+.nameInput:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-selected); }
+
+.actions {
+  display: flex; gap: var(--space-3); width: 100%; justify-content: center;
+}
+
+.btnPrimary {
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-accent); color: #fff; border: none;
+  border-radius: var(--radius-md); font-size: var(--text-base); font-weight: 600;
+  cursor: pointer; transition: background var(--transition);
+}
+.btnPrimary:hover { background: var(--color-accent-hover); }
+
+.btnSecondary {
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-bg); color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); font-size: var(--text-base); font-weight: 500;
+  cursor: pointer; transition: background var(--transition);
+}
+.btnSecondary:hover { background: var(--color-border); }
+
+.dots {
+  display: flex; gap: var(--space-2); margin-top: var(--space-2);
+}
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--color-border);
+  transition: background var(--transition);
+}
+.dotActive { background: var(--color-accent); }

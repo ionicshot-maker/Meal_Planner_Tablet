@@ -1,0 +1,23 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
+.env.*
+
+# Netlify local state
+.netlify/
+
+# Claude Code local settings
+.claude/
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+npm-debug.log*
