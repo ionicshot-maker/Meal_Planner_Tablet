@@ -13,6 +13,7 @@
   --color-danger:       #C0392B;
   --color-danger-hover: #A93226;
   --color-success:      #27AE60;
+  --color-success-text: #2D6A2D;
   --color-warning:      #E67E22;
 
   --color-overlay:      rgba(28, 28, 30, 0.4);
@@ -34,6 +35,7 @@
   --color-danger:       #EF9A9A;
   --color-danger-hover: #FFCDD2;
   --color-success:      #A5D6A7;
+  --color-success-text: var(--color-text);
   --color-warning:      #FFCC80;
 
   --color-overlay:      rgba(0, 0, 0, 0.5);

@@ -125,7 +125,7 @@
 .draftMsg {
   font-size: var(--text-xs);
   font-weight: 500;
-  color: #16a34a;
+  color: var(--color-success-text);
   animation: draftFade 2.5s ease-out forwards;
 }
 

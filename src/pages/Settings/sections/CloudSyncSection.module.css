@@ -56,7 +56,9 @@
   flex-direction: column;
   gap: var(--space-2);
 }
-.syncSuccess { font-size: var(--text-sm); color: #16a34a; }
+/* Green left border provides the "success" visual cue without relying on text color */
+.syncResultOk  { border-left: 3px solid var(--color-success); }
+.syncSuccess { font-size: var(--text-sm); color: var(--color-success-text); }
 .syncError   { font-size: var(--text-sm); color: var(--color-danger); }
 
 /* Duplicate list in sync result */

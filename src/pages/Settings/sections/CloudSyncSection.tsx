@@ -271,13 +271,13 @@ function SyncResultDisplay({
   const hasDups     = summary.duplicatesForReview.length > 0
 
   return (
-    <div className={styles.syncResult}>
+    <div className={`${styles.syncResult} ${!hasErrors ? styles.syncResultOk : ''}`}>
       {hasErrors && summary.errors.map((err, i) => (
         <p key={i} className={styles.syncError}>{err}</p>
       ))}
       {!hasErrors && (
         <p className={styles.syncSuccess}>
-          Sync complete —{' '}
+          ✓ Sync complete —{' '}
           {summary.addedLocally} new {summary.addedLocally === 1 ? 'item' : 'items'} added from cloud,{' '}
           {summary.uploadedToCloud} {summary.uploadedToCloud === 1 ? 'item' : 'items'} uploaded,{' '}
           {summary.updatedToNewer} updated to newer version.
