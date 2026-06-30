@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useSettings, useHouseholdTitle } from '@/context/SettingsContext'
 import { Button, Input, Select, Card, Modal, Toggle } from '@/components/ui'
 import { getAllIngredients, saveIngredient, archiveIngredient, deleteIngredient, searchIngredients } from '@/db/ingredients'
@@ -8,6 +9,7 @@ import type { Ingredient } from '@/types'
 import styles from './IngredientsPage.module.css'
 
 export default function IngredientsPage() {
+  const navigate = useNavigate()
   const { settings } = useSettings()
   const pageTitle = useHouseholdTitle('Ingredient Database')
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
@@ -75,7 +77,10 @@ export default function IngredientsPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <h1 className={styles.heading}>{pageTitle}</h1>
-        <Button onClick={createNew}>+ Add Ingredient</Button>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <Button variant="secondary" onClick={() => navigate('/import-ingredients')}>📥 Import</Button>
+          <Button onClick={createNew}>+ Add Ingredient</Button>
+        </div>
       </header>
 
       <div className={styles.toolbar}>

@@ -11,12 +11,14 @@
     "gen-icons": "node scripts/gen-icons.cjs"
   },
   "dependencies": {
+    "@zxing/browser": "^0.2.0",
     "idb": "^8.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.1"
   },
   "devDependencies": {
+    "@netlify/functions": "^5.3.0",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",

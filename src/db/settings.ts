@@ -7,6 +7,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   ai: { provider: 'none', apiKey: '' },
   usdaApiKey: '',
+  geminiApiKey: '',
   nutrientToggles: {
     saturatedFat: false,
     transFat: false,

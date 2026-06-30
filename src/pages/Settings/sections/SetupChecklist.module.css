@@ -1,0 +1,139 @@
+.card {
+  margin: var(--space-4) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.cardDone {
+  border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
+  background: color-mix(in srgb, var(--color-success) 4%, var(--color-surface));
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  gap: var(--space-3);
+}
+
+.cardLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.cardIcon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.cardTitle {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.progressMsg {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.collapseBtn {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  transition: background var(--transition);
+}
+
+.collapseBtn:hover {
+  background: var(--color-border);
+}
+
+/* ── Progress bar ────────────────────────────────────────────────────────── */
+.progressBar {
+  height: 4px;
+  background: var(--color-border);
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 0.5s ease;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── Checklist items ─────────────────────────────────────────────────────── */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.list li {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.list li:last-child {
+  border-bottom: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition);
+  color: var(--color-text);
+}
+
+.item:not(:disabled):hover {
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+}
+
+.item:disabled {
+  cursor: default;
+}
+
+.itemDone {
+  opacity: 0.7;
+}
+
+.itemOptional .itemLabel {
+  color: var(--color-text-muted);
+}
+
+.itemIcon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  width: 1.25rem;
+  text-align: center;
+}
+
+.itemLabel {
+  flex: 1;
+  font-size: var(--text-sm);
+  line-height: 1.3;
+}
+
+.itemArrow {
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}

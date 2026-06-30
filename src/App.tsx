@@ -5,12 +5,14 @@ import { ThemeProvider } from '@/context/ThemeContext'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { SetupWizard } from '@/pages/Setup/SetupWizard'
 
-const SettingsPage    = lazy(() => import('@/pages/Settings/SettingsPage'))
-const IngredientsPage = lazy(() => import('@/pages/Ingredients/IngredientsPage'))
-const CookbookPage    = lazy(() => import('@/pages/Cookbook/CookbookPage'))
-const MealPlannerPage = lazy(() => import('@/pages/MealPlanner/MealPlannerPage'))
-const MacroTrackerPage= lazy(() => import('@/pages/MacroTracker/MacroTrackerPage'))
-const GroceryListPage = lazy(() => import('@/pages/GroceryList/GroceryListPage'))
+const SettingsPage          = lazy(() => import('@/pages/Settings/SettingsPage'))
+const IngredientsPage       = lazy(() => import('@/pages/Ingredients/IngredientsPage'))
+const CookbookPage          = lazy(() => import('@/pages/Cookbook/CookbookPage'))
+const MealPlannerPage       = lazy(() => import('@/pages/MealPlanner/MealPlannerPage'))
+const MacroTrackerPage      = lazy(() => import('@/pages/MacroTracker/MacroTrackerPage'))
+const GroceryListPage       = lazy(() => import('@/pages/GroceryList/GroceryListPage'))
+const IngredientImportPage  = lazy(() => import('@/pages/IngredientImport/IngredientImportPage'))
+const HelpPage              = lazy(() => import('@/pages/Help/HelpPage'))
 
 function AppRoutes() {
   const { settings, updateSettings, isLoading } = useSettings()
@@ -30,8 +32,10 @@ function AppRoutes() {
               <Route path="/cookbook"    element={<CookbookPage />} />
               <Route path="/planner"     element={<MealPlannerPage />} />
               <Route path="/macros"      element={<MacroTrackerPage />} />
-              <Route path="/grocery"     element={<GroceryListPage />} />
-              <Route path="/settings"    element={<SettingsPage />} />
+              <Route path="/grocery"            element={<GroceryListPage />} />
+              <Route path="/settings"           element={<SettingsPage />} />
+              <Route path="/import-ingredients" element={<IngredientImportPage />} />
+              <Route path="/help"               element={<HelpPage />} />
             </Routes>
           </Suspense>
         </AppLayout>

@@ -100,6 +100,75 @@
   height: 100dvh;
 }
 
+/* ── Page help tooltip button ─────────────────────────────────────────────── */
+.helpBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+
+.helpWidget {
+  position: fixed;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.helpBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  font-size: var(--text-base);
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.20);
+  transition: transform var(--transition), background var(--transition);
+  flex-shrink: 0;
+}
+
+.helpBtn:hover { transform: scale(1.08); }
+.helpBtnOpen   { background: var(--color-text-muted); }
+
+.helpTooltip {
+  width: 280px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.helpTooltipText {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.helpTooltipClose {
+  align-self: flex-end;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
 /* ── Print: hide nav, expand content full width ───────────────────────────── */
 @media print {
   .nav { display: none !important; }

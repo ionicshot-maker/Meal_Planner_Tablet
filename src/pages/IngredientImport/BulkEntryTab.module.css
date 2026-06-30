@@ -1,0 +1,196 @@
+.tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.desc { font-size: var(--text-sm); color: var(--color-text-muted); flex: 1; }
+
+.tableWrap {
+  flex: 1;
+  overflow: auto;
+}
+
+.table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  border-bottom: 2px solid var(--color-border);
+  padding: var(--space-2) var(--space-2);
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.table td {
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-1) var(--space-1);
+  vertical-align: middle;
+}
+
+.thName  { min-width: 160px; }
+.thCat   { min-width: 120px; }
+.thNum   { min-width: 64px; }
+.thUnit  { min-width: 72px; }
+.thStore { min-width: 100px; }
+.thDel   { width: 32px; }
+.tdName  { position: relative; }
+
+.cellInput {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+}
+.cellInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  background: var(--color-bg);
+}
+
+.cellNum {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  text-align: right;
+}
+.cellNum:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  background: var(--color-bg);
+}
+.numError { border-color: var(--color-danger) !important; background: color-mix(in srgb, var(--color-danger) 8%, transparent) !important; }
+
+.cellSelect {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+}
+.cellSelect:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  background: var(--color-bg);
+}
+
+.rowError td { background: color-mix(in srgb, var(--color-danger) 5%, transparent); }
+.rowSaved { opacity: 0.6; }
+.rowSaved td { background: color-mix(in srgb, var(--color-success) 5%, transparent); }
+
+.errorTip {
+  display: block;
+  font-size: 10px;
+  color: var(--color-danger);
+  margin-top: 1px;
+}
+
+.savedMark {
+  color: var(--color-success);
+  font-weight: 700;
+  padding: 0 var(--space-2);
+}
+
+.delBtn {
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--text-base);
+  padding: 0 var(--space-2);
+  line-height: 1;
+  border-radius: var(--radius-sm);
+}
+.delBtn:hover { color: var(--color-danger); background: color-mix(in srgb, var(--color-danger) 10%, transparent); }
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-3) var(--space-6);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  background: var(--color-surface);
+}
+
+/* Confirm overlay */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.confirmBox {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+  max-width: 320px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.confirmBox p { font-size: var(--text-sm); color: var(--color-text); }
+
+.confirmActions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+.cancelBtn {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.clearBtn {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  background: var(--color-danger);
+  color: #fff;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  font-weight: 600;
+}

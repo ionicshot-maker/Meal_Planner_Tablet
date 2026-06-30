@@ -74,6 +74,9 @@ export interface NutrientToggles {
   weight: boolean
 }
 
+// ─── Nutrition Source ────────────────────────────────────────────────────────
+export type NutritionSource = 'openfoodfacts' | 'gemini' | 'usda' | 'manual'
+
 // ─── App Settings ────────────────────────────────────────────────────────────
 export interface AppSettings {
   householdName: string
@@ -81,6 +84,7 @@ export interface AppSettings {
   theme: ThemePreference
   ai: AIConfig
   usdaApiKey: string
+  geminiApiKey: string
   nutrientToggles: NutrientToggles
   macroHistoryDays: number    // 90–365
   storePreferenceEnabled: boolean

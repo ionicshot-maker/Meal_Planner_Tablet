@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { Button, Input, Select, Toggle, Modal, Card } from '@/components/ui'
+import { useState, useRef, useEffect } from 'react'
+import { Button, Input, NumericInput, Select, Toggle, Modal, Card } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { newId, now } from '@/utils/ids'
 import { availableUnits } from '@/utils/units'
 import { calcCostPerServing } from '@/db/ingredients'
+import { parseFraction, formatNumeric } from '@/utils/fractionInput'
 import type { Ingredient, IngredientVariant, IngredientUnit, Macros } from '@/types'
 import styles from './IngredientForm.module.css'
 
@@ -239,13 +240,11 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
               </div>
 
               <div className={styles.row3}>
-                <Input
+                <NumericInput
                   label="Serving Size"
-                  type="number"
-                  min={0}
-                  step="any"
                   value={activeVariant.servingSize}
-                  onChange={e => updateVariant({ servingSize: +e.target.value })}
+                  onChange={n => updateVariant({ servingSize: n ?? 0 })}
+                  placeholder="e.g. 1, 1/4, ½"
                 />
                 <Select
                   label="Serving Unit"
@@ -262,22 +261,16 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
               </div>
 
               <div className={styles.row3}>
-                <Input
+                <NumericInput
                   label="Package Cost ($)"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={activeVariant.packageCost ?? ''}
-                  onChange={e => updateVariant({ packageCost: +e.target.value || undefined })}
+                  value={activeVariant.packageCost}
+                  onChange={n => updateVariant({ packageCost: n })}
                   placeholder="e.g. 2.37"
                 />
-                <Input
+                <NumericInput
                   label="Servings per Package"
-                  type="number"
-                  min={0}
-                  step="any"
-                  value={activeVariant.totalServingsInPackage ?? ''}
-                  onChange={e => updateVariant({ totalServingsInPackage: +e.target.value || undefined })}
+                  value={activeVariant.totalServingsInPackage}
+                  onChange={n => updateVariant({ totalServingsInPackage: n })}
                 />
                 <div className={styles.costDisplay}>
                   <span className={styles.costLabel}>Cost / serving</span>
@@ -337,47 +330,22 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
                   ['fat',      'Fat',      'g'],
                   ['sodium',   'Sodium',   'mg'],
                 ] as [keyof Macros, string, string][]).map(([key, label, unit]) => (
-                  <div key={key} className={styles.macroField}>
-                    <label className={styles.macroLabel}>{label}</label>
-                    <div className={styles.macroInput}>
-                      <input
-                        type="number"
-                        min={0}
-                        step="any"
-                        value={activeVariant.macros[key] ?? 0}
-                        onChange={e => updateMacro(key, +e.target.value)}
-                        className={styles.macroNumber}
-                      />
-                      <span className={styles.macroUnit}>{unit}</span>
-                    </div>
-                  </div>
+                  <FormMacroField
+                    key={key}
+                    label={label}
+                    unit={unit}
+                    value={activeVariant.macros[key] ?? 0}
+                    onChange={n => updateMacro(key, n)}
+                  />
                 ))}
                 {settings.nutrientToggles.saturatedFat && (
-                  <div className={styles.macroField}>
-                    <label className={styles.macroLabel}>Sat. Fat</label>
-                    <div className={styles.macroInput}>
-                      <input type="number" min={0} step="any" value={activeVariant.macros.saturatedFat ?? 0} onChange={e => updateMacro('saturatedFat', +e.target.value)} className={styles.macroNumber} />
-                      <span className={styles.macroUnit}>g</span>
-                    </div>
-                  </div>
+                  <FormMacroField label="Sat. Fat" unit="g" value={activeVariant.macros.saturatedFat ?? 0} onChange={n => updateMacro('saturatedFat', n)} />
                 )}
                 {settings.nutrientToggles.transFat && (
-                  <div className={styles.macroField}>
-                    <label className={styles.macroLabel}>Trans Fat</label>
-                    <div className={styles.macroInput}>
-                      <input type="number" min={0} step="any" value={activeVariant.macros.transFat ?? 0} onChange={e => updateMacro('transFat', +e.target.value)} className={styles.macroNumber} />
-                      <span className={styles.macroUnit}>g</span>
-                    </div>
-                  </div>
+                  <FormMacroField label="Trans Fat" unit="g" value={activeVariant.macros.transFat ?? 0} onChange={n => updateMacro('transFat', n)} />
                 )}
                 {settings.nutrientToggles.alcohol && (
-                  <div className={styles.macroField}>
-                    <label className={styles.macroLabel}>Alcohol</label>
-                    <div className={styles.macroInput}>
-                      <input type="number" min={0} step="any" value={activeVariant.macros.alcohol ?? 0} onChange={e => updateMacro('alcohol', +e.target.value)} className={styles.macroNumber} />
-                      <span className={styles.macroUnit}>g</span>
-                    </div>
-                  </div>
+                  <FormMacroField label="Alcohol" unit="g" value={activeVariant.macros.alcohol ?? 0} onChange={n => updateMacro('alcohol', n)} />
                 )}
               </div>
             </Card>
@@ -385,6 +353,49 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
         </section>
       </div>
     </Modal>
+  )
+}
+
+// ─── Compact macro field with fraction support ────────────────────────────────
+function FormMacroField({ label, unit, value, onChange }: {
+  label: string; unit: string; value: number; onChange: (v: number) => void
+}) {
+  const [text, setText] = useState(formatNumeric(value))
+  const focused = useRef(false)
+
+  useEffect(() => {
+    if (!focused.current) setText(formatNumeric(value))
+  }, [value])
+
+  function handleBlur() {
+    focused.current = false
+    const raw = text.trim()
+    const normalized = /^\.\d/.test(raw) ? '0' + raw : raw
+    const parsed = parseFraction(normalized)
+    if (parsed !== null && isFinite(parsed)) {
+      onChange(parsed)
+      setText(formatNumeric(parsed))
+    } else {
+      setText(formatNumeric(value))
+    }
+  }
+
+  return (
+    <div className={styles.macroField}>
+      <label className={styles.macroLabel}>{label}</label>
+      <div className={styles.macroInput}>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onFocus={() => { focused.current = true }}
+          onBlur={handleBlur}
+          className={styles.macroNumber}
+        />
+        <span className={styles.macroUnit}>{unit}</span>
+      </div>
+    </div>
   )
 }
 

@@ -1,5 +1,6 @@
 export { Button } from './Button'
 export { Input } from './Input'
+export { NumericInput } from './NumericInput'
 export { Select } from './Select'
 export { Toggle } from './Toggle'
 export { Modal } from './Modal'

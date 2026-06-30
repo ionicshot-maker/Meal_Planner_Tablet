@@ -22,7 +22,7 @@ const PROVIDER_HINTS: Record<AIProvider, string> = {
 
 export function AISection() {
   const { settings, updateSettings } = useSettings()
-  const { ai, usdaApiKey } = settings
+  const { ai, usdaApiKey, geminiApiKey } = settings
   const [showKey, setShowKey] = useState(false)
 
   return (
@@ -108,6 +108,32 @@ export function AISection() {
             {showKey ? 'Hide' : 'Show'}
           </Button>
         </div>
+      </Card>
+
+      <h3 className={styles.subTitle} style={{ marginTop: 'var(--space-4)' }}>Google Gemini (Nutrition Lookup)</h3>
+      <p className={styles.desc}>
+        Used to auto-fill nutrition facts for packaged products when barcode data is missing.
+        Free at <strong>aistudio.google.com</strong>. Fully optional — falls back to USDA search if not configured.
+      </p>
+
+      <Card>
+        <div className={styles.keyRow}>
+          <Input
+            label="Google Gemini API Key (optional)"
+            type={showKey ? 'text' : 'password'}
+            value={geminiApiKey}
+            onChange={e => updateSettings({ geminiApiKey: e.target.value })}
+            placeholder="Get a free key at aistudio.google.com"
+          />
+          <Button variant="ghost" size="sm" className={styles.showBtn} onClick={() => setShowKey(v => !v)}>
+            {showKey ? 'Hide' : 'Show'}
+          </Button>
+        </div>
+        {geminiApiKey && (
+          <p className={styles.keyStored} style={{ marginTop: 'var(--space-2)' }}>
+            Key stored locally on this device only. Used for nutrition lookup only, not recipe import.
+          </p>
+        )}
       </Card>
     </div>
   )

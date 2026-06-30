@@ -6,6 +6,7 @@ import { HouseholdSection } from './sections/HouseholdSection'
 import { AISection } from './sections/AISection'
 import { ListsSection } from './sections/ListsSection'
 import { DataSection } from './sections/DataSection'
+import { SetupChecklist } from './sections/SetupChecklist'
 import styles from './SettingsPage.module.css'
 import type { ThemePreference, UnitSystem } from '@/types'
 
@@ -30,6 +31,8 @@ export default function SettingsPage() {
       <header className={styles.header}>
         <h1 className={styles.heading}>Settings</h1>
       </header>
+
+      <SetupChecklist onSwitchSection={s => setActive(s as Section)} />
 
       <div className={styles.layout}>
         {/* Section tabs */}
