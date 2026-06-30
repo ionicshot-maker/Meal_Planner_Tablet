@@ -1,3 +1,12 @@
+.aiBadge {
+  padding: var(--space-1) var(--space-4);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
 .backdrop {
   position: fixed;
   inset: 0;

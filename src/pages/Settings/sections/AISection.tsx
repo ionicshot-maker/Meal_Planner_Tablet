@@ -22,6 +22,8 @@ const PROVIDER_HINTS: Record<AIProvider, string> = {
 
 interface FetchedModel { id: string; displayName: string }
 
+const SUPABASE_HINT = 'Get a free account at supabase.com — create a project, then go to Project Settings → API.'
+
 export function AISection() {
   const { settings, updateSettings } = useSettings()
   const { ai, usdaApiKey, geminiApiKey, geminiModel } = settings
@@ -211,8 +213,42 @@ export function AISection() {
 
           {geminiApiKey && (
             <p className={styles.keyStored}>
-              Key stored locally on this device only. Used for nutrition lookup only, not recipe import.
+              Key stored locally on this device only. Also used for recipe import when no other AI provider is set.
             </p>
+          )}
+        </div>
+      </Card>
+
+      <h3 className={styles.subTitle} style={{ marginTop: 'var(--space-4)' }}>Supabase (Cloud Sync)</h3>
+      <p className={styles.desc}>
+        Required for cloud sync between devices and family sharing. Free at <strong>supabase.com</strong>.
+        {' '}After setting up, go to <strong>Settings → Data → Cloud Sync</strong> to configure sync codes.
+      </p>
+
+      <Card>
+        <div className={styles.fieldGroup}>
+          <Input
+            label="Supabase Project URL"
+            value={settings.supabaseUrl ?? ''}
+            onChange={e => updateSettings({ supabaseUrl: e.target.value })}
+            placeholder="https://xxxx.supabase.co"
+            hint={SUPABASE_HINT}
+          />
+          <div className={styles.keyRow}>
+            <Input
+              label="Supabase Anon Key"
+              type={showKey ? 'text' : 'password'}
+              value={settings.supabaseAnonKey ?? ''}
+              onChange={e => updateSettings({ supabaseAnonKey: e.target.value })}
+              placeholder="eyJ..."
+              hint="Copy the anon/public key from Project Settings → API → Project API keys."
+            />
+            <Button variant="ghost" size="sm" className={styles.showBtn} onClick={() => setShowKey(v => !v)}>
+              {showKey ? 'Hide' : 'Show'}
+            </Button>
+          </div>
+          {settings.supabaseUrl && settings.supabaseAnonKey && (
+            <p className={styles.keyStored}>Supabase credentials stored locally. Never shared with anyone except Supabase.</p>
           )}
         </div>
       </Card>

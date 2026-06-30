@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSettings } from '@/context/SettingsContext'
-import { importRecipeFromUrl, importRecipeFromText } from '@/utils/aiImport'
+import {
+  importRecipeFromUrl, importRecipeFromText,
+  isRecipeImportAvailable, effectiveRecipeAI, recipeAILabel,
+} from '@/utils/aiImport'
 import type { AIRecipeResult } from '@/utils/aiImport'
 import styles from './RecipeImportModal.module.css'
 
@@ -22,7 +25,10 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const aiConfigured = settings.ai.provider !== 'none' && settings.ai.apiKey.trim() !== ''
+  const aiConfigured = isRecipeImportAvailable(settings)
+  const aiLabel = recipeAILabel(settings)
+  const effectiveAI = effectiveRecipeAI(settings)
+  const geminiModel = settings.geminiModel || 'gemini-flash-latest'
 
   function goToSettings() {
     onClose()
@@ -34,7 +40,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
     setError('')
     setLoading(true)
     try {
-      const result = await importRecipeFromUrl(url.trim(), settings.ai)
+      const result = await importRecipeFromUrl(url.trim(), effectiveAI, geminiModel)
       onImported(result)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Import failed. Try pasting the text instead.')
@@ -48,7 +54,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
     setError('')
     setLoading(true)
     try {
-      const result = await importRecipeFromText(pasteText.trim(), settings.ai)
+      const result = await importRecipeFromText(pasteText.trim(), effectiveAI, geminiModel)
       onImported(result)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Import failed. Check your AI provider settings.')
@@ -65,6 +71,12 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
           <h2 className={styles.title}>Import Recipe</h2>
           <button className={styles.closeBtn} onClick={onClose} aria-label="Close">✕</button>
         </header>
+
+        {aiConfigured && aiLabel && (
+          <div className={styles.aiBadge}>
+            ✨ Powered by {aiLabel}
+          </div>
+        )}
 
         <div className={styles.tabs}>
           <button
@@ -110,9 +122,9 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
               <div className={styles.noAiBox}>
                 <p className={styles.noAiTitle}>AI provider required for URL import</p>
                 <p className={styles.noAiBody}>
-                  Automatically fetching and reading a recipe from a URL requires an AI provider
-                  (Claude, OpenAI, Gemini, or Ollama). Once configured, paste any recipe URL here
-                  and the AI will extract everything for you.
+                  Automatically fetching and reading a recipe from a URL requires an AI provider.
+                  You can use your free Gemini code — go to Settings → Integrations and enter it in the
+                  Google Gemini box. No extra cost, completely free.
                 </p>
                 <button className={styles.btnSettings} onClick={goToSettings}>
                   Go to Settings → Integrations
@@ -188,9 +200,9 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
               />
               <div className={styles.noAiPasteHint}>
                 <span>
-                  With an AI provider configured, we can parse this automatically.{' '}
+                  With a free Gemini code in Settings → Integrations, we can parse this automatically.{' '}
                   <button className={styles.inlineTabLink} onClick={goToSettings}>
-                    Set up AI →
+                    Set up Gemini →
                   </button>
                 </span>
               </div>

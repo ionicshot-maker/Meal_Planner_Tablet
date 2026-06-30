@@ -2,6 +2,7 @@ import { useState, ChangeEvent } from 'react'
 import { Button, Card, Modal } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { getAllIngredients, getAllRecipes } from '@/db'
+import { CloudSyncSection } from './CloudSyncSection'
 import { loadSettings } from '@/db/settings'
 import { getAllMealPlanTemplates } from '@/db/mealPlan'
 import { getAllHouseholdItems } from '@/db/householdItems'
@@ -208,6 +209,11 @@ export function DataSection() {
   return (
     <div className={styles.section}>
       <h2 className={styles.sectionTitle}>Data</h2>
+
+      {/* Cloud Sync */}
+      <CloudSyncSection />
+
+      <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: 'var(--space-4) 0' }} />
 
       {/* Export */}
       <h3 className={styles.subTitle}>Export</h3>

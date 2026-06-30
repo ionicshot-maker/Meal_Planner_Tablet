@@ -20,9 +20,9 @@ const PAGE_HELP: Record<string, string> = {
   '/import-ingredients': 'Use this page to add ingredients quickly. Scan a barcode with your camera, search the USDA database for fresh foods, or use Gemini AI to look up packaged products.',
   '/cookbook':           'This is where your recipes live. Tap + New Recipe to add a recipe, or tap Import to grab one from a website. Tap any recipe to view or edit it.',
   '/planner':            'This is your weekly meal calendar. Tap any meal slot to add a recipe to that day. A yellow dot means that day still has unfilled meal slots.',
-  '/macros':             'This page shows your nutrition totals for today based on your planned meals. You can also log meals you actually ate and compare against your personal goals.',
+  '/macros':             'This page shows your nutrition totals for today. Log meals, snacks, and drinks you actually ate. Scroll down to the Drinks section to log beverages. Compare against your personal nutrition goals.',
   '/grocery':            'Your shopping list page. Pick your shopping dates and the app builds your grocery list from your meal plan. Tap items to check them off as you shop.',
-  '/settings':           'Customize the app here. Set up your household, add family members, connect free tools like USDA and Gemini, and export your data for safekeeping.',
+  '/settings':           'Customize the app here. Set up your household, add family members, connect free tools like USDA and Gemini, and set up Cloud Sync to keep devices in sync. Export your data for safekeeping.',
   '/help':               'You are on the Help page. Here you will find friendly guides for every feature, step-by-step instructions for optional free tools, and answers to common questions.',
 }
 

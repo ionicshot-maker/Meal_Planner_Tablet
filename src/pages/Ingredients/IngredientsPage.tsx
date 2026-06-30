@@ -102,6 +102,19 @@ export default function IngredientsPage() {
           onChange={setShowArchived}
         />
       </div>
+      <div className={styles.quickFilters}>
+        {['Beverages', 'Meat', 'Produce', 'Dairy', 'Pantry', 'Frozen', 'Snacks'].map(cat => (
+          settings.ingredientCategories.includes(cat) ? (
+            <button
+              key={cat}
+              className={`${styles.quickFilter} ${filterCategory === cat ? styles.quickFilterActive : ''}`}
+              onClick={() => setFilterCategory(filterCategory === cat ? '' : cat)}
+            >
+              {cat}
+            </button>
+          ) : null
+        ))}
+      </div>
 
       {loading ? (
         <div className={styles.empty}>Loading…</div>

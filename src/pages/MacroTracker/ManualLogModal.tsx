@@ -10,6 +10,7 @@ const SLOT_OPTIONS = [
   { value: 'lunch',     label: 'Lunch' },
   { value: 'dinner',    label: 'Dinner' },
   { value: 'snacks',    label: 'Snacks' },
+  { value: 'drinks',    label: 'Drinks' },
   { value: 'other',     label: 'Other' },
 ]
 

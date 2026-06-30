@@ -77,6 +77,9 @@ export interface NutrientToggles {
 // ─── Nutrition Source ────────────────────────────────────────────────────────
 export type NutritionSource = 'openfoodfacts' | 'gemini' | 'usda' | 'manual'
 
+// ─── Cloud Sync ───────────────────────────────────────────────────────────────
+export type FamilyShareRole = 'owner' | 'contributor' | 'readonly'
+
 // ─── App Settings ────────────────────────────────────────────────────────────
 export interface AppSettings {
   householdName: string
@@ -94,6 +97,12 @@ export interface AppSettings {
   setupComplete: boolean
   ingredientCategories: string[]
   recipeTags: RecipeTagGroup[]
+  // Cloud sync
+  supabaseUrl: string
+  supabaseAnonKey: string
+  householdSyncCode: string
+  familyShareCode: string
+  familyShareRole: FamilyShareRole
 }
 
 export interface RecipeTagGroup {
@@ -206,6 +215,7 @@ export interface DayMeals {
   lunch: MealSlotItem[]
   dinner: MealSlotItem[]
   snacks: MealSlotItem[]
+  drinks?: MealSlotItem[]
 }
 
 export interface MealPlanDay {

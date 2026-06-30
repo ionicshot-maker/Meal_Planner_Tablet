@@ -451,6 +451,13 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
                   </div>
                 ))}
               </div>
+              {selectedTags.includes('Beverages') && (
+                <p className={styles.tagHint}>
+                  💧 For homemade drinks like sweet tea or smoothies, add your ingredients (water, sugar, tea bags, etc.)
+                  and the macros will calculate automatically. Recipe scaling works perfectly — making a gallon vs. a quart
+                  adjusts all ingredient quantities.
+                </p>
+              )}
             </div>
 
             {/* Source */}

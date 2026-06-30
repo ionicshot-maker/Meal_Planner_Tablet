@@ -23,6 +23,7 @@ const MEAL_SLOTS: { key: keyof DayMeals; label: string }[] = [
   { key: 'lunch',     label: 'Lunch' },
   { key: 'dinner',    label: 'Dinner' },
   { key: 'snacks',    label: 'Snacks' },
+  { key: 'drinks',    label: 'Drinks' },
 ]
 
 export function DayLog({ person, date, nutrientToggles, unitSystem }: Props) {

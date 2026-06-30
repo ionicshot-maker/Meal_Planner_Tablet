@@ -29,8 +29,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   recipeTags: [
     { group: 'Protein', tags: ['Chicken', 'Beef', 'Pork', 'Fish', 'Shrimp', 'Turkey', 'Vegetarian', 'Vegan'] },
     { group: 'Cook Method', tags: ['Crockpot', 'Oven', 'Stovetop', 'Grill', 'Instant Pot', 'Air Fryer', 'No-Cook'] },
+    { group: 'Type', tags: ['Beverages', 'Homemade', 'Dessert', 'Snack', 'Soup', 'Salad', 'Sandwich'] },
     { group: 'Extras', tags: ['Easy', 'Quick', 'Gluten-Free', 'Dairy-Free', 'Kid-Friendly', 'Meal Prep'] },
   ],
+  supabaseUrl: '',
+  supabaseAnonKey: '',
+  householdSyncCode: '',
+  familyShareCode: '',
+  familyShareRole: 'owner',
 }
 
 export async function loadSettings(): Promise<AppSettings> {

@@ -1,4 +1,4 @@
-import type { AIConfig } from '@/types'
+import type { AIConfig, AppSettings } from '@/types'
 import { normalizeUnit } from './recipeCalculations'
 import { parseTimeToMinutes } from './units'
 import { fetchPageAsText } from './recipeParse'
@@ -40,10 +40,45 @@ Rules:
 - quantity must be a number (use 0.5 for ½, 0.25 for ¼, etc.)
 - unit must be one of: cup, tbsp, tsp, oz, lb, g, kg, ml, l, can, package, bag, box, piece, slice, jar, each, floz
 - servingDisplay is an optional short description like "6 oz" or "1 cup"
-- suggestedTags should pick from common recipe tags: Chicken, Beef, Pork, Fish, Turkey, Vegetarian, Vegan, Crockpot, Oven, Stovetop, Grill, Instant Pot, Air Fryer, No-Cook, Easy, Quick, Gluten-Free, Dairy-Free, Kid-Friendly, Meal Prep
+- suggestedTags should pick from common recipe tags: Chicken, Beef, Pork, Fish, Turkey, Vegetarian, Vegan, Crockpot, Oven, Stovetop, Grill, Instant Pot, Air Fryer, No-Cook, Easy, Quick, Gluten-Free, Dairy-Free, Kid-Friendly, Meal Prep, Beverages, Homemade, Dessert, Snack, Soup, Salad
 - Return ONLY the JSON object, no explanation or markdown.`
 
-async function callAI(prompt: string, config: AIConfig): Promise<string> {
+// Returns true if the user has any AI provider configured that can do recipe import.
+// This includes the main ai config AND a standalone Gemini key.
+export function isRecipeImportAvailable(settings: AppSettings): boolean {
+  const mainAiReady = settings.ai.provider !== 'none' && settings.ai.apiKey.trim() !== ''
+  const geminiReady = Boolean(settings.geminiApiKey?.trim())
+  return mainAiReady || geminiReady
+}
+
+// Returns the effective AIConfig to use for recipe import.
+// Prefers the main ai config; falls back to geminiApiKey if that's all that's configured.
+export function effectiveRecipeAI(settings: AppSettings): AIConfig {
+  if (settings.ai.provider !== 'none' && settings.ai.apiKey.trim() !== '') {
+    return settings.ai
+  }
+  if (settings.geminiApiKey?.trim()) {
+    return { provider: 'gemini', apiKey: settings.geminiApiKey.trim() }
+  }
+  return settings.ai
+}
+
+// Returns a short label describing the active AI for attribution display.
+export function recipeAILabel(settings: AppSettings): string {
+  if (settings.ai.provider !== 'none' && settings.ai.apiKey.trim() !== '') {
+    switch (settings.ai.provider) {
+      case 'anthropic': return 'Claude (Anthropic)'
+      case 'openai':    return 'OpenAI'
+      case 'gemini':    return 'Gemini'
+      case 'ollama':    return 'Ollama (local)'
+      default: return ''
+    }
+  }
+  if (settings.geminiApiKey?.trim()) return 'Gemini'
+  return ''
+}
+
+async function callAI(prompt: string, config: AIConfig, geminiModel?: string): Promise<string> {
   const { provider, apiKey, ollamaBaseUrl, ollamaModel } = config
 
   if (provider === 'anthropic') {
@@ -58,7 +93,7 @@ async function callAI(prompt: string, config: AIConfig): Promise<string> {
       }),
     })
     if (!res.ok) throw new Error(`Anthropic API error: ${res.status}`)
-    const data = await res.json()
+    const data = await res.json() as { content: Array<{ text: string }> }
     return data.content[0].text
 
   } else if (provider === 'openai') {
@@ -75,25 +110,21 @@ async function callAI(prompt: string, config: AIConfig): Promise<string> {
       }),
     })
     if (!res.ok) throw new Error(`OpenAI API error: ${res.status}`)
-    const data = await res.json()
+    const data = await res.json() as { choices: Array<{ message: { content: string } }> }
     return data.choices[0].message.content
 
   } else if (provider === 'gemini') {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json' },
-        }),
-      }
-    )
-    if (!res.ok) throw new Error(`Gemini API error: ${res.status}`)
-    const data = await res.json()
-    return data.candidates[0].content.parts[0].text
+    // Route through Netlify function to avoid CORS/key-exposure issues and get URL-fetch support
+    const res = await fetch('/api/gemini-recipe-import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: prompt, apiKey, model: geminiModel || 'gemini-flash-latest' }),
+    })
+    const json = await res.json() as { status?: number; recipe?: unknown; error?: string }
+    if (!res.ok || !json.recipe) {
+      throw new Error(json.error ?? `Gemini recipe import error: ${res.status}`)
+    }
+    return JSON.stringify(json.recipe)
 
   } else if (provider === 'ollama') {
     const base = ollamaBaseUrl ?? 'http://localhost:11434'
@@ -112,7 +143,7 @@ async function callAI(prompt: string, config: AIConfig): Promise<string> {
       }),
     })
     if (!res.ok) throw new Error(`Ollama API error: ${res.status}`)
-    const data = await res.json()
+    const data = await res.json() as { message: { content: string } }
     return data.message.content
   }
 
@@ -136,23 +167,40 @@ function parseAIResponse(raw: string): AIRecipeResult {
     prepTimeMinutes: Number(parsed.prepTimeMinutes) || 0,
     cookTimeMinutes: Number(parsed.cookTimeMinutes) || 0,
     notes: parsed.notes ?? undefined,
+    sourceUrl: parsed.sourceUrl ?? undefined,
     ingredients,
     steps: (parsed.steps ?? []).map((s: unknown) => String(s)),
     suggestedTags: (parsed.suggestedTags ?? []).map((t: unknown) => String(t)),
   }
 }
 
-// Both functions require an AI provider — the UI gates access before calling these.
-export async function importRecipeFromText(text: string, config: AIConfig): Promise<AIRecipeResult> {
+export async function importRecipeFromText(text: string, config: AIConfig, geminiModel?: string): Promise<AIRecipeResult> {
   const prompt = `Parse this recipe:\n\n${text}`
-  const raw = await callAI(prompt, config)
+  const raw = await callAI(prompt, config, geminiModel)
   return parseAIResponse(raw)
 }
 
-export async function importRecipeFromUrl(url: string, config: AIConfig): Promise<AIRecipeResult> {
+// For Gemini, URL fetch happens server-side in the Netlify function.
+// For other providers, we fetch the page client-side first.
+export async function importRecipeFromUrl(url: string, config: AIConfig, geminiModel?: string): Promise<AIRecipeResult> {
+  if (config.provider === 'gemini') {
+    const res = await fetch('/api/gemini-recipe-import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, apiKey: config.apiKey, model: geminiModel || 'gemini-flash-latest' }),
+    })
+    const json = await res.json() as { status?: number; recipe?: unknown; error?: string }
+    if (!res.ok || !json.recipe) {
+      throw new Error(json.error ?? `Gemini recipe import error: ${res.status}`)
+    }
+    const result = parseAIResponse(JSON.stringify(json.recipe))
+    result.sourceUrl = url
+    return result
+  }
+  // Non-Gemini providers: fetch page client-side and pass text to AI
   const pageText = await fetchPageAsText(url)
   const prompt = `The recipe is from this URL: ${url}\n\nPage content:\n${pageText}`
-  const raw = await callAI(prompt, config)
+  const raw = await callAI(prompt, config, geminiModel)
   const result = parseAIResponse(raw)
   result.sourceUrl = url
   return result

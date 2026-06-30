@@ -38,17 +38,18 @@ export function SetupChecklist({ onSwitchSection }: Props) {
   const hasPeople = settings.people.length > 0
   const hasUsdaKey = Boolean(settings.usdaApiKey)
   const hasGeminiKey = Boolean(settings.geminiApiKey)
+  const hasCloudSync = Boolean(settings.supabaseUrl?.trim() && settings.householdSyncCode?.trim())
 
   const required = [hasHouseholdName, hasPeople, counts.hasIngredients, counts.hasRecipes, counts.hasMealPlan]
   const requiredDone = required.filter(Boolean).length
   const allRequiredDone = requiredDone === 5
 
-  const optional = [hasUsdaKey, hasGeminiKey]
+  const optional = [hasUsdaKey, hasGeminiKey, hasCloudSync]
   const optionalDone = optional.filter(Boolean).length
 
   function progressMessage() {
     if (!loaded) return 'Loading your progress…'
-    if (allRequiredDone && optionalDone === 2) return 'You are fully set up and ready to go!'
+    if (allRequiredDone && optionalDone === 3) return 'You are fully set up and ready to go!'
     if (allRequiredDone) return 'You are all set up! Optional extras available below.'
     if (requiredDone === 0) return 'Welcome! Tap any step below to get started.'
     if (requiredDone === 1) return 'Good start! Keep going — you are almost there.'
@@ -93,6 +94,12 @@ export function SetupChecklist({ onSwitchSection }: Props) {
       done: hasGeminiKey,
       optional: true,
       onClick: () => onSwitchSection('integrations'),
+    },
+    {
+      label: 'Set up Cloud Sync — sync between devices (optional)',
+      done: hasCloudSync,
+      optional: true,
+      onClick: () => onSwitchSection('data'),
     },
   ]
 
