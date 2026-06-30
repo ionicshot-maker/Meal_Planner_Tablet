@@ -76,6 +76,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
             ))}
           </ul>
         </div>
+        {helpText && (
+          <button
+            className={`${styles.helpNavBtn} ${helpOpen ? styles.helpNavBtnActive : ''}`}
+            onClick={() => setHelpOpen(v => !v)}
+            aria-expanded={helpOpen}
+            aria-label="What is this page?"
+          >
+            <span className={styles.navIcon} aria-hidden="true">❓</span>
+            <span className={styles.navLabel}>Page Help</span>
+          </button>
+        )}
         <button className={styles.themeBtn} onClick={cycleTheme} aria-label="Toggle theme">
           <span aria-hidden="true">{resolved === 'dark' ? '☀️' : '🌙'}</span>
           <span className={styles.navLabel}>
@@ -87,28 +98,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
         {children}
       </main>
 
-      {helpText && (
+      {helpText && helpOpen && (
         <>
-          {helpOpen && (
-            <div className={styles.helpBackdrop} onClick={() => setHelpOpen(false)} aria-hidden="true" />
-          )}
-          <div className={styles.helpWidget}>
-            <button
-              className={`${styles.helpBtn} ${helpOpen ? styles.helpBtnOpen : ''}`}
-              onClick={() => setHelpOpen(v => !v)}
-              aria-label="What is this page?"
-              title="What is this page?"
-            >
-              ?
+          <div className={styles.helpBackdrop} onClick={() => setHelpOpen(false)} aria-hidden="true" />
+          <div className={styles.helpTooltip} role="dialog" aria-label="Page help">
+            <p className={styles.helpTooltipText}>{helpText}</p>
+            <button className={styles.helpTooltipClose} onClick={() => setHelpOpen(false)}>
+              Got it ✓
             </button>
-            {helpOpen && (
-              <div className={styles.helpTooltip} role="dialog" aria-label="Page help">
-                <p className={styles.helpTooltipText}>{helpText}</p>
-                <button className={styles.helpTooltipClose} onClick={() => setHelpOpen(false)}>
-                  Got it ✓
-                </button>
-              </div>
-            )}
           </div>
         </>
       )}

@@ -100,52 +100,45 @@
   height: 100dvh;
 }
 
-/* ── Page help tooltip button ─────────────────────────────────────────────── */
+/* ── Page help — nav button + fixed tooltip ───────────────────────────────── */
+.helpNavBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  margin: 0 var(--space-3) var(--space-1);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  background: none;
+  border: none;
+  transition: background-color var(--transition), color var(--transition);
+  text-align: left;
+  width: calc(100% - var(--space-6));
+}
+.helpNavBtn:hover { background-color: var(--color-border); color: var(--color-text); }
+.helpNavBtnActive { background-color: var(--color-selected); color: var(--color-selected-text); }
+
 .helpBackdrop {
   position: fixed;
   inset: 0;
   z-index: 90;
 }
 
-.helpWidget {
-  position: fixed;
-  top: var(--space-4);
-  right: var(--space-4);
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-2);
-}
-
-.helpBtn {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  color: #fff;
-  border: none;
-  font-size: var(--text-base);
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.20);
-  transition: transform var(--transition), background var(--transition);
-  flex-shrink: 0;
-}
-
-.helpBtn:hover { transform: scale(1.08); }
-.helpBtnOpen   { background: var(--color-text-muted); }
-
+/* Tooltip anchored to the right of the nav sidebar, aligned with the help button */
 .helpTooltip {
-  width: 280px;
+  position: fixed;
+  left: calc(var(--nav-width) + var(--space-3));
+  bottom: 70px;
+  z-index: 100;
+  width: 300px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: var(--space-4);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -197,5 +190,15 @@
   .navLabel { display: none; }
   .navItem { padding: var(--space-2); }
   .themeBtn { padding: var(--space-2); margin: 0; }
+  .helpNavBtn { padding: var(--space-2); margin: 0; width: auto; }
   .main { height: calc(100dvh - 56px); }
+
+  /* On mobile the tooltip opens below the horizontal nav bar */
+  .helpTooltip {
+    left: var(--space-3);
+    right: var(--space-3);
+    width: auto;
+    bottom: auto;
+    top: calc(56px + var(--space-2));
+  }
 }

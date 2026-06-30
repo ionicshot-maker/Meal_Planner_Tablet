@@ -82,6 +82,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
   const [isTemplate, setIsTemplate] = useState(recipe?.isTemplate ?? false)
   const [photoUrl, setPhotoUrl]   = useState(recipe?.photoUrl ?? '')
   const [selectedTags, setSelectedTags] = useState<string[]>(recipe?.tags ?? prefill?.suggestedTags ?? [])
+  const [openTagGroup, setOpenTagGroup] = useState<string | null>(null)
 
   // Steps
   const [steps, setSteps] = useState<RecipeStep[]>(
@@ -193,10 +194,34 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
     setCookInput(m > 0 ? formatMinutes(m) : '')
   }
 
-  // Tag toggle
-  function toggleTag(tag: string) {
-    setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
+  // Tag helpers
+  function getGroupTags(group: { group: string; tags: string[] }): string[] {
+    const tags = [...group.tags]
+    // Beverages is useful for both protein-type and extras — add it if not already there
+    if ((group.group === 'Protein' || group.group === 'Extras') && !tags.includes('Beverages')) {
+      tags.push('Beverages')
+    }
+    return tags
   }
+
+  function addTag(tag: string) {
+    setSelectedTags(prev => prev.includes(tag) ? prev : [...prev, tag])
+    setOpenTagGroup(null)
+  }
+
+  function removeTag(tag: string) {
+    setSelectedTags(prev => prev.filter(t => t !== tag))
+  }
+
+  // Close tag dropdown on outside click
+  useEffect(() => {
+    if (!openTagGroup) return
+    function handleOutside(e: MouseEvent) {
+      if (!(e.target as Element).closest('[data-tag-group]')) setOpenTagGroup(null)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [openTagGroup])
 
   // Ingredient rows
   function addPickedIngredient(picked: PickedIngredient) {
@@ -433,23 +458,57 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
             <div className={styles.fieldGroup}>
               <label className={styles.fieldLabel}>Tags</label>
               <div className={styles.tagGroups}>
-                {settings.recipeTags.map(group => (
-                  <div key={group.group} className={styles.tagGroup}>
-                    <span className={styles.tagGroupLabel}>{group.group}</span>
-                    <div className={styles.tagChips}>
-                      {group.tags.map(tag => (
+                {settings.recipeTags.map(group => {
+                  const allGroupTags = getGroupTags(group)
+                  const available     = allGroupTags.filter(t => !selectedTags.includes(t))
+                  const groupSelected = allGroupTags.filter(t => selectedTags.includes(t))
+                  const isOpen        = openTagGroup === group.group
+                  return (
+                    <div key={group.group} className={styles.tagGroupRow} data-tag-group={group.group}>
+                      <div className={styles.tagDropdownWrap}>
                         <button
-                          key={tag}
-                          className={`${styles.tagChip} ${selectedTags.includes(tag) ? styles.tagChipActive : ''}`}
-                          onClick={() => toggleTag(tag)}
                           type="button"
+                          className={`${styles.tagDropdownBtn} ${isOpen ? styles.tagDropdownBtnOpen : ''}`}
+                          onClick={() => setOpenTagGroup(isOpen ? null : group.group)}
+                          disabled={available.length === 0}
                         >
-                          {tag}
+                          + Add {group.group}
+                          <span className={styles.tagDropdownArrow} aria-hidden="true">{isOpen ? '▲' : '▼'}</span>
                         </button>
-                      ))}
+                        {isOpen && (
+                          <ul className={styles.tagDropdownMenu} role="listbox">
+                            {available.map(tag => (
+                              <li key={tag} role="option">
+                                <button
+                                  type="button"
+                                  className={styles.tagDropdownOption}
+                                  onMouseDown={e => { e.preventDefault(); addTag(tag) }}
+                                >
+                                  {tag}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      {groupSelected.length > 0 && (
+                        <div className={styles.tagChipRow}>
+                          {groupSelected.map(tag => (
+                            <span key={tag} className={styles.tagSelectedChip}>
+                              {tag}
+                              <button
+                                type="button"
+                                className={styles.tagChipRemove}
+                                onClick={() => removeTag(tag)}
+                                aria-label={`Remove ${tag}`}
+                              >×</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
               {selectedTags.includes('Beverages') && (
                 <p className={styles.tagHint}>

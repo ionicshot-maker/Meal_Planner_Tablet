@@ -5,6 +5,10 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# Increase timeout for recipe import: page fetch (8s) + Gemini (20s) can exceed the 10s default
+[functions."gemini-recipe-import"]
+  timeout = 26
+
 # API proxy — must come before the SPA catch-all
 [[redirects]]
   from = "/api/*"
