@@ -85,6 +85,7 @@ export interface AppSettings {
   ai: AIConfig
   usdaApiKey: string
   geminiApiKey: string
+  geminiModel: string
   nutrientToggles: NutrientToggles
   macroHistoryDays: number    // 90–365
   storePreferenceEnabled: boolean

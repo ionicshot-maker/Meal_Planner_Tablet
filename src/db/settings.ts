@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ai: { provider: 'none', apiKey: '' },
   usdaApiKey: '',
   geminiApiKey: '',
+  geminiModel: 'gemini-flash-latest',
   nutrientToggles: {
     saturatedFat: false,
     transFat: false,

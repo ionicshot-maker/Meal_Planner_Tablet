@@ -55,6 +55,58 @@
 }
 .doneBtn:hover { background: color-mix(in srgb, var(--color-accent) 20%, transparent); }
 
+/* ─── Draft resume banner ───────────────────────────────────────── */
+.draftBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 25%, transparent);
+  flex-shrink: 0;
+}
+
+.draftBannerText {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draftBannerActions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.draftBannerDiscard {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition);
+}
+.draftBannerDiscard:hover { color: var(--color-text); border-color: var(--color-text-muted); }
+
+.draftBannerResume {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+.draftBannerResume:hover { opacity: 0.88; }
+
 /* ─── Tabs ─────────────────────────────────────────────────────── */
 .tabContainer {
   display: flex;

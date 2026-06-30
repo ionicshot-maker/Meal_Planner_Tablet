@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button, Input, NumericInput, Select, Toggle, Card, Modal } from '@/components/ui'
 import { parseFraction, formatNumeric } from '@/utils/fractionInput'
 // useRef / parseFraction / formatNumeric used by MacroField below
@@ -10,6 +10,8 @@ import type { Ingredient, IngredientVariant, IngredientUnit, Macros, NutritionSo
 import styles from './ReviewScreen.module.css'
 
 const BLANK_MACROS: Macros = { calories: 0, protein: 0, carbs: 0, fiber: 0, sugar: 0, fat: 0, sodium: 0 }
+
+const DRAFT_KEY = 'ingredient_import_draft'
 
 interface DuplicateState {
   existing: Ingredient
@@ -36,6 +38,17 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
   const [draft, setDraft] = useState<Ingredient>(() => ensureVariant(initialDraft))
   const [saving, setSaving] = useState(false)
   const [duplicate, setDuplicate] = useState<DuplicateState | null>(null)
+  const [draftSaved, setDraftSaved] = useState(false)
+
+  const handleSaveDraft = useCallback(() => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      ingredient: draft,
+      nutritionSource: nutritionSource ?? 'manual',
+      savedAt: new Date().toISOString(),
+    }))
+    setDraftSaved(true)
+    setTimeout(() => setDraftSaved(false), 2500)
+  }, [draft, nutritionSource])
 
   const units = availableUnits(settings.unitSystem).map(u => ({ value: u, label: u }))
   const categoryOptions = settings.ingredientCategories.map(c => ({ value: c, label: c }))
@@ -270,6 +283,9 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
 
       <div className={styles.footer}>
         <Button variant="secondary" onClick={onCancel}>Back</Button>
+        <span className={styles.footerSpacer} />
+        {draftSaved && <span className={styles.draftMsg}>Draft saved</span>}
+        <Button variant="ghost" size="sm" onClick={handleSaveDraft}>Save Draft</Button>
         <Button onClick={handleSave} disabled={saving || !draft.name.trim()}>
           {saving ? 'Saving…' : 'Save Ingredient'}
         </Button>

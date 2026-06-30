@@ -52,7 +52,7 @@ function geminiToIngredient(
     variants: [{
       id: variantId,
       parentId: ingredientId,
-      brand: brand.trim() || 'Generic',
+      brand: brand.trim(),   // user-typed brand, empty if not provided
       defaultUnit: servingUnit,
       servingSize,
       servingUnit,
@@ -80,12 +80,16 @@ export function GeminiTab({ onReview }: Props) {
     setLoading(true)
     setError('')
     try {
-      const params = new URLSearchParams({
-        productName: productName.trim(),
-        brand: brand.trim(),
-        apiKey: settings.geminiApiKey,
+      const res = await fetch('/api/gemini-nutrition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName: productName.trim(),
+          brand: brand.trim(),
+          apiKey: settings.geminiApiKey,
+          model: settings.geminiModel || 'gemini-flash-latest',
+        }),
       })
-      const res = await fetch(`/api/gemini-nutrition?${params}`)
       const json = await res.json() as { status: number; nutrition?: GeminiNutrition; error?: string }
       if (!res.ok || json.status !== 1 || !json.nutrition) {
         setError(json.error ?? 'No nutrition data found for this product. Try a different name.')

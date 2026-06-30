@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser'
+import { useState, useRef, useEffect } from 'react'
+import Quagga from '@ericblade/quagga2'
 import { Button, Input } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { newId, now } from '@/utils/ids'
@@ -40,7 +40,6 @@ function mapOFFCategoryToApp(offCategories: string[], appCategories: string[]): 
   return appCategories[0] ?? 'Pantry'
 }
 
-// Shape returned by the barcode-lookup Netlify function
 interface NormalizedProduct {
   product_name: string
   brands: string
@@ -100,64 +99,206 @@ function normalizedToIngredient(product: NormalizedProduct, categories: string[]
   }
 }
 
+// Brief success beep using Web Audio API — silent if unsupported
+function playBeep() {
+  try {
+    const CtxClass = window.AudioContext
+      ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!CtxClass) return
+    const ctx = new CtxClass()
+    const osc  = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(1047, ctx.currentTime)
+    gain.gain.setValueAtTime(0.25, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12)
+    osc.start(ctx.currentTime)
+    osc.stop(ctx.currentTime + 0.15)
+    setTimeout(() => { try { ctx.close() } catch { /* ignore */ } }, 600)
+  } catch { /* AudioContext unavailable */ }
+}
+
+type ScanState = 'idle' | 'loading' | 'active' | 'denied' | 'nocamera' | 'error'
+
+type QuaggaDetected = { codeResult: { code: string | null } }
+
 interface Props {
   onReview: (draft: Ingredient, source: NutritionSource) => void
 }
 
 export function BarcodeTab({ onReview }: Props) {
   const { settings } = useSettings()
+  const [scanState, setScanState] = useState<ScanState>('idle')
+  const [scanError, setScanError]   = useState('')
+  const [scanFlash, setScanFlash]   = useState(false)
   const [manualBarcode, setManualBarcode] = useState('')
-  const [scanning, setScanning] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const controlsRef = useRef<IScannerControls | null>(null)
+  const [error, setError]     = useState('')
+  const [helpOpen, setHelpOpen] = useState(false)
+  // Incrementing trigger fires the scanner init useEffect
+  const [scanTrigger, setScanTrigger] = useState(0)
+
+  const scannerContainerRef = useRef<HTMLDivElement>(null)
+  const manualInputRef      = useRef<HTMLInputElement>(null)
+  const quaggaActiveRef     = useRef(false)
+  const scannedRef          = useRef(false)
+
   const categories = settings.ingredientCategories.length > 0
     ? settings.ingredientCategories
     : DEFAULT_CATEGORIES
 
-  const stopScanner = useCallback(() => {
-    if (controlsRef.current) {
-      controlsRef.current.stop()
-      controlsRef.current = null
+  // ── Quagga init effect ──────────────────────────────────────────────────
+  // Runs after the scannerContainer div has been rendered into the DOM.
+  useEffect(() => {
+    if (scanTrigger === 0) return
+
+    let cancelled = false
+    scannedRef.current = false
+
+    function detected(result: QuaggaDetected) {
+      if (cancelled || scannedRef.current) return
+      const code = result.codeResult.code
+      if (!code) return
+      scannedRef.current = true
+
+      // Visual + haptic feedback
+      setScanFlash(true)
+      setTimeout(() => setScanFlash(false), 700)
+      playBeep()
+      try { navigator.vibrate?.(120) } catch { /* not supported */ }
+
+      // Stop camera immediately so battery isn't drained
+      try { Quagga.offDetected(detected) } catch { /* ignore */ }
+      try { Quagga.stop() } catch { /* ignore */ }
+      quaggaActiveRef.current = false
+      if (!cancelled) setScanState('idle')
+
+      lookupBarcode(code)
     }
-    setScanning(false)
+
+    ;(async () => {
+      try {
+        await Quagga.init({
+          inputStream: {
+            type: 'LiveStream',
+            target: scannerContainerRef.current!,
+            constraints: {
+              // ideal = prefer rear camera, fall back to any if unavailable
+              facingMode: { ideal: 'environment' },
+              width:  { min: 320, ideal: 1280 },
+              height: { min: 240, ideal: 720  },
+            },
+          },
+          locator: {
+            patchSize: 'medium',
+            halfSample: true,  // faster on mobile
+          },
+          numOfWorkers: 0,   // safest across all browsers including iOS Safari
+          frequency: 10,     // frames/sec — balance between speed and battery
+          decoder: {
+            readers: [
+              'ean_reader',
+              'ean_8_reader',
+              'upc_reader',
+              'upc_e_reader',
+              'code_128_reader',
+            ],
+          },
+          locate: true,
+        })
+
+        if (cancelled) {
+          try { Quagga.stop() } catch { /* ignore */ }
+          return
+        }
+
+        quaggaActiveRef.current = true
+        Quagga.start()
+        Quagga.onDetected(detected)
+        setScanState('active')
+
+      } catch (err) {
+        if (cancelled) return
+        quaggaActiveRef.current = false
+        const name = err instanceof Error ? err.name    : String(err)
+        const msg  = err instanceof Error ? err.message : String(err)
+        console.error('[BarcodeTab] Quagga init error:', name, msg)
+
+        const msgLc = msg.toLowerCase()
+        if (
+          name === 'NotAllowedError'    ||
+          name === 'PermissionDeniedError' ||
+          name === 'SecurityError'      ||
+          msgLc.includes('permission') ||
+          msgLc.includes('denied')
+        ) {
+          setScanState('denied')
+        } else if (
+          name === 'NotFoundError'        ||
+          name === 'DevicesNotFoundError' ||
+          name === 'NotReadableError'     ||
+          msgLc.includes('no camera')    ||
+          msgLc.includes('not found')
+        ) {
+          setScanState('nocamera')
+        } else {
+          setScanState('error')
+          setScanError(`Camera error: ${msg}`)
+        }
+        setTimeout(() => manualInputRef.current?.focus(), 150)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      if (quaggaActiveRef.current) {
+        try { Quagga.offDetected(detected) } catch { /* ignore */ }
+        try { Quagga.stop() } catch { /* ignore */ }
+        quaggaActiveRef.current = false
+      }
+    }
+  }, [scanTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stop camera when tab switches away or component unmounts
+  useEffect(() => {
+    return () => {
+      if (quaggaActiveRef.current) {
+        try { Quagga.stop() } catch { /* ignore */ }
+        quaggaActiveRef.current = false
+      }
+    }
   }, [])
 
-  useEffect(() => () => stopScanner(), [stopScanner])
-
-  async function startScanner() {
+  function handleStartScan() {
     setError('')
-    setScanning(true)
-    try {
-      const reader = new BrowserMultiFormatReader()
-      const devices = await BrowserMultiFormatReader.listVideoInputDevices()
-      const deviceId = devices.find(d => d.label.toLowerCase().includes('back'))?.deviceId
-        ?? devices[devices.length - 1]?.deviceId
-      if (!deviceId) throw new Error('No camera found')
-      const controls = await reader.decodeFromVideoDevice(deviceId, videoRef.current!, async (result, err) => {
-        if (result) {
-          stopScanner()
-          await lookupBarcode(result.getText())
-        }
-        void err
-      })
-      controlsRef.current = controls
-    } catch (e: unknown) {
-      stopScanner()
-      setError(e instanceof Error ? e.message : 'Camera access failed')
+    setScanError('')
+    setScanState('loading')
+    setScanTrigger(t => t + 1)
+  }
+
+  function handleStopScan() {
+    if (quaggaActiveRef.current) {
+      try { Quagga.stop() } catch { /* ignore */ }
+      quaggaActiveRef.current = false
     }
+    setScanState('idle')
   }
 
   async function tryGeminiEnrich(draft: Ingredient, productName: string, brands: string): Promise<Ingredient | null> {
     try {
       const brand = brands.split(',')[0].trim()
-      const params = new URLSearchParams({
-        productName,
-        brand,
-        apiKey: settings.geminiApiKey,
+      const res = await fetch('/api/gemini-nutrition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName,
+          brand,
+          apiKey: settings.geminiApiKey,
+          model: settings.geminiModel || 'gemini-flash-latest',
+        }),
       })
-      const res = await fetch(`/api/gemini-nutrition?${params}`)
       const json = await res.json() as { status: number; nutrition?: GeminiNutrition }
       if (!res.ok || json.status !== 1 || !json.nutrition) return null
       const g = json.nutrition
@@ -221,14 +362,18 @@ export function BarcodeTab({ onReview }: Props) {
     await lookupBarcode(code)
   }
 
+  const showScanner = scanState === 'loading' || scanState === 'active'
+
   return (
     <div className={styles.tab}>
       <p className={styles.desc}>
         Scan a barcode with your camera or enter one manually to auto-fill product info from Open Food Facts.
       </p>
 
+      {/* ── Manual barcode entry (always visible) ── */}
       <div className={styles.manualRow}>
         <Input
+          ref={manualInputRef}
           label="Barcode number"
           value={manualBarcode}
           onChange={e => setManualBarcode(e.target.value)}
@@ -247,23 +392,115 @@ export function BarcodeTab({ onReview }: Props) {
 
       <div className={styles.divider}><span>or</span></div>
 
-      {!scanning ? (
-        <Button variant="secondary" onClick={startScanner} className={styles.scanBtn}>
-          📷 Scan Barcode with Camera
-        </Button>
-      ) : (
+      {/* ── Camera scanner section ── */}
+      {showScanner ? (
         <div className={styles.scannerArea}>
-          <video ref={videoRef} className={styles.video} autoPlay playsInline muted />
-          <div className={styles.scanOverlay}>
-            <div className={styles.scanTarget} />
-          </div>
-          <Button variant="ghost" size="sm" onClick={stopScanner} className={styles.cancelScan}>
-            Cancel scan
-          </Button>
+          {/* Quagga injects its <video> and <canvas> inside this div */}
+          <div ref={scannerContainerRef} className={styles.scannerContainer} />
+
+          {/* Loading / permission-request overlay */}
+          {scanState === 'loading' && (
+            <div className={styles.loadingOverlay}>
+              <div className={styles.loadingSpinner} />
+              <p className={styles.loadingText}>Starting camera…</p>
+              <p className={styles.permissionNote}>
+                We need access to your camera to scan barcodes.{' '}
+                Please tap <strong>Allow</strong> when prompted.
+              </p>
+            </div>
+          )}
+
+          {/* Scan guide overlay */}
+          {scanState === 'active' && (
+            <div className={styles.scanOverlay}>
+              <div className={`${styles.scanBox} ${scanFlash ? styles.scanBoxFlash : ''}`}>
+                <span className={`${styles.scanCorner} ${styles.scanCornerTL}`} />
+                <span className={`${styles.scanCorner} ${styles.scanCornerTR}`} />
+                <span className={`${styles.scanCorner} ${styles.scanCornerBL}`} />
+                <span className={`${styles.scanCorner} ${styles.scanCornerBR}`} />
+              </div>
+              <p className={styles.scanHint}>Align barcode within the box</p>
+            </div>
+          )}
+
+          <button
+            className={styles.cancelScanBtn}
+            onClick={handleStopScan}
+            aria-label="Cancel camera scan"
+          >
+            ✕ Cancel
+          </button>
         </div>
+      ) : (
+        <>
+          {scanState === 'idle' && (
+            <Button onClick={handleStartScan} className={styles.scanBtn}>
+              📷 Scan Barcode with Camera
+            </Button>
+          )}
+
+          {scanState === 'denied' && (
+            <div className={styles.scanErrorBox}>
+              <span className={styles.scanErrorIcon} aria-hidden="true">🚫</span>
+              <div>
+                <p className={styles.scanErrorTitle}>Camera access was denied</p>
+                <p className={styles.scanErrorText}>
+                  To enable it, tap the lock icon in your browser's address bar and allow camera
+                  access, then refresh the page.
+                </p>
+                <button className={styles.retryBtn} onClick={handleStartScan}>Try again</button>
+              </div>
+            </div>
+          )}
+
+          {scanState === 'nocamera' && (
+            <div className={styles.scanErrorBox}>
+              <span className={styles.scanErrorIcon} aria-hidden="true">📷</span>
+              <div>
+                <p className={styles.scanErrorTitle}>No camera found</p>
+                <p className={styles.scanErrorText}>
+                  No camera was detected on this device. Please enter the barcode number manually
+                  using the field above.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {scanState === 'error' && (
+            <div className={styles.scanErrorBox}>
+              <span className={styles.scanErrorIcon} aria-hidden="true">⚠️</span>
+              <div>
+                <p className={styles.scanErrorTitle}>Camera error</p>
+                <p className={styles.scanErrorText}>{scanError}</p>
+                <button className={styles.retryBtn} onClick={handleStartScan}>Try again</button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {error && <p className={styles.error}>{error}</p>}
+
+      {/* ── Collapsible help tips ── */}
+      <div className={styles.helpSection}>
+        <button
+          className={styles.helpToggle}
+          onClick={() => setHelpOpen(v => !v)}
+          aria-expanded={helpOpen}
+        >
+          Having trouble scanning?
+          <span className={styles.helpChevron} aria-hidden="true">{helpOpen ? '▲' : '▼'}</span>
+        </button>
+        {helpOpen && (
+          <ul className={styles.helpList}>
+            <li>Make sure you have good lighting — barcodes are hard to read in dim light.</li>
+            <li>Hold the barcode steady about 6–8 inches from the camera.</li>
+            <li>Make sure the entire barcode fits within the green scanning box.</li>
+            <li>Try tilting the product slightly if it is not scanning.</li>
+            <li>If scanning still does not work, type the barcode number manually in the field above.</li>
+          </ul>
+        )}
+      </div>
 
       <div className={styles.credit}>
         Product data from{' '}

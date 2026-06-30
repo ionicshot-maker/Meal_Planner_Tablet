@@ -113,12 +113,26 @@
 .footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-6);
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
   background: var(--color-surface);
+}
+
+.footerSpacer { flex: 1; }
+
+.draftMsg {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: #16a34a;
+  animation: draftFade 2.5s ease-out forwards;
+}
+
+@keyframes draftFade {
+  0%   { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .nutritionWarning {

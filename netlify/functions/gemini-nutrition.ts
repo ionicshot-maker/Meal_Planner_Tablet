@@ -2,6 +2,13 @@ import type { Handler } from '@netlify/functions'
 
 const NO_CACHE = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
 
+interface RequestBody {
+  productName?: string
+  brand?: string
+  apiKey?: string
+  model?: string
+}
+
 interface GeminiNutrition {
   calories: number
   protein: number
@@ -16,16 +23,55 @@ interface GeminiNutrition {
 }
 
 const handler: Handler = async (event) => {
-  const { productName, brand, apiKey } = event.queryStringParameters ?? {}
-
-  if (!productName?.trim()) {
-    return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'Missing productName parameter' }) }
-  }
-  if (!apiKey?.trim()) {
-    return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'No Gemini API key configured' }) }
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, headers: NO_CACHE, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
-  const nameWithBrand = brand?.trim() ? `${brand.trim()} ${productName.trim()}` : productName.trim()
+  let body: RequestBody = {}
+  try {
+    body = JSON.parse(event.body ?? '{}') as RequestBody
+  } catch {
+    return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'Invalid JSON body' }) }
+  }
+
+  const productName = body.productName?.trim()
+  const brand       = body.brand?.trim() ?? ''
+  const apiKey      = body.apiKey?.trim()
+  const model       = body.model?.trim() || 'gemini-flash-latest'
+
+  if (!productName) {
+    return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'Missing productName' }) }
+  }
+  if (!apiKey) {
+    return {
+      statusCode: 400,
+      headers: NO_CACHE,
+      body: JSON.stringify({ error: 'No Gemini API key configured. Go to Settings → Integrations to add your free key.' }),
+    }
+  }
+
+  const keyLen = apiKey.length
+  const keyPrefix = apiKey.slice(0, 8)
+  const keyHasWhitespace = apiKey !== apiKey.trim()
+  console.log(
+    '[gemini-nutrition] lookup:', productName,
+    '| brand:', brand || '(none)',
+    '| model:', model,
+    '| key prefix:', keyPrefix + '…',
+    '| key length:', keyLen,
+    '| key has whitespace:', keyHasWhitespace,
+  )
+
+  if (keyLen < 20) {
+    console.error('[gemini-nutrition] API key appears too short. Length:', keyLen)
+    return {
+      statusCode: 400,
+      headers: NO_CACHE,
+      body: JSON.stringify({ error: 'Gemini API key appears invalid (too short). Check Settings → Integrations.' }),
+    }
+  }
+
+  const nameWithBrand = brand ? `${brand} ${productName}` : productName
 
   const prompt = `You are a nutrition database. Return ONLY a valid JSON object with nutrition facts for "${nameWithBrand}" exactly as they appear on the product label or as accurately as possible.
 
@@ -38,28 +84,79 @@ Use this exact schema:
   "sugar": number (grams per serving, 1 decimal),
   "fat": number (grams per serving, 1 decimal),
   "sodium": number (mg per serving),
-  "servingSize": number (e.g. 1, 100, 0.25),
-  "servingUnit": string (e.g. "g", "oz", "tsp", "tbsp", "cup", "ml")
+  "servingSize": number (numeric quantity, e.g. 85, 1, 0.25),
+  "servingUnit": string — MUST be one of exactly: "tsp", "tbsp", "cup", "floz", "oz", "g", "kg", "ml", "l", "lb", "each", "package", "jar", "can", "bag", "box", "slice", "piece"
 }
+
+IMPORTANT for servingUnit:
+- Use "g" when the serving weight is in GRAMS (e.g. a 85g can of tuna → servingSize: 85, servingUnit: "g")
+- Use "oz" ONLY when the label explicitly states ounces (e.g. 3oz serving → servingSize: 3, servingUnit: "oz")
+- Use "can", "jar", "bag", "box", "package" for whole-container servings when no weight is given
+- Never use "oz" to mean grams
 
 If you cannot find reliable nutrition data for this specific product, return: {"notFound": true}
 Return ONLY the JSON object with no explanation, no markdown, no code fences.`
 
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+  console.log('[gemini-nutrition] calling:', geminiUrl)
+
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`
-    const res = await fetch(url, {
+    const res = await fetch(geminiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: 'application/json' },
       }),
     })
 
+    console.log('[gemini-nutrition] HTTP status:', res.status, res.statusText)
+
     if (!res.ok) {
       const errText = await res.text()
-      console.error('[gemini-nutrition] API error:', res.status, errText)
-      return { statusCode: res.status, headers: NO_CACHE, body: JSON.stringify({ error: `Gemini API returned ${res.status}` }) }
+      console.error('[gemini-nutrition] error body:', errText)
+
+      let geminiMessage = ''
+      try {
+        const parsed = JSON.parse(errText) as { error?: { message?: string; status?: string; code?: number } }
+        geminiMessage = parsed.error?.message ?? ''
+        console.error('[gemini-nutrition] parsed error — code:', parsed.error?.code, '| status:', parsed.error?.status, '| message:', geminiMessage)
+      } catch {
+        console.error('[gemini-nutrition] could not parse error body as JSON')
+      }
+
+      if (res.status === 429) {
+        return {
+          statusCode: 429,
+          headers: NO_CACHE,
+          body: JSON.stringify({
+            error: `Gemini rate limit or quota exceeded for model "${model}". Try a different model in Settings → Integrations.${geminiMessage ? ' (' + geminiMessage + ')' : ''}`,
+          }),
+        }
+      }
+      if (res.status === 401 || res.status === 403) {
+        return {
+          statusCode: res.status,
+          headers: NO_CACHE,
+          body: JSON.stringify({
+            error: `Gemini API key is invalid or not authorized. Check Settings → Integrations.${geminiMessage ? ' (' + geminiMessage + ')' : ''}`,
+          }),
+        }
+      }
+      if (res.status === 404) {
+        return {
+          statusCode: 404,
+          headers: NO_CACHE,
+          body: JSON.stringify({
+            error: `Model "${model}" not found. Use "Check for newer model" in Settings → Integrations to pick an available model.`,
+          }),
+        }
+      }
+      return {
+        statusCode: res.status,
+        headers: NO_CACHE,
+        body: JSON.stringify({ error: `Gemini API returned ${res.status}`, details: errText }),
+      }
     }
 
     const raw = await res.json() as {
@@ -67,13 +164,17 @@ Return ONLY the JSON object with no explanation, no markdown, no code fences.`
     }
 
     const text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    console.log('[gemini-nutrition] raw response for:', nameWithBrand, text)
+    console.log('[gemini-nutrition] success | model:', model, '| preview:', text.slice(0, 120))
 
     let nutrition: GeminiNutrition
     try {
       nutrition = JSON.parse(text) as GeminiNutrition
     } catch {
-      return { statusCode: 502, headers: NO_CACHE, body: JSON.stringify({ error: 'Failed to parse Gemini response', raw: text }) }
+      return {
+        statusCode: 502,
+        headers: NO_CACHE,
+        body: JSON.stringify({ error: 'Failed to parse Gemini response', raw: text }),
+      }
     }
 
     if (nutrition.notFound) {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useHouseholdTitle } from '@/context/SettingsContext'
 import { newId } from '@/utils/ids'
@@ -10,6 +10,14 @@ import { ReviewScreen } from './ReviewScreen'
 import { Toast } from './Toast'
 import type { Ingredient, NutritionSource } from '@/types'
 import styles from './IngredientImportPage.module.css'
+
+const DRAFT_KEY = 'ingredient_import_draft'
+
+interface SavedDraft {
+  ingredient: Ingredient
+  nutritionSource: NutritionSource
+  savedAt: string
+}
 
 type TabId = 'barcode' | 'usda' | 'bulk' | 'gemini'
 
@@ -83,6 +91,15 @@ export default function IngredientImportPage() {
   const [reviewNutritionSource, setReviewNutritionSource] = useState<NutritionSource | null>(null)
   const [usdaInitialQuery, setUsdaInitialQuery] = useState('')
   const [toasts, setToasts] = useState<ToastItem[]>([])
+  const [pendingDraft, setPendingDraft] = useState<SavedDraft | null>(null)
+
+  function checkForDraft() {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) { setPendingDraft(null); return }
+    try { setPendingDraft(JSON.parse(raw) as SavedDraft) } catch { setPendingDraft(null) }
+  }
+
+  useEffect(() => { checkForDraft() }, [])
 
   function addToast(name: string) {
     const id = newId()
@@ -111,12 +128,27 @@ export default function IngredientImportPage() {
   function handleSaved(name: string) {
     setReviewDraft(null)
     setReviewNutritionSource(null)
+    localStorage.removeItem(DRAFT_KEY)
+    setPendingDraft(null)
     addToast(name)
   }
 
   function handleCancelReview() {
     setReviewDraft(null)
     setReviewNutritionSource(null)
+    checkForDraft()
+  }
+
+  function handleResumeDraft() {
+    if (!pendingDraft) return
+    setReviewDraft(pendingDraft.ingredient)
+    setReviewNutritionSource(pendingDraft.nutritionSource)
+    setPendingDraft(null)
+  }
+
+  function handleDiscardDraft() {
+    localStorage.removeItem(DRAFT_KEY)
+    setPendingDraft(null)
   }
 
   function handleSearchUSDA() {
@@ -163,6 +195,17 @@ export default function IngredientImportPage() {
         </div>
       ) : (
         <div className={styles.tabContainer}>
+          {pendingDraft && (
+            <div className={styles.draftBanner}>
+              <span className={styles.draftBannerText}>
+                You have an unsaved ingredient in progress: <strong>{pendingDraft.ingredient.name || 'Untitled'}</strong>
+              </span>
+              <div className={styles.draftBannerActions}>
+                <button className={styles.draftBannerDiscard} onClick={handleDiscardDraft}>Discard</button>
+                <button className={styles.draftBannerResume} onClick={handleResumeDraft}>Resume</button>
+              </div>
+            </div>
+          )}
           <div className={styles.tabBar} role="tablist">
             {TABS.map(tab => (
               <button

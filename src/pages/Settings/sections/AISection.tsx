@@ -20,10 +20,51 @@ const PROVIDER_HINTS: Record<AIProvider, string> = {
   ollama:    'Runs locally — no API key needed. Requires Ollama running on your machine.',
 }
 
+interface FetchedModel { id: string; displayName: string }
+
 export function AISection() {
   const { settings, updateSettings } = useSettings()
-  const { ai, usdaApiKey, geminiApiKey } = settings
+  const { ai, usdaApiKey, geminiApiKey, geminiModel } = settings
   const [showKey, setShowKey] = useState(false)
+  const [modelFetchLoading, setModelFetchLoading] = useState(false)
+  const [fetchedModels, setFetchedModels] = useState<FetchedModel[]>([])
+  const [modelFetchError, setModelFetchError] = useState('')
+
+  async function handleFetchModels() {
+    if (!geminiApiKey) return
+    setModelFetchLoading(true)
+    setModelFetchError('')
+    setFetchedModels([])
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiApiKey)}`
+      )
+      if (!res.ok) {
+        const text = await res.text()
+        setModelFetchError(`API returned ${res.status} — check your API key.`)
+        console.error('[AISection] model list error:', text)
+        return
+      }
+      const json = await res.json() as {
+        models?: Array<{ name: string; displayName?: string; supportedGenerationMethods?: string[] }>
+      }
+      const generationModels = (json.models ?? [])
+        .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+        .map(m => ({
+          id: m.name.replace('models/', ''),
+          displayName: m.displayName ?? m.name.replace('models/', ''),
+        }))
+      if (generationModels.length === 0) {
+        setModelFetchError('No generateContent models found for this key.')
+        return
+      }
+      setFetchedModels(generationModels)
+    } catch (e) {
+      setModelFetchError(`Could not reach Gemini API: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setModelFetchLoading(false)
+    }
+  }
 
   return (
     <div className={styles.section}>
@@ -117,23 +158,63 @@ export function AISection() {
       </p>
 
       <Card>
-        <div className={styles.keyRow}>
-          <Input
-            label="Google Gemini API Key (optional)"
-            type={showKey ? 'text' : 'password'}
-            value={geminiApiKey}
-            onChange={e => updateSettings({ geminiApiKey: e.target.value })}
-            placeholder="Get a free key at aistudio.google.com"
-          />
-          <Button variant="ghost" size="sm" className={styles.showBtn} onClick={() => setShowKey(v => !v)}>
-            {showKey ? 'Hide' : 'Show'}
-          </Button>
+        <div className={styles.fieldGroup}>
+          <div className={styles.keyRow}>
+            <Input
+              label="Google Gemini API Key (optional)"
+              type={showKey ? 'text' : 'password'}
+              value={geminiApiKey}
+              onChange={e => updateSettings({ geminiApiKey: e.target.value })}
+              placeholder="Get a free key at aistudio.google.com"
+            />
+            <Button variant="ghost" size="sm" className={styles.showBtn} onClick={() => setShowKey(v => !v)}>
+              {showKey ? 'Hide' : 'Show'}
+            </Button>
+          </div>
+
+          <div className={styles.modelRow}>
+            <Input
+              label="Gemini Model"
+              value={geminiModel || 'gemini-flash-latest'}
+              onChange={e => updateSettings({ geminiModel: e.target.value })}
+              placeholder="gemini-flash-latest"
+              hint="Model used for nutrition lookups"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              className={styles.modelCheckBtn}
+              onClick={handleFetchModels}
+              disabled={!geminiApiKey || modelFetchLoading}
+            >
+              {modelFetchLoading ? 'Loading…' : 'Check for newer model'}
+            </Button>
+          </div>
+
+          {modelFetchError && (
+            <p className={styles.modelError}>{modelFetchError}</p>
+          )}
+
+          {fetchedModels.length > 0 && (
+            <div className={styles.modelPickRow}>
+              <Select
+                label="Select from available models"
+                options={fetchedModels.map(m => ({ value: m.id, label: m.displayName }))}
+                value={geminiModel || 'gemini-flash-latest'}
+                onChange={e => updateSettings({ geminiModel: e.target.value })}
+              />
+              <p className={styles.hint}>
+                {fetchedModels.length} models available. Selecting here also updates the model field above.
+              </p>
+            </div>
+          )}
+
+          {geminiApiKey && (
+            <p className={styles.keyStored}>
+              Key stored locally on this device only. Used for nutrition lookup only, not recipe import.
+            </p>
+          )}
         </div>
-        {geminiApiKey && (
-          <p className={styles.keyStored} style={{ marginTop: 'var(--space-2)' }}>
-            Key stored locally on this device only. Used for nutrition lookup only, not recipe import.
-          </p>
-        )}
       </Card>
     </div>
   )
