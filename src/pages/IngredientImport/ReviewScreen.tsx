@@ -7,6 +7,8 @@ import { useSettings } from '@/context/SettingsContext'
 import { getAllIngredients, saveIngredient, calcCostPerServing } from '@/db/ingredients'
 import { newId, now } from '@/utils/ids'
 import { availableUnits } from '@/utils/units'
+import { findSmartMatches } from '@/utils/smartDuplicate'
+import { Toast } from './Toast'
 import type { Ingredient, IngredientVariant, IngredientUnit, Macros, NutritionSource } from '@/types'
 import styles from './ReviewScreen.module.css'
 
@@ -14,9 +16,14 @@ const BLANK_MACROS: Macros = { calories: 0, protein: 0, carbs: 0, fiber: 0, suga
 
 const DRAFT_KEY = 'ingredient_import_draft'
 
-interface DuplicateState {
-  existing: Ingredient
+interface SmartMatchState {
+  matches: Ingredient[]
   draft: Ingredient
+}
+
+interface ToastState {
+  message: string
+  onDone: () => void
 }
 
 const SOURCE_LABELS: Record<NutritionSource, string> = {
@@ -38,7 +45,8 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
   const { settings, updateSettings } = useSettings()
   const [draft, setDraft] = useState<Ingredient>(() => ensureVariant(initialDraft))
   const [saving, setSaving] = useState(false)
-  const [duplicate, setDuplicate] = useState<DuplicateState | null>(null)
+  const [smartMatches, setSmartMatches] = useState<SmartMatchState | null>(null)
+  const [toast, setToast] = useState<ToastState | null>(null)
   const [draftSaved, setDraftSaved] = useState(false)
 
   const handleSaveDraft = useCallback(() => {
@@ -83,13 +91,24 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
     setSaving(true)
     try {
       const all = await getAllIngredients(true)
-      const existing = all.find(i => i.name.toLowerCase() === draft.name.trim().toLowerCase())
-      if (existing) {
-        setDuplicate({ existing, draft })
-        setSaving(false)
+      const matches = findSmartMatches(draft.name.trim(), all)
+      if (matches.length === 0) {
+        await commitSave(draft)
         return
       }
-      await commitSave(draft)
+      if (matches.length === 1) {
+        const parent = matches[0]
+        const draftBrand = (draft.variants[0]?.brand ?? '').trim().toLowerCase()
+        const brandConflict = parent.variants.some(
+          v => (v.brand ?? '').trim().toLowerCase() === draftBrand
+        )
+        if (!brandConflict) {
+          await addAsVariantOf(parent, draft)
+          return
+        }
+      }
+      setSmartMatches({ matches, draft })
+      setSaving(false)
     } catch {
       setSaving(false)
     }
@@ -120,45 +139,33 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
     }
   }
 
-  async function saveAsNewVariant() {
-    if (!duplicate) return
+  async function addAsVariantOf(parent: Ingredient, d: Ingredient) {
     setSaving(true)
-    const { existing, draft: d } = duplicate
     const newVariant: IngredientVariant = {
       ...d.variants[0],
       id: newId(),
-      parentId: existing.id,
+      parentId: parent.id,
     }
     const updated: Ingredient = {
-      ...existing,
-      variants: [...existing.variants, newVariant],
+      ...parent,
+      variants: [...parent.variants, newVariant],
       updatedAt: now(),
     }
     await saveIngredient(updated)
     await autoAddBrand(d.variants[0]?.brand)
-    setDuplicate(null)
-    onSaved(existing.name)
+    setSmartMatches(null)
+    setSaving(false)
+    setToast({ message: `Added as a variant of ${parent.name}`, onDone: () => onSaved(parent.name) })
   }
 
-  async function saveAsNewIngredient() {
-    if (!duplicate) return
+  async function handleSaveAsNew() {
+    if (!smartMatches) return
     setSaving(true)
-    const toSave: Ingredient = {
-      ...duplicate.draft,
-      id: newId(),
-      name: duplicate.draft.name.trim(),
-      createdAt: now(),
-      updatedAt: now(),
-      defaultVariantId: duplicate.draft.variants[0].id,
-      variants: duplicate.draft.variants.map(variant => ({
-        ...variant,
-        costPerServing: calcCostPerServing(variant),
-      })),
+    try {
+      await commitSave(smartMatches.draft)
+    } catch {
+      setSaving(false)
     }
-    await saveIngredient(toSave)
-    await autoAddBrand(toSave.variants[0]?.brand)
-    setDuplicate(null)
-    onSaved(toSave.name)
   }
 
   return (
@@ -310,29 +317,47 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
         </Button>
       </div>
 
-      {duplicate && (
+      {smartMatches && (
         <Modal
           open
-          onClose={() => { setDuplicate(null); setSaving(false) }}
-          title="Duplicate Found"
+          onClose={() => { setSmartMatches(null); setSaving(false) }}
+          title={smartMatches.matches.length === 1 ? 'Similar Ingredient Found' : 'Similar Ingredients Found'}
           size="sm"
           footer={
             <>
-              <Button variant="secondary" onClick={() => { setDuplicate(null); setSaving(false) }}>Cancel</Button>
-              <Button variant="secondary" onClick={saveAsNewIngredient} disabled={saving}>Save as New</Button>
-              <Button onClick={saveAsNewVariant} disabled={saving}>Add as Variant</Button>
+              <Button variant="secondary" onClick={() => { setSmartMatches(null); setSaving(false) }}>Cancel</Button>
+              <Button variant="secondary" onClick={handleSaveAsNew} disabled={saving}>Save as New</Button>
             </>
           }
         >
-          <p>
-            <strong>{duplicate.existing.name}</strong> already exists in your ingredient database.
+          <p className={styles.dupDesc}>
+            {smartMatches.matches.length === 1
+              ? 'A similar ingredient already exists. Add this as a variant, or save it as a new ingredient.'
+              : 'These existing ingredients have similar names. Add this as a variant of one, or save it as a new ingredient.'}
           </p>
-          <p style={{ marginTop: 'var(--space-2)', color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
-            "Add as Variant" adds this brand to the existing ingredient.
-            "Save as New" creates a separate ingredient entry.
-          </p>
+          {smartMatches.matches.map(m => {
+            const draftBrand = (smartMatches.draft.variants[0]?.brand ?? '').trim().toLowerCase()
+            const brandExists = m.variants.some(v => (v.brand ?? '').trim().toLowerCase() === draftBrand)
+            return (
+              <div key={m.id} className={styles.dupMatch}>
+                <div>
+                  <div className={styles.dupMatchName}>{m.name}</div>
+                  {brandExists && (
+                    <div className={styles.dupMatchWarn}>
+                      Brand "{smartMatches.draft.variants[0]?.brand}" already exists on this ingredient
+                    </div>
+                  )}
+                </div>
+                <Button size="sm" onClick={() => addAsVariantOf(m, smartMatches.draft)} disabled={saving}>
+                  Add as Variant
+                </Button>
+              </div>
+            )
+          })}
         </Modal>
       )}
+
+      {toast && <Toast message={toast.message} onDone={toast.onDone} />}
     </div>
   )
 }

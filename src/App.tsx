@@ -4,6 +4,7 @@ import { SettingsProvider, useSettings } from '@/context/SettingsContext'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { SetupWizard } from '@/pages/Setup/SetupWizard'
+import { StarterLibraryPrompt } from '@/components/StarterLibraryPrompt'
 
 const SettingsPage          = lazy(() => import('@/pages/Settings/SettingsPage'))
 const IngredientsPage       = lazy(() => import('@/pages/Ingredients/IngredientsPage'))
@@ -24,6 +25,7 @@ function AppRoutes() {
     >
       <BrowserRouter>
         {!isLoading && !settings.setupComplete && <SetupWizard />}
+        {!isLoading && settings.setupComplete && <StarterLibraryPrompt />}
         <AppLayout>
           <Suspense fallback={<PageLoader />}>
             <Routes>

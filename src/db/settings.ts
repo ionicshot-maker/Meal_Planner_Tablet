@@ -77,6 +77,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     "Sprouts", "Stop & Shop", "Target", "Trader Joe's", "Walmart",
     "Whole Foods", "Winn-Dixie",
   ],
+  starterLibrarySeeded: false,
   supabaseUrl: '',
   supabaseAnonKey: '',
   householdSyncCode: '',

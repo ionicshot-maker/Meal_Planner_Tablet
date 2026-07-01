@@ -19,6 +19,9 @@ export default function IngredientsPage() {
   const [editing, setEditing] = useState<Ingredient | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Ingredient | null>(null)
   const [loading, setLoading] = useState(true)
+  const [bannerDismissed, setBannerDismissed] = useState(
+    () => localStorage.getItem('starter_banner_dismissed') === '1'
+  )
 
   const load = useCallback(async () => {
     const results = search
@@ -115,6 +118,20 @@ export default function IngredientsPage() {
           ) : null
         ))}
       </div>
+
+      {settings.starterLibrarySeeded && !bannerDismissed && (
+        <div className={styles.infoBanner}>
+          <span className={styles.infoBannerText}>
+            ℹ️ Pre-loaded ingredients use USDA average values for generic raw items. Nutritional values vary by variety,
+            ripeness, and preparation — cooked weights differ from raw. Always verify against a food label for packaged products.
+          </span>
+          <button
+            className={styles.infoBannerDismiss}
+            onClick={() => { localStorage.setItem('starter_banner_dismissed', '1'); setBannerDismissed(true) }}
+            aria-label="Dismiss"
+          >✕</button>
+        </div>
+      )}
 
       {loading ? (
         <div className={styles.empty}>Loading…</div>

@@ -99,6 +99,7 @@ export interface AppSettings {
   recipeTags: RecipeTagGroup[]
   brands: string[]
   stores: string[]
+  starterLibrarySeeded: boolean
   // Cloud sync
   supabaseUrl: string
   supabaseAnonKey: string
