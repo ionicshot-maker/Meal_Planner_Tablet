@@ -12,6 +12,17 @@
   line-height: 1.5;
 }
 
+/* ── Data accuracy disclaimer ───────────────────────────────────── */
+.disclaimer {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-accent) 6%, var(--color-bg));
+  border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.5;
+}
+
 /* ── Manual entry row ───────────────────────────────────────────── */
 .manualRow {
   display: flex;

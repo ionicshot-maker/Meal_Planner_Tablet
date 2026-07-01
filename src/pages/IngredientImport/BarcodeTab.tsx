@@ -370,6 +370,11 @@ export function BarcodeTab({ onReview }: Props) {
         Scan a barcode with your camera or enter one manually to auto-fill product info from Open Food Facts.
       </p>
 
+      <div className={styles.disclaimer}>
+        Open Food Facts is a community-maintained, open database. Nutrition data may be incomplete or inaccurate.
+        Always compare values against the product label before saving.
+      </div>
+
       {/* ── Manual barcode entry (always visible) ── */}
       <div className={styles.manualRow}>
         <Input

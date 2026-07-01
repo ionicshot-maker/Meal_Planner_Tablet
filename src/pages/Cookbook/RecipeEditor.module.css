@@ -563,19 +563,87 @@
 }
 
 .suggestionItem {
-  display: block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   text-align: left;
   padding: var(--space-2) var(--space-3);
   background: none;
   border: none;
-  font-size: var(--text-sm);
-  color: var(--color-text);
   cursor: pointer;
   font-family: inherit;
   transition: background var(--transition), color var(--transition);
 }
 .suggestionItem:hover { background: var(--color-selected); color: var(--color-selected-text); }
+
+.suggestionName {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+.suggestionItem:hover .suggestionName { color: var(--color-selected-text); }
+
+.suggestionMeta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 1px;
+}
+.suggestionItem:hover .suggestionMeta { color: var(--color-selected-text); opacity: 0.8; }
+
+/* ── No-match helper ── */
+.noMatchHelper {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.noMatchText {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.noMatchBtns {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.noMatchBtn {
+  padding: 3px var(--space-2);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+.noMatchBtn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+/* ── Not-linked badge ── */
+.notLinkedBadge {
+  display: inline-block;
+  font-size: var(--text-xs);
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: var(--radius-full);
+  padding: 1px var(--space-2);
+  margin-top: 3px;
+  font-weight: 500;
+}
+[data-theme="dark"] .notLinkedBadge { color: #fbbf24; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.25); }
 
 .variantSelect {
   font-size: var(--text-xs);

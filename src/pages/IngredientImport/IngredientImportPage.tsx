@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useHouseholdTitle } from '@/context/SettingsContext'
 import { newId } from '@/utils/ids'
 import { BarcodeTab } from './BarcodeTab'
@@ -85,11 +85,15 @@ function isNutritionIncomplete(ingredient: Ingredient): boolean {
 
 export default function IngredientImportPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const pageTitle = useHouseholdTitle('Import Ingredients')
-  const [activeTab, setActiveTab] = useState<TabId>('barcode')
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    const tab = searchParams.get('tab') as TabId | null
+    return tab && TABS.some(t => t.id === tab) ? tab : 'barcode'
+  })
   const [reviewDraft, setReviewDraft] = useState<Ingredient | null>(null)
   const [reviewNutritionSource, setReviewNutritionSource] = useState<NutritionSource | null>(null)
-  const [usdaInitialQuery, setUsdaInitialQuery] = useState('')
+  const [usdaInitialQuery, setUsdaInitialQuery] = useState(() => searchParams.get('q') ?? '')
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [pendingDraft, setPendingDraft] = useState<SavedDraft | null>(null)
 

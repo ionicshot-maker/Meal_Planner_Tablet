@@ -747,6 +747,13 @@ function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
       .map(x => x.ing)
   }, [value, allIngredients])
 
+  const showNoMatch = open && suggestions.length === 0 && value.trim().length >= 2
+
+  function openImport(tab: string) {
+    const q = encodeURIComponent(value.trim())
+    window.open(`/import-ingredients?tab=${tab}&q=${q}`, '_blank')
+  }
+
   return (
     <div className={styles.nameSuggestWrap}>
       <input
@@ -755,27 +762,47 @@ function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
         value={value}
         onChange={e => onChange(e.target.value)}
         onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
         placeholder="Ingredient name…"
       />
       {open && suggestions.length > 0 && (
         <ul className={styles.suggestions}>
-          {suggestions.map(ing => (
-            <li key={ing.id}>
-              <button
-                type="button"
-                className={styles.suggestionItem}
-                onMouseDown={e => {
-                  e.preventDefault()
-                  onLink(ing, ing.defaultVariantId || ing.variants[0]?.id || '')
-                  setOpen(false)
-                }}
-              >
-                {ing.name}
-              </button>
-            </li>
-          ))}
+          {suggestions.map(ing => {
+            const dv = ing.variants.find(v => v.id === ing.defaultVariantId) ?? ing.variants[0]
+            const brand = dv?.brand ?? ''
+            const calories = dv ? Math.round(dv.macros.calories) : 0
+            return (
+              <li key={ing.id}>
+                <button
+                  type="button"
+                  className={styles.suggestionItem}
+                  onMouseDown={e => {
+                    e.preventDefault()
+                    onLink(ing, ing.defaultVariantId || ing.variants[0]?.id || '')
+                    setOpen(false)
+                  }}
+                >
+                  <span className={styles.suggestionName}>{ing.name}</span>
+                  {(brand || calories > 0) && (
+                    <span className={styles.suggestionMeta}>
+                      {brand}{brand && calories > 0 ? ' · ' : ''}{calories > 0 ? `${calories} cal` : ''}
+                    </span>
+                  )}
+                </button>
+              </li>
+            )
+          })}
         </ul>
+      )}
+      {showNoMatch && (
+        <div className={styles.noMatchHelper}>
+          <span className={styles.noMatchText}>Not in your database — add it first:</span>
+          <div className={styles.noMatchBtns}>
+            <button type="button" className={styles.noMatchBtn} onMouseDown={e => { e.preventDefault(); openImport('barcode') }}>📷 Scan Barcode</button>
+            <button type="button" className={styles.noMatchBtn} onMouseDown={e => { e.preventDefault(); openImport('usda') }}>🔬 USDA Lookup</button>
+            <button type="button" className={styles.noMatchBtn} onMouseDown={e => { e.preventDefault(); openImport('gemini') }}>✨ Ask Gemini</button>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -808,12 +835,15 @@ function IngredientRow({
         <div className={styles.ingName}>
           {isMissing
             ? (
-                <IngredientNameInput
-                  value={row.name}
-                  allIngredients={allIngredients}
-                  onChange={name => onUpdate({ name })}
-                  onLink={(ing, variantId) => onUpdate({ ingredientId: ing.id, variantId, name: ing.name })}
-                />
+                <>
+                  <IngredientNameInput
+                    value={row.name}
+                    allIngredients={allIngredients}
+                    onChange={name => onUpdate({ name })}
+                    onLink={(ing, variantId) => onUpdate({ ingredientId: ing.id, variantId, name: ing.name })}
+                  />
+                  {row.name.trim() && <span className={styles.notLinkedBadge}>not linked</span>}
+                </>
               )
             : (
                 <div>
