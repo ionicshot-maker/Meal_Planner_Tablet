@@ -52,6 +52,11 @@
   font-style: italic;
 }
 
+.itemMeta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
 .partialNote {
   font-size: var(--text-xs);
   color: #B8860B;

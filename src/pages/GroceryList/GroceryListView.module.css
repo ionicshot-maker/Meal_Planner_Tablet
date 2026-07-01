@@ -135,3 +135,16 @@
 }
 .manualAddBtn:hover:not(:disabled) { background: var(--color-accent-hover); }
 .manualAddBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Estimated total */
+.totalBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-surface);
+  border-top: 2px solid var(--color-border);
+  flex-shrink: 0;
+}
+.totalLabel { font-size: var(--text-sm); color: var(--color-text-muted); }
+.totalAmount { font-size: var(--text-base); font-weight: 700; color: var(--color-text); }

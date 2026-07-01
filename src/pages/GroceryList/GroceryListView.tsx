@@ -23,6 +23,9 @@ export function GroceryListView({ list, showStoreOption, householdName, onUpdate
   const totalCount = allItems.length
   const progressPct = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0
 
+  const pricedItems = allItems.filter(i => i.unitPrice != null)
+  const estimatedTotal = pricedItems.reduce((sum, i) => sum + (i.unitPrice ?? 0) * i.quantity, 0)
+
   function updateItem(id: string, patch: Partial<GroceryItem>, inManual = false) {
     const key = inManual ? 'manualItems' : 'items'
     const updated = {
@@ -269,6 +272,14 @@ export function GroceryListView({ list, showStoreOption, householdName, onUpdate
         </div>
       </div>
 
+      {pricedItems.length > 0 && (
+        <div className={styles.totalBar}>
+          <span className={styles.totalLabel}>
+            Estimated total ({pricedItems.length} priced item{pricedItems.length !== 1 ? 's' : ''})
+          </span>
+          <span className={styles.totalAmount}>${estimatedTotal.toFixed(2)}</span>
+        </div>
+      )}
     </div>
   )
 }

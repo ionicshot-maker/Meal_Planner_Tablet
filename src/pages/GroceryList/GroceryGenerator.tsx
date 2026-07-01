@@ -3,10 +3,11 @@ import { createPortal } from 'react-dom'
 import { getMealPlanDays } from '@/db/mealPlan'
 import { getAllRecipes } from '@/db/recipes'
 import { getAllIngredients } from '@/db/ingredients'
+import { getAllHouseholdItems } from '@/db/householdItems'
 import { buildIngredientMap } from '@/utils/recipeCalculations'
 import { consolidateIngredients, aggToGroceryItem } from '@/utils/groceryUtils'
 import { toISODate } from '@/utils/mealPlanUtils'
-import type { GroceryList, GroceryItem } from '@/types'
+import type { GroceryList, GroceryItem, HouseholdItem, IngredientUnit } from '@/types'
 import type { AggregatedItem } from '@/utils/groceryUtils'
 import styles from './GroceryGenerator.module.css'
 
@@ -16,6 +17,22 @@ interface Props {
 }
 
 type Step = 'dates' | 'aoh' | 'generating'
+
+function householdToGroceryItem(h: HouseholdItem): GroceryItem {
+  return {
+    id: crypto.randomUUID(),
+    name: h.name,
+    quantity: 1,
+    unit: 'each' as IngredientUnit,
+    category: h.category || 'Household',
+    brand: h.brand || undefined,
+    store: h.store || undefined,
+    unitPrice: h.price,
+    checked: false,
+    partiallyBought: false,
+    isManual: true,
+  }
+}
 
 export function GroceryGenerator({ onGenerated, onClose }: Props) {
   const today = toISODate(new Date())
@@ -27,11 +44,13 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
   // Results from analysis
   const [allAggregated, setAllAggregated] = useState<AggregatedItem[]>([])
   const [aohItems, setAohItems] = useState<AggregatedItem[]>([])
-  // Track which AoH items the user says they DON'T have (should be added to list)
   const [aohMissing, setAohMissing] = useState<Set<string>>(new Set())
   const [aohAnswered, setAohAnswered] = useState(false)
 
-  // Close on Escape
+  // Household AoH items
+  const [aohHouseholdItems, setAohHouseholdItems] = useState<HouseholdItem[]>([])
+  const [aohHouseholdMissing, setAohHouseholdMissing] = useState<Set<string>>(new Set())
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
@@ -46,7 +65,6 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
     setError('')
     setStep('generating')
 
-    // Build date array
     const dates: string[] = []
     const cur = new Date(startDate + 'T12:00:00')
     const end = new Date(endDate + 'T12:00:00')
@@ -55,10 +73,11 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
       cur.setDate(cur.getDate() + 1)
     }
 
-    const [dayMap, recipes, ingredients] = await Promise.all([
+    const [dayMap, recipes, ingredients, householdAll] = await Promise.all([
       getMealPlanDays(dates),
       getAllRecipes(false),
       getAllIngredients(false),
+      getAllHouseholdItems(),
     ])
 
     const recipeMap = new Map(recipes.map(r => [r.id, r]))
@@ -72,23 +91,25 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
     )
 
     const aoh = aggregated.filter(a => a.alwaysOnHand)
+    const aohHousehold = householdAll.filter(h => h.alwaysOnHand)
+
     setAllAggregated(aggregated)
     setAohItems(aoh)
+    setAohHouseholdItems(aohHousehold)
 
-    if (aoh.length > 0) {
+    if (aoh.length > 0 || aohHousehold.length > 0) {
       setStep('aoh')
     } else {
-      generateList(aggregated, new Set())
+      generateList(aggregated, new Set(), new Set())
     }
   }
 
   function handleAohYesAll() {
-    // All on hand → none added to list
-    generateList(allAggregated, new Set())
+    generateList(allAggregated, new Set(), new Set())
   }
 
   function handleAohConfirm() {
-    generateList(allAggregated, aohMissing)
+    generateList(allAggregated, aohMissing, aohHouseholdMissing)
   }
 
   function toggleAohMissing(key: string) {
@@ -100,8 +121,17 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
     })
   }
 
-  function generateList(aggregated: AggregatedItem[], missingAohKeys: Set<string>) {
-    const items: GroceryItem[] = aggregated
+  function toggleAohHouseholdMissing(id: string) {
+    setAohHouseholdMissing(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function generateList(aggregated: AggregatedItem[], missingAohKeys: Set<string>, missingHouseholdIds: Set<string>) {
+    const ingredientItems: GroceryItem[] = aggregated
       .filter(a => {
         if (!a.alwaysOnHand) return true
         const key = `${a.ingredientId}::${a.variantId ?? ''}::${a.unit}`
@@ -109,13 +139,17 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
       })
       .map(aggToGroceryItem)
 
+    const householdItems: GroceryItem[] = aohHouseholdItems
+      .filter(h => missingHouseholdIds.has(h.id))
+      .map(householdToGroceryItem)
+
     const list: GroceryList = {
       id: crypto.randomUUID(),
       startDate,
       endDate,
       generatedAt: new Date().toISOString(),
-      items,
-      manualItems: [],
+      items: ingredientItems,
+      manualItems: householdItems,
       remainderItems: [],
       status: 'active',
     }
@@ -124,6 +158,7 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
 
   const nonAohCount = allAggregated.filter(a => !a.alwaysOnHand).length
   const aohCount = aohItems.length
+  const aohHouseholdCount = aohHouseholdItems.length
 
   return createPortal(
     <div className={styles.overlay} onClick={onClose}>
@@ -161,8 +196,12 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
             <>
               <div className={styles.stepTitle}>Always-on-hand check</div>
               <p className={styles.aohDesc}>
-                The following {aohCount} ingredient{aohCount !== 1 ? 's are' : ' is'} marked as
-                <strong> Always On Hand</strong> in your database.
+                {aohCount > 0 && (
+                  <>The following <strong>{aohCount} ingredient{aohCount !== 1 ? 's are' : ' is'}</strong> marked as Always On Hand. </>
+                )}
+                {aohHouseholdCount > 0 && (
+                  <>Plus <strong>{aohHouseholdCount} household item{aohHouseholdCount !== 1 ? 's' : ''}</strong> usually kept on hand. </>
+                )}
                 The rest of your list has <strong>{nonAohCount} item{nonAohCount !== 1 ? 's' : ''}</strong>.
               </p>
               <p className={styles.aohQuestion}>Are you still stocked on all of these?</p>
@@ -179,29 +218,56 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
               ) : (
                 <>
                   <p className={styles.aohCheckNote}>Check any items you need to buy:</p>
-                  <ul className={styles.aohList}>
-                    {aohItems.map(item => {
-                      const key = `${item.ingredientId}::${item.variantId ?? ''}::${item.unit}`
-                      return (
-                        <li key={key} className={styles.aohItem}>
-                          <label className={styles.aohLabel}>
-                            <input
-                              type="checkbox"
-                              className={styles.aohCheckbox}
-                              checked={aohMissing.has(key)}
-                              onChange={() => toggleAohMissing(key)}
-                            />
-                            <span className={styles.aohName}>{item.name}</span>
-                            <span className={styles.aohQty}>
-                              {Math.round(item.quantity * 100) / 100} {item.unit}
-                            </span>
-                          </label>
-                        </li>
-                      )
-                    })}
-                  </ul>
+                  {aohCount > 0 && (
+                    <ul className={styles.aohList}>
+                      {aohItems.map(item => {
+                        const key = `${item.ingredientId}::${item.variantId ?? ''}::${item.unit}`
+                        return (
+                          <li key={key} className={styles.aohItem}>
+                            <label className={styles.aohLabel}>
+                              <input
+                                type="checkbox"
+                                className={styles.aohCheckbox}
+                                checked={aohMissing.has(key)}
+                                onChange={() => toggleAohMissing(key)}
+                              />
+                              <span className={styles.aohName}>{item.name}</span>
+                              <span className={styles.aohQty}>
+                                {Math.round(item.quantity * 100) / 100} {item.unit}
+                              </span>
+                            </label>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                  {aohHouseholdCount > 0 && (
+                    <>
+                      {aohCount > 0 && <div className={styles.aohDivider}>Household Items</div>}
+                      <ul className={styles.aohList}>
+                        {aohHouseholdItems.map(item => (
+                          <li key={item.id} className={styles.aohItem}>
+                            <label className={styles.aohLabel}>
+                              <input
+                                type="checkbox"
+                                className={styles.aohCheckbox}
+                                checked={aohHouseholdMissing.has(item.id)}
+                                onChange={() => toggleAohHouseholdMissing(item.id)}
+                              />
+                              <span className={styles.aohName}>{item.name}</span>
+                              <span className={styles.aohQty}>
+                                {[item.brand, item.store ? `@ ${item.store}` : null].filter(Boolean).join(' ') || '1 each'}
+                              </span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
                   <button className={styles.btnPrimary} onClick={handleAohConfirm}>
-                    Continue with {aohMissing.size > 0 ? `${aohMissing.size} added` : 'no additions'}
+                    Continue with {aohMissing.size + aohHouseholdMissing.size > 0
+                      ? `${aohMissing.size + aohHouseholdMissing.size} added`
+                      : 'no additions'}
                   </button>
                 </>
               )}

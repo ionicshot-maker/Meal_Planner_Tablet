@@ -35,8 +35,14 @@ export function GroceryItemRow({ item, showStore, onToggleCheck, onPartialBuy, o
 
       <div className={styles.content}>
         <span className={styles.name}>{item.name}</span>
-        {showStore && item.store && (
-          <span className={styles.store}>{item.store}</span>
+        {(item.brand || (showStore && item.store) || item.unitPrice != null) && (
+          <span className={styles.itemMeta}>
+            {[
+              item.brand,
+              (showStore || item.brand) && item.store ? `@ ${item.store}` : null,
+              item.unitPrice != null ? `$${item.unitPrice.toFixed(2)}` : null,
+            ].filter(Boolean).join(' ')}
+          </span>
         )}
         {item.partiallyBought && (
           <span className={styles.partialNote}>

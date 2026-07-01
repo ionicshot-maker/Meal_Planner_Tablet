@@ -257,7 +257,11 @@ export interface HouseholdItem {
   id: string
   name: string
   category: string
+  brand?: string
+  store?: string
+  price?: number
   notes?: string
+  alwaysOnHand?: boolean
   createdAt: string
 }
 
@@ -279,7 +283,9 @@ export interface GroceryItem {
   quantity: number
   unit: IngredientUnit
   category: string
+  brand?: string
   store?: string
+  unitPrice?: number
   checked: boolean
   partiallyBought: boolean
   purchasedQuantity?: number
