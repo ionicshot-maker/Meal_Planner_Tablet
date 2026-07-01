@@ -81,6 +81,8 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
   const [isFavorite, setIsFavorite] = useState(recipe?.isFavorite ?? false)
   const [isTemplate, setIsTemplate] = useState(recipe?.isTemplate ?? false)
   const [photoUrl, setPhotoUrl]   = useState(recipe?.photoUrl ?? '')
+  const [isDragging, setIsDragging] = useState(false)
+  const [photoUrlInput, setPhotoUrlInput] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>(recipe?.tags ?? prefill?.suggestedTags ?? [])
   const [openTagGroup, setOpenTagGroup] = useState<string | null>(null)
 
@@ -290,15 +292,34 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
     })
   }
 
-  // Photo
-  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  // Photo helpers
+  function processPhotoFile(file: File) {
     if (file.size > 2 * 1024 * 1024) { alert('Photo must be under 2 MB.'); return }
     const reader = new FileReader()
     reader.onload = ev => setPhotoUrl(ev.target?.result as string)
     reader.readAsDataURL(file)
+  }
+
+  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    processPhotoFile(file)
     e.target.value = ''
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file?.type.startsWith('image/')) processPhotoFile(file)
+  }
+
+  function handlePhotoUrlLoad() {
+    const url = photoUrlInput.trim()
+    if (!url) return
+    try { new URL(url) } catch { alert('Please enter a valid image URL.'); return }
+    setPhotoUrl(url)
+    setPhotoUrlInput('')
   }
 
   // Save
@@ -344,6 +365,24 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
+
+  // Clipboard image paste (Ctrl+V anywhere in the editor)
+  useEffect(() => {
+    function handlePaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault()
+          const file = item.getAsFile()
+          if (file) processPhotoFile(file)
+          break
+        }
+      }
+    }
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const units = availableUnits(settings.unitSystem).map(u => ({ value: u, label: u }))
 
@@ -401,8 +440,8 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
         {/* ── Missing ingredient warning ── */}
         {showMissingWarning && (
           <div className={styles.missingBanner}>
-            <strong>Unlinked ingredients:</strong> {missingNames.join(', ')} — not found in your ingredient database, so their macros and cost won't be counted.
-            {' '}You can save anyway, or go to the Ingredient Database to add them first, then come back to link them here.
+            <strong>Unlinked ingredients:</strong> {missingNames.join(', ')} — not in your ingredient database, so their macros and cost won't be counted.
+            {' '}Use the <strong>Scan Barcode</strong>, <strong>Search USDA</strong>, or <strong>Ask Gemini</strong> buttons on each unlinked row to add them, or save anyway to skip macro tracking for those items.
             <div className={styles.missingActions}>
               <button className={styles.missingBtn} onClick={() => { setShowMissingWarning(false); handleSave() }}>
                 Save anyway
@@ -546,20 +585,44 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
             {/* Photo */}
             <div className={styles.fieldGroup}>
               <label className={styles.fieldLabel}>Photo (optional, max 2 MB)</label>
-              <div className={styles.photoArea}>
-                {photoUrl
-                  ? (
-                      <div className={styles.photoPreview}>
-                        <img src={photoUrl} alt="Recipe" className={styles.photoImg} />
-                        <button className={styles.photoRemove} onClick={() => setPhotoUrl('')}>Remove photo</button>
-                      </div>
-                    )
-                  : (
+              <div
+                className={`${styles.photoDropZone} ${isDragging ? styles.photoDropZoneActive : ''}`}
+                onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+              >
+                {photoUrl ? (
+                  <div className={styles.photoPreview}>
+                    <img src={photoUrl} alt="Recipe" className={styles.photoImg} />
+                    <button className={styles.photoRemove} onClick={() => setPhotoUrl('')}>Remove photo</button>
+                  </div>
+                ) : (
+                  <>
+                    <div className={styles.photoPlaceholder}>
                       <button className={styles.photoUpload} onClick={() => photoInputRef.current?.click()}>
-                        📷 Add Photo
+                        📷 Browse file
                       </button>
-                    )
-                }
+                      <span className={styles.photoDivider}>or drag & drop / paste (Ctrl+V)</span>
+                    </div>
+                    <div className={styles.photoUrlRow}>
+                      <input
+                        type="url"
+                        className={styles.photoUrlInput}
+                        value={photoUrlInput}
+                        onChange={e => setPhotoUrlInput(e.target.value)}
+                        placeholder="Or paste an image URL…"
+                        onKeyDown={e => { if (e.key === 'Enter') handlePhotoUrlLoad() }}
+                      />
+                      <button
+                        className={styles.photoUrlBtn}
+                        onClick={handlePhotoUrlLoad}
+                        disabled={!photoUrlInput.trim()}
+                      >
+                        Load
+                      </button>
+                    </div>
+                  </>
+                )}
                 <input
                   ref={photoInputRef}
                   type="file"
@@ -716,6 +779,10 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
 
 // ─── Ingredient row inside the editor ────────────────────────────────────────
 
+function openImportTab(tab: string, name: string) {
+  window.open(`/import-ingredients?tab=${tab}&q=${encodeURIComponent(name.trim())}`, '_blank')
+}
+
 function scoreMatch(name: string, query: string): number {
   const n = name.toLowerCase()
   const q = query.toLowerCase()
@@ -746,13 +813,6 @@ function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
       .slice(0, 5)
       .map(x => x.ing)
   }, [value, allIngredients])
-
-  const showNoMatch = open && suggestions.length === 0 && value.trim().length >= 2
-
-  function openImport(tab: string) {
-    const q = encodeURIComponent(value.trim())
-    window.open(`/import-ingredients?tab=${tab}&q=${q}`, '_blank')
-  }
 
   return (
     <div className={styles.nameSuggestWrap}>
@@ -794,16 +854,6 @@ function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
           })}
         </ul>
       )}
-      {showNoMatch && (
-        <div className={styles.noMatchHelper}>
-          <span className={styles.noMatchText}>Not in your database — add it first:</span>
-          <div className={styles.noMatchBtns}>
-            <button type="button" className={styles.noMatchBtn} onMouseDown={e => { e.preventDefault(); openImport('barcode') }}>📷 Scan Barcode</button>
-            <button type="button" className={styles.noMatchBtn} onMouseDown={e => { e.preventDefault(); openImport('usda') }}>🔬 USDA Lookup</button>
-            <button type="button" className={styles.noMatchBtn} onMouseDown={e => { e.preventDefault(); openImport('gemini') }}>✨ Ask Gemini</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -842,13 +892,22 @@ function IngredientRow({
                     onChange={name => onUpdate({ name })}
                     onLink={(ing, variantId) => onUpdate({ ingredientId: ing.id, variantId, name: ing.name })}
                   />
-                  {row.name.trim() && <span className={styles.notLinkedBadge}>not linked</span>}
+                  {row.name.trim() && (
+                    <>
+                      <span className={styles.notLinkedBadge}>not linked — add it first:</span>
+                      <div className={styles.ingActionBtns}>
+                        <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('barcode', row.name)}>📷 Scan Barcode</button>
+                        <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('usda', row.name)}>🔬 Search USDA</button>
+                        <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('gemini', row.name)}>✨ Ask Gemini</button>
+                      </div>
+                    </>
+                  )}
                 </>
               )
             : (
                 <div>
                   <span className={styles.ingNameText}>{row.name}</span>
-                  {ingredient && ingredient.variants.length > 1 && (
+                  {ingredient && ingredient.variants.length > 0 && (
                     <select
                       className={styles.variantSelect}
                       value={row.variantId ?? ''}
