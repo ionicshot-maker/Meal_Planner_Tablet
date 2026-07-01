@@ -97,6 +97,8 @@ export interface AppSettings {
   setupComplete: boolean
   ingredientCategories: string[]
   recipeTags: RecipeTagGroup[]
+  brands: string[]
+  stores: string[]
   // Cloud sync
   supabaseUrl: string
   supabaseAnonKey: string
