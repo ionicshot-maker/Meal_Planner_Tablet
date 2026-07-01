@@ -122,8 +122,9 @@ export default function IngredientsPage() {
       {settings.starterLibrarySeeded && !bannerDismissed && (
         <div className={styles.infoBanner}>
           <span className={styles.infoBannerText}>
-            ℹ️ Pre-loaded ingredients use USDA average values for generic raw items. Nutritional values vary by variety,
-            ripeness, and preparation — cooked weights differ from raw. Always verify against a food label for packaged products.
+            <strong>ℹ️ Pre-loaded ingredients use USDA average values for generic raw items.</strong>{' '}
+            Nutritional values vary by variety, ripeness, and preparation — cooked weights differ from raw.
+            Always verify against a food label for packaged products.
           </span>
           <button
             className={styles.infoBannerDismiss}

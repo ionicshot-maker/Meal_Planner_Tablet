@@ -78,6 +78,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     "Whole Foods", "Winn-Dixie",
   ],
   starterLibrarySeeded: false,
+  starterLibraryVersion: 0,
   supabaseUrl: '',
   supabaseAnonKey: '',
   householdSyncCode: '',

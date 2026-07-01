@@ -100,6 +100,7 @@ export interface AppSettings {
   brands: string[]
   stores: string[]
   starterLibrarySeeded: boolean
+  starterLibraryVersion: number
   // Cloud sync
   supabaseUrl: string
   supabaseAnonKey: string

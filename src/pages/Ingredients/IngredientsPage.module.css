@@ -56,16 +56,22 @@
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-6);
-  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 18%, transparent);
+  padding: var(--space-4) var(--space-6);
+  background: #FFF3CD;
+  border: 1px solid #D4B896;
+  border-left: 4px solid #D4B896;
   flex-shrink: 0;
+}
+[data-theme="dark"] .infoBanner {
+  background: rgba(212, 184, 150, 0.12);
+  border-color: rgba(212, 184, 150, 0.4);
+  border-left-color: #D4B896;
 }
 
 .infoBannerText {
   flex: 1;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  color: var(--color-text);
   line-height: 1.6;
 }
 

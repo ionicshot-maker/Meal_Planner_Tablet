@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { createPortal } from 'react-dom'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button, Input, NumericInput, Select, Toggle, Card, Modal } from '@/components/ui'
+import { BrandCombobox } from '@/components/BrandCombobox'
 import { parseFraction, formatNumeric } from '@/utils/fractionInput'
 // useRef / parseFraction / formatNumeric used by MacroField below
 import { useSettings } from '@/context/SettingsContext'
@@ -219,10 +219,9 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
         <Card padding="md">
           <h3 className={styles.sectionTitle}>Brand / Variant</h3>
           <div className={styles.row2}>
-            <BrandInput
+            <BrandCombobox
               value={v.brand}
               onChange={brand => setVariantField({ brand })}
-              brands={settings.brands ?? []}
             />
             {settings.storePreferenceEnabled && (
               <Input
@@ -358,74 +357,6 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
       )}
 
       {toast && <Toast message={toast.message} onDone={toast.onDone} />}
-    </div>
-  )
-}
-
-// ─── Brand searchable combobox ───────────────────────────────────────────────
-function BrandInput({ value, onChange, brands }: {
-  value: string; onChange: (v: string) => void; brands: string[]
-}) {
-  const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
-  // Show filtered matches; fall back to full list when value has no matches (e.g. "Generic")
-  const showItems = useMemo(() => {
-    const q = value.trim().toLowerCase()
-    if (!q) return brands.slice(0, 10)
-    const matches = brands.filter(b => b.toLowerCase().includes(q))
-    return (matches.length > 0 ? matches : brands).slice(0, 10)
-  }, [value, brands])
-
-  function openDropdown() {
-    if (inputRef.current) {
-      const rect = inputRef.current.getBoundingClientRect()
-      setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
-    }
-    setOpen(true)
-  }
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      const target = e.target as Node
-      if (wrapRef.current?.contains(target) || dropdownRef.current?.contains(target)) return
-      setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  return (
-    <div className={styles.brandWrap} ref={wrapRef}>
-      <label className={styles.brandLabel}>Brand Name</label>
-      <input
-        ref={inputRef}
-        className={styles.brandInput}
-        value={value}
-        onChange={e => { onChange(e.target.value); openDropdown() }}
-        onFocus={openDropdown}
-        placeholder="Generic"
-      />
-      {open && showItems.length > 0 && pos && createPortal(
-        <div
-          ref={dropdownRef}
-          className={styles.brandDropdown}
-          style={{ top: pos.top, left: pos.left, width: pos.width }}
-        >
-          {showItems.map(b => (
-            <button
-              key={b}
-              className={`${styles.brandOption} ${b.toLowerCase() === value.toLowerCase() ? styles.brandOptionActive : ''}`}
-              type="button"
-              onMouseDown={e => { e.preventDefault(); onChange(b); setOpen(false) }}
-            >{b}</button>
-          ))}
-        </div>,
-        document.body
-      )}
     </div>
   )
 }

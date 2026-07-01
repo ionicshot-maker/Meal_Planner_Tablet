@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button, Input, NumericInput, Select, Toggle, Modal, Card } from '@/components/ui'
+import { BrandCombobox } from '@/components/BrandCombobox'
 import { useSettings } from '@/context/SettingsContext'
 import { newId, now } from '@/utils/ids'
 import { availableUnits } from '@/utils/units'
@@ -217,10 +218,9 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
           {activeVariant && (
             <Card padding="sm">
               <div className={styles.row2}>
-                <Input
-                  label="Brand Name"
+                <BrandCombobox
                   value={activeVariant.brand}
-                  onChange={e => updateVariant({ brand: e.target.value })}
+                  onChange={brand => updateVariant({ brand })}
                 />
                 <div className={styles.actions}>
                   {draft.variants.length > 1 && (
