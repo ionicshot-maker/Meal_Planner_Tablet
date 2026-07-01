@@ -1,5 +1,5 @@
 import { getDB } from './schema'
-import type { AppSettings } from '@/types'
+import type { AppSettings, RecipeTagGroup } from '@/types'
 
 export const DEFAULT_SETTINGS: AppSettings = {
   householdName: '',
@@ -27,11 +27,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
     'Snacks', 'Canned Goods', 'Deli', 'Household',
   ],
   recipeTags: [
-    { group: 'Protein', tags: ['Chicken', 'Beef', 'Pork', 'Fish', 'Shrimp', 'Turkey', 'Vegetarian', 'Vegan'] },
-    { group: 'Cook Method', tags: ['Crockpot', 'Oven', 'Stovetop', 'Grill', 'Instant Pot', 'Air Fryer', 'No-Cook'] },
-    { group: 'Cuisine', tags: ['American', 'Mexican', 'Italian', 'Chinese', 'Japanese', 'Thai', 'Indian', 'Greek', 'French', 'Spanish', 'Mediterranean', 'Southern', 'BBQ', 'Asian', 'Middle Eastern'] },
-    { group: 'Type', tags: ['Beverages', 'Homemade', 'Dessert', 'Snack', 'Soup', 'Salad', 'Sandwich'] },
-    { group: 'Extras', tags: ['Easy', 'Quick', 'Gluten-Free', 'Dairy-Free', 'Kid-Friendly', 'Meal Prep'] },
+    { group: 'Protein',     tags: ['Chicken', 'Beef', 'Pork', 'Fish', 'Shrimp', 'Turkey', 'Lamb', 'Vegetarian', 'Vegan', 'Seafood', 'Eggs', 'Tofu', 'Beans', 'Peanut Butter', 'Beverages'] },
+    { group: 'Cook Method', tags: ['Crockpot', 'Oven', 'Stovetop', 'Grill', 'Instant Pot', 'Air Fryer', 'No-Cook', 'Smoker'] },
+    { group: 'Cuisine',     tags: ['American', 'Mexican', 'Italian', 'Chinese', 'Japanese', 'Thai', 'Indian', 'Greek', 'French', 'Spanish', 'Mediterranean', 'Southern', 'BBQ', 'Asian', 'Middle Eastern'] },
+    { group: 'Type',        tags: ['Beverages', 'Homemade', 'Dessert', 'Snack', 'Soup', 'Salad', 'Sandwich'] },
+    { group: 'Extras',      tags: ['Easy', 'Quick', 'Gluten-Free', 'Dairy-Free', 'Kid-Friendly', 'Meal Prep', 'High Protein'] },
   ],
   brands: [
     "365 by Whole Foods Market", "Annie's", "Applegate", "Arrowhead Mills", "Austin",
@@ -84,12 +84,34 @@ export const DEFAULT_SETTINGS: AppSettings = {
   familyShareRole: 'owner',
 }
 
+function mergeDefaultTags(current: RecipeTagGroup[]): RecipeTagGroup[] {
+  const result = [...current]
+  for (const dflt of DEFAULT_SETTINGS.recipeTags) {
+    const existing = result.find(g => g.group === dflt.group)
+    if (!existing) {
+      result.push({ ...dflt })
+    } else {
+      const missingTags = dflt.tags.filter(
+        dt => !existing.tags.some(t => t.toLowerCase() === dt.toLowerCase())
+      )
+      if (missingTags.length > 0) {
+        const idx = result.indexOf(existing)
+        result[idx] = { ...existing, tags: [...existing.tags, ...missingTags] }
+      }
+    }
+  }
+  return result
+}
+
 export async function loadSettings(): Promise<AppSettings> {
   const db = await getDB()
   const stored = await db.get('settings', 'app')
   if (!stored) return { ...DEFAULT_SETTINGS }
   // Merge stored over defaults to pick up any new default fields added in upgrades
-  return { ...DEFAULT_SETTINGS, ...stored }
+  const merged: AppSettings = { ...DEFAULT_SETTINGS, ...stored }
+  // Restore any missing default recipe tags (adds back deleted groups/tags without removing custom ones)
+  merged.recipeTags = mergeDefaultTags(merged.recipeTags)
+  return merged
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {

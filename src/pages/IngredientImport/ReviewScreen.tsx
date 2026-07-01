@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Button, Input, NumericInput, Select, Toggle, Card, Modal } from '@/components/ui'
 import { parseFraction, formatNumeric } from '@/utils/fractionInput'
 // useRef / parseFraction / formatNumeric used by MacroField below
@@ -106,14 +107,17 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
       })),
     }
     await saveIngredient(toSave)
-    const brand = toSave.variants[0]?.brand?.trim()
-    if (brand && brand.toLowerCase() !== 'generic') {
-      const existing = settings.brands ?? []
-      if (!existing.some(b => b.toLowerCase() === brand.toLowerCase())) {
-        updateSettings({ brands: [...existing, brand].sort((a, b) => a.localeCompare(b)) })
-      }
-    }
+    await autoAddBrand(toSave.variants[0]?.brand)
     onSaved(toSave.name)
+  }
+
+  async function autoAddBrand(brand: string | undefined) {
+    const b = brand?.trim()
+    if (!b || b.toLowerCase() === 'generic') return
+    const existing = settings.brands ?? []
+    if (!existing.some(x => x.toLowerCase() === b.toLowerCase())) {
+      await updateSettings({ brands: [...existing, b].sort((a, c) => a.localeCompare(c)) })
+    }
   }
 
   async function saveAsNewVariant() {
@@ -131,6 +135,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
       updatedAt: now(),
     }
     await saveIngredient(updated)
+    await autoAddBrand(d.variants[0]?.brand)
     setDuplicate(null)
     onSaved(existing.name)
   }
@@ -151,6 +156,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
       })),
     }
     await saveIngredient(toSave)
+    await autoAddBrand(toSave.variants[0]?.brand)
     setDuplicate(null)
     onSaved(toSave.name)
   }
@@ -336,17 +342,32 @@ function BrandInput({ value, onChange, brands }: {
   value: string; onChange: (v: string) => void; brands: string[]
 }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const filtered = useMemo(() => {
+  // Show filtered matches; fall back to full list when value has no matches (e.g. "Generic")
+  const showItems = useMemo(() => {
     const q = value.trim().toLowerCase()
-    if (!q) return brands.slice(0, 8)
-    return brands.filter(b => b.toLowerCase().includes(q)).slice(0, 10)
+    if (!q) return brands.slice(0, 10)
+    const matches = brands.filter(b => b.toLowerCase().includes(q))
+    return (matches.length > 0 ? matches : brands).slice(0, 10)
   }, [value, brands])
+
+  function openDropdown() {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+    }
+    setOpen(true)
+  }
 
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (wrapRef.current?.contains(target) || dropdownRef.current?.contains(target)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -356,15 +377,20 @@ function BrandInput({ value, onChange, brands }: {
     <div className={styles.brandWrap} ref={wrapRef}>
       <label className={styles.brandLabel}>Brand Name</label>
       <input
+        ref={inputRef}
         className={styles.brandInput}
         value={value}
-        onChange={e => { onChange(e.target.value); setOpen(true) }}
-        onFocus={() => setOpen(true)}
+        onChange={e => { onChange(e.target.value); openDropdown() }}
+        onFocus={openDropdown}
         placeholder="Generic"
       />
-      {open && filtered.length > 0 && (
-        <div className={styles.brandDropdown}>
-          {filtered.map(b => (
+      {open && showItems.length > 0 && pos && createPortal(
+        <div
+          ref={dropdownRef}
+          className={styles.brandDropdown}
+          style={{ top: pos.top, left: pos.left, width: pos.width }}
+        >
+          {showItems.map(b => (
             <button
               key={b}
               className={`${styles.brandOption} ${b.toLowerCase() === value.toLowerCase() ? styles.brandOptionActive : ''}`}
@@ -372,7 +398,8 @@ function BrandInput({ value, onChange, brands }: {
               onMouseDown={e => { e.preventDefault(); onChange(b); setOpen(false) }}
             >{b}</button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

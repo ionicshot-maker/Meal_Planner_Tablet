@@ -208,15 +208,12 @@
 .brandInput:focus { border-color: var(--color-accent); }
 
 .brandDropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
+  position: fixed;
   background: var(--color-surface, var(--color-bg));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-  z-index: 200;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.16);
+  z-index: 9999;
   max-height: 200px;
   overflow-y: auto;
 }

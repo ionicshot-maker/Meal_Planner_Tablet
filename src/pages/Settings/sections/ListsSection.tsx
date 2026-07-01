@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useSettings } from '@/context/SettingsContext'
+import { DEFAULT_SETTINGS } from '@/db/settings'
 import styles from './ListsSection.module.css'
 
 function editDistance(a: string, b: string): number {
@@ -20,18 +21,20 @@ function editDistance(a: string, b: string): number {
 interface ListCardProps {
   title: string
   items: string[]
+  defaultItems?: string[]
   onAdd: (item: string) => void
   onRemove: (item: string) => void
   onRemoveSection?: () => void
 }
 
-function ListCard({ title, items, onAdd, onRemove, onRemoveSection }: ListCardProps) {
+function ListCard({ title, items, defaultItems, onAdd, onRemove, onRemoveSection }: ListCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [addInput, setAddInput] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [removeQuery, setRemoveQuery] = useState('')
   const [showRemoveDropdown, setShowRemoveDropdown] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
+  const [confirmRemoveSection, setConfirmRemoveSection] = useState(false)
   const [viewOpen, setViewOpen] = useState(false)
   const [viewSearch, setViewSearch] = useState('')
   const addRef = useRef<HTMLDivElement>(null)
@@ -65,11 +68,20 @@ function ListCard({ title, items, onAdd, onRemove, onRemoveSection }: ListCardPr
     return sorted.filter(i => i.toLowerCase().includes(viewSearch.toLowerCase()))
   }, [viewSearch, sorted])
 
+  const missingDefaults = useMemo(() => {
+    if (!defaultItems) return []
+    return defaultItems.filter(d => !items.some(i => i.toLowerCase() === d.toLowerCase()))
+  }, [defaultItems, items])
+
   function handleAdd() {
     if (!trimmed || isDuplicate) return
     onAdd(trimmed)
     setAddInput('')
     setShowSuggestions(false)
+  }
+
+  function handleRestoreDefaults() {
+    missingDefaults.forEach(d => onAdd(d))
   }
 
   useEffect(() => {
@@ -151,8 +163,7 @@ function ListCard({ title, items, onAdd, onRemove, onRemoveSection }: ListCardPr
                       key={s}
                       className={styles.comboOption}
                       type="button"
-                      onMouseDown={e => {
-                        e.preventDefault()
+                      onClick={() => {
                         setConfirmRemove(s)
                         setRemoveQuery('')
                         setShowRemoveDropdown(false)
@@ -170,17 +181,25 @@ function ListCard({ title, items, onAdd, onRemove, onRemoveSection }: ListCardPr
               type="button"
               onClick={() => { setViewOpen(true); setViewSearch('') }}
             >View all {items.length}</button>
+            {missingDefaults.length > 0 && (
+              <button
+                className={styles.restoreDefaultsBtn}
+                type="button"
+                onClick={handleRestoreDefaults}
+              >Restore {missingDefaults.length} default{missingDefaults.length !== 1 ? 's' : ''}</button>
+            )}
             {onRemoveSection && (
               <button
                 className={styles.removeSectionBtn}
                 type="button"
-                onClick={onRemoveSection}
+                onClick={() => setConfirmRemoveSection(true)}
               >Remove group</button>
             )}
           </div>
         </div>
       )}
 
+      {/* Confirm remove item */}
       {confirmRemove !== null && createPortal(
         <div
           className={styles.overlay}
@@ -203,6 +222,30 @@ function ListCard({ title, items, onAdd, onRemove, onRemoveSection }: ListCardPr
         document.body
       )}
 
+      {/* Confirm remove section/group */}
+      {confirmRemoveSection && createPortal(
+        <div
+          className={styles.overlay}
+          onClick={e => { if (e.target === e.currentTarget) setConfirmRemoveSection(false) }}
+        >
+          <div className={styles.dialog}>
+            <p className={styles.dialogMsg}>
+              Are you sure you want to remove the <strong>"{title}"</strong> group and all its tags? This cannot be undone.
+            </p>
+            <div className={styles.dialogBtns}>
+              <button className={styles.dialogCancel} type="button" onClick={() => setConfirmRemoveSection(false)}>Cancel</button>
+              <button
+                className={styles.dialogConfirm}
+                type="button"
+                onClick={() => { onRemoveSection?.(); setConfirmRemoveSection(false) }}
+              >Remove</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* View all modal */}
       {viewOpen && createPortal(
         <div
           className={styles.overlay}
@@ -303,22 +346,27 @@ export function ListsSection() {
       <ListCard
         title="Ingredient Categories"
         items={ingredientCategories}
+        defaultItems={DEFAULT_SETTINGS.ingredientCategories}
         onAdd={addCategory}
         onRemove={removeCategory}
       />
 
       <h3 className={styles.subTitle} style={{ marginTop: 'var(--space-4)' }}>Recipe Tags</h3>
       <p className={styles.desc}>Tags are organized by group. Multiple tags can be applied per recipe.</p>
-      {recipeTags.map(group => (
-        <ListCard
-          key={group.group}
-          title={group.group}
-          items={group.tags}
-          onAdd={tag => addTagToGroup(group.group, tag)}
-          onRemove={tag => removeTagFromGroup(group.group, tag)}
-          onRemoveSection={() => removeTagGroup(group.group)}
-        />
-      ))}
+      {recipeTags.map(group => {
+        const defaultGroup = DEFAULT_SETTINGS.recipeTags.find(g => g.group === group.group)
+        return (
+          <ListCard
+            key={group.group}
+            title={group.group}
+            items={group.tags}
+            defaultItems={defaultGroup?.tags}
+            onAdd={tag => addTagToGroup(group.group, tag)}
+            onRemove={tag => removeTagFromGroup(group.group, tag)}
+            onRemoveSection={() => removeTagGroup(group.group)}
+          />
+        )
+      })}
       <div className={styles.addGroupRow}>
         <input
           className={styles.addGroupInput}
@@ -349,6 +397,7 @@ export function ListsSection() {
       <ListCard
         title="Stores"
         items={stores ?? []}
+        defaultItems={DEFAULT_SETTINGS.stores}
         onAdd={addStore}
         onRemove={removeStore}
       />
