@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     { group: 'Protein',     tags: ['Chicken', 'Beef', 'Pork', 'Fish', 'Shrimp', 'Turkey', 'Lamb', 'Vegetarian', 'Vegan', 'Seafood', 'Eggs', 'Tofu', 'Beans', 'Peanut Butter', 'Beverages'] },
     { group: 'Cook Method', tags: ['Crockpot', 'Oven', 'Stovetop', 'Grill', 'Instant Pot', 'Air Fryer', 'No-Cook', 'Smoker'] },
     { group: 'Cuisine',     tags: ['American', 'Mexican', 'Italian', 'Chinese', 'Japanese', 'Thai', 'Indian', 'Greek', 'French', 'Spanish', 'Mediterranean', 'Southern', 'BBQ', 'Asian', 'Middle Eastern'] },
+    { group: 'Source',      tags: ['Family Recipe', 'Pinterest', 'AllRecipes', 'Food Network', 'Better Homes and Gardens', 'Paula Deen', 'Pioneer Woman', 'Tasty', 'YouTube', 'Cookbook', 'Personal Creation'] },
     { group: 'Type',        tags: ['Beverages', 'Homemade', 'Dessert', 'Snack', 'Soup', 'Salad', 'Sandwich'] },
     { group: 'Extras',      tags: ['Easy', 'Quick', 'Gluten-Free', 'Dairy-Free', 'Kid-Friendly', 'Meal Prep', 'High Protein'] },
   ],

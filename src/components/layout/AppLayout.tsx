@@ -2,17 +2,21 @@ import { ReactNode, useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useTheme } from '@/context/ThemeContext'
 import { useSettings } from '@/context/SettingsContext'
+import {
+  Carrot, Download, BookOpen, Calendar, BarChart2, ShoppingCart,
+  Settings, HelpCircle, UtensilsCrossed, Sun, Moon, Monitor,
+} from 'lucide-react'
 import styles from './AppLayout.module.css'
 
-const NAV_ITEMS = [
-  { to: '/ingredients',        label: 'Ingredients',        icon: '🥕' },
-  { to: '/import-ingredients', label: 'Import Ingredients', icon: '📥' },
-  { to: '/cookbook',           label: 'Cookbook',           icon: '📖' },
-  { to: '/planner',            label: 'Meal Plan',          icon: '📅' },
-  { to: '/macros',             label: 'Macros',             icon: '📊' },
-  { to: '/grocery',            label: 'Grocery',            icon: '🛒' },
-  { to: '/settings',           label: 'Settings',           icon: '⚙️' },
-  { to: '/help',               label: 'Help',               icon: '❓' },
+const NAV_ITEMS: { to: string; label: string; icon: ReactNode }[] = [
+  { to: '/ingredients',        label: 'Ingredients',        icon: <Carrot size={18} /> },
+  { to: '/import-ingredients', label: 'Import Ingredients', icon: <Download size={18} /> },
+  { to: '/cookbook',           label: 'Cookbook',           icon: <BookOpen size={18} /> },
+  { to: '/planner',            label: 'Meal Plan',          icon: <Calendar size={18} /> },
+  { to: '/macros',             label: 'Macros',             icon: <BarChart2 size={18} /> },
+  { to: '/grocery',            label: 'Grocery',            icon: <ShoppingCart size={18} /> },
+  { to: '/settings',           label: 'Settings',           icon: <Settings size={18} /> },
+  { to: '/help',               label: 'Help',               icon: <HelpCircle size={18} /> },
 ]
 
 const PAGE_HELP: Record<string, string> = {
@@ -52,12 +56,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
     setPreference(next)
   }
 
+  const themeIcon = resolved === 'dark' ? <Sun size={18} /> : preference === 'system' ? <Monitor size={18} /> : <Moon size={18} />
+
   return (
     <div className={styles.shell}>
       <nav className={styles.nav} aria-label="Main navigation">
         <div className={styles.navTop}>
           <div className={styles.logo}>
-            <span className={styles.logoIcon}>🍽️</span>
+            <span className={styles.logoIcon}><UtensilsCrossed size={20} /></span>
             <span className={styles.logoText}>{appTitle}</span>
           </div>
           <ul className={styles.navList} role="list">
@@ -83,12 +89,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
             aria-expanded={helpOpen}
             aria-label="What is this page?"
           >
-            <span className={styles.navIcon} aria-hidden="true">❓</span>
+            <span className={styles.navIcon} aria-hidden="true"><HelpCircle size={18} /></span>
             <span className={styles.navLabel}>Page Help</span>
           </button>
         )}
         <button className={styles.themeBtn} onClick={cycleTheme} aria-label="Toggle theme">
-          <span aria-hidden="true">{resolved === 'dark' ? '☀️' : '🌙'}</span>
+          <span aria-hidden="true">{themeIcon}</span>
           <span className={styles.navLabel}>
             {preference === 'system' ? 'System' : preference === 'dark' ? 'Dark' : 'Light'}
           </span>

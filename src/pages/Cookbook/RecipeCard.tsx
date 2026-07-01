@@ -1,10 +1,12 @@
-import type { Recipe } from '@/types'
+import { Heart, Clock, FolderPlus } from 'lucide-react'
+import type { Recipe, RecipeCollection } from '@/types'
 import { formatMacro } from '@/utils/recipeCalculations'
 import { formatMinutes } from '@/utils/units'
 import styles from './RecipeCard.module.css'
 
 interface Props {
   recipe: Recipe
+  collections: RecipeCollection[]
   onView: () => void
   onEdit: () => void
   onToggleFavorite: () => void
@@ -12,12 +14,31 @@ interface Props {
   onDelete: () => void
   onUseTemplate?: () => void
   onAddToMealPlan?: () => void
+  onAddToCollection: (collectionId: string) => void
+  onCreateCollection: (name: string) => void
 }
 
-export function RecipeCard({ recipe, onView, onEdit, onToggleFavorite, onSaveAsTemplate, onDelete, onUseTemplate, onAddToMealPlan }: Props) {
+export function RecipeCard({ recipe, collections, onView, onEdit, onToggleFavorite, onSaveAsTemplate, onDelete, onUseTemplate, onAddToMealPlan, onAddToCollection, onCreateCollection }: Props) {
   const totalTime = recipe.prepTimeMinutes + recipe.cookTimeMinutes
   const m = recipe.macrosPerServing
   const hasUnlinked = recipe.ingredients.some(ri => !ri.ingredientId)
+
+  function handleCollectionClick() {
+    if (collections.length === 0) {
+      const name = prompt('New collection name:')
+      if (name?.trim()) onCreateCollection(name.trim())
+    } else {
+      const names = collections.map((c, i) => `${i + 1}. ${c.name}`).join('\n')
+      const input = prompt(`Add to collection:\n${names}\n\nEnter number or type a new name:`)
+      if (!input?.trim()) return
+      const idx = parseInt(input.trim()) - 1
+      if (!isNaN(idx) && collections[idx]) {
+        onAddToCollection(collections[idx].id)
+      } else {
+        onCreateCollection(input.trim())
+      }
+    }
+  }
 
   return (
     <article className={`${styles.card} ${recipe.isTemplate ? styles.isTemplate : ''}`}>
@@ -34,13 +55,25 @@ export function RecipeCard({ recipe, onView, onEdit, onToggleFavorite, onSaveAsT
           <button className={styles.nameBtn} onClick={onView}>
             <h2 className={styles.name}>{recipe.name}</h2>
           </button>
-          <button
-            className={`${styles.favBtn} ${recipe.isFavorite ? styles.favActive : ''}`}
-            onClick={onToggleFavorite}
-            aria-label={recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            {recipe.isFavorite ? '♥' : '♡'}
-          </button>
+          <div className={styles.headerIcons}>
+            <button
+              className={`${styles.favBtn} ${recipe.isFavorite ? styles.favActive : ''}`}
+              onClick={onToggleFavorite}
+              aria-label={recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              <Heart size={16} fill={recipe.isFavorite ? 'currentColor' : 'none'} />
+            </button>
+            {!recipe.isTemplate && (
+              <button
+                className={styles.collectionBtn}
+                onClick={handleCollectionClick}
+                aria-label="Add to collection"
+                title="Add to collection"
+              >
+                <FolderPlus size={16} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Template badge */}
@@ -57,7 +90,7 @@ export function RecipeCard({ recipe, onView, onEdit, onToggleFavorite, onSaveAsT
         <div className={styles.stats}>
           {totalTime > 0 && (
             <span className={styles.stat} title="Total time">
-              ⏱ {formatMinutes(totalTime)}
+              <Clock size={13} style={{ verticalAlign: 'middle', marginRight: 2 }} />{formatMinutes(totalTime)}
             </span>
           )}
           <span className={styles.stat}>{recipe.servings} serving{recipe.servings !== 1 ? 's' : ''}</span>
@@ -105,4 +138,3 @@ export function RecipeCard({ recipe, onView, onEdit, onToggleFavorite, onSaveAsT
     </article>
   )
 }
-

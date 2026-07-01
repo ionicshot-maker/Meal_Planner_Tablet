@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useHouseholdTitle } from '@/context/SettingsContext'
 import { newId } from '@/utils/ids'
+import { ScanBarcode, Microscope, Sparkles, ClipboardList } from 'lucide-react'
 import { BarcodeTab } from './BarcodeTab'
 import { USDATab } from './USDATab'
 import { BulkEntryTab } from './BulkEntryTab'
@@ -21,11 +22,11 @@ interface SavedDraft {
 
 type TabId = 'barcode' | 'usda' | 'bulk' | 'gemini'
 
-const TABS: { id: TabId; label: string; icon: string }[] = [
-  { id: 'barcode', label: 'Barcode Lookup',  icon: '📷' },
-  { id: 'usda',    label: 'USDA Lookup',     icon: '🔬' },
-  { id: 'gemini',  label: 'Gemini Lookup',   icon: '✨' },
-  { id: 'bulk',    label: 'Bulk Entry',      icon: '📋' },
+const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
+  { id: 'barcode', label: 'Barcode Lookup',  icon: <ScanBarcode size={18} /> },
+  { id: 'usda',    label: 'USDA Lookup',     icon: <Microscope size={18} /> },
+  { id: 'gemini',  label: 'Gemini Lookup',   icon: <Sparkles size={18} /> },
+  { id: 'bulk',    label: 'Bulk Entry',      icon: <ClipboardList size={18} /> },
 ]
 
 interface ToastItem { id: string; message: string }

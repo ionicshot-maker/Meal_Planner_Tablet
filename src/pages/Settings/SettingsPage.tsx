@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, ReactNode } from 'react'
 import { useSettings } from '@/context/SettingsContext'
 import { useTheme } from '@/context/ThemeContext'
 import { Toggle, Card } from '@/components/ui'
@@ -7,18 +7,19 @@ import { AISection } from './sections/AISection'
 import { ListsSection } from './sections/ListsSection'
 import { DataSection } from './sections/DataSection'
 import { SetupChecklist } from './sections/SetupChecklist'
+import { Users, Palette, Plug, Salad, List, HardDrive } from 'lucide-react'
 import styles from './SettingsPage.module.css'
 import type { ThemePreference, UnitSystem } from '@/types'
 
 type Section = 'household' | 'preferences' | 'integrations' | 'nutrients' | 'lists' | 'data'
 
-const SECTIONS: { id: Section; label: string; icon: string }[] = [
-  { id: 'household',    label: 'Household',    icon: '👥' },
-  { id: 'preferences',  label: 'Preferences',  icon: '🎨' },
-  { id: 'integrations', label: 'Integrations', icon: '🔌' },
-  { id: 'nutrients',    label: 'Nutrients',    icon: '🥗' },
-  { id: 'lists',        label: 'Lists',        icon: '📋' },
-  { id: 'data',         label: 'Data',         icon: '💾' },
+const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
+  { id: 'household',    label: 'Household',    icon: <Users size={18} /> },
+  { id: 'preferences',  label: 'Preferences',  icon: <Palette size={18} /> },
+  { id: 'integrations', label: 'Integrations', icon: <Plug size={18} /> },
+  { id: 'nutrients',    label: 'Nutrients',    icon: <Salad size={18} /> },
+  { id: 'lists',        label: 'Lists',        icon: <List size={18} /> },
+  { id: 'data',         label: 'Data',         icon: <HardDrive size={18} /> },
 ]
 
 export default function SettingsPage() {

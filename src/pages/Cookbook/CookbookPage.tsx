@@ -1,25 +1,29 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Heart, Download, Plus, FolderOpen } from 'lucide-react'
 import {
   getAllRecipes, saveRecipe, deleteRecipe, cloneRecipeFromTemplate,
 } from '@/db/recipes'
 import { getAllIngredients } from '@/db/ingredients'
+import { getAllCollections, createCollection, addRecipeToCollection, saveCollection, deleteCollection } from '@/db/collections'
 import { attachRecipeMacros, buildIngredientMap } from '@/utils/recipeCalculations'
-import type { Recipe, Ingredient } from '@/types'
+import type { Recipe, Ingredient, RecipeCollection } from '@/types'
 import type { AIRecipeResult } from '@/utils/aiImport'
 import { RecipeCard } from './RecipeCard'
 import { RecipeEditor } from './RecipeEditor'
 import { RecipeDetail } from './RecipeDetail'
 import { RecipeImportModal } from './RecipeImportModal'
 import { AddToMealPlanModal } from './AddToMealPlanModal'
+import { CollectionsTab } from './CollectionsTab'
 import { useHouseholdTitle } from '@/context/SettingsContext'
 import styles from './CookbookPage.module.css'
 
-type FilterMode = 'all' | 'favorites' | 'templates'
+type FilterMode = 'all' | 'favorites' | 'templates' | 'collections'
 
 export default function CookbookPage() {
   const pageTitle = useHouseholdTitle('Cookbook')
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [allIngredients, setAllIngredients] = useState<Ingredient[]>([])
+  const [collections, setCollections] = useState<RecipeCollection[]>([])
   const [loading, setLoading] = useState(true)
 
   // Filter / search state
@@ -36,11 +40,16 @@ export default function CookbookPage() {
   const [addToPlanRecipe, setAddToPlanRecipe] = useState<Recipe | null>(null)
 
   const load = useCallback(async () => {
-    const [recs, ings] = await Promise.all([getAllRecipes(true), getAllIngredients(false)])
+    const [recs, ings, cols] = await Promise.all([
+      getAllRecipes(true),
+      getAllIngredients(false),
+      getAllCollections(),
+    ])
     const map = buildIngredientMap(ings)
     const withMacros = recs.map(r => attachRecipeMacros(r, map))
     setRecipes(withMacros)
     setAllIngredients(ings)
+    setCollections(cols)
     setLoading(false)
   }, [])
 
@@ -54,6 +63,7 @@ export default function CookbookPage() {
     if (filterMode === 'favorites' && !r.isFavorite) return false
     if (filterMode === 'templates' && !r.isTemplate) return false
     if (filterMode === 'all' && r.isTemplate) return false
+    if (filterMode === 'collections') return false
     if (activeTag && !r.tags.includes(activeTag)) return false
     if (search.trim()) {
       const q = search.toLowerCase()
@@ -121,6 +131,27 @@ export default function CookbookPage() {
     setViewingRecipe(recipe)
   }
 
+  async function handleAddToCollection(collectionId: string, recipeId: string) {
+    await addRecipeToCollection(collectionId, recipeId)
+    await load()
+  }
+
+  async function handleCreateAndAddCollection(name: string, recipeId: string) {
+    const c = await createCollection(name)
+    await addRecipeToCollection(c.id, recipeId)
+    await load()
+  }
+
+  async function handleSaveCollection(c: RecipeCollection) {
+    await saveCollection(c)
+    await load()
+  }
+
+  async function handleDeleteCollection(id: string) {
+    await deleteCollection(id)
+    await load()
+  }
+
   return (
     <div className={styles.page}>
       <h1 className={styles.pageTitle}>{pageTitle}</h1>
@@ -136,29 +167,32 @@ export default function CookbookPage() {
         />
 
         <div className={styles.filterBtns}>
-          {(['all', 'favorites', 'templates'] as FilterMode[]).map(mode => (
+          {(['all', 'favorites', 'templates', 'collections'] as FilterMode[]).map(mode => (
             <button
               key={mode}
               className={`${styles.filterBtn} ${filterMode === mode ? styles.filterBtnActive : ''}`}
               onClick={() => { setFilterMode(mode); setActiveTag('') }}
             >
-              {mode === 'all' ? 'All Recipes' : mode === 'favorites' ? '♥ Favorites' : 'Templates'}
+              {mode === 'all' ? 'All Recipes'
+                : mode === 'favorites' ? <><Heart size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />Favorites</>
+                : mode === 'templates' ? 'Templates'
+                : <><FolderOpen size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />Collections</>}
             </button>
           ))}
         </div>
 
         <div className={styles.toolbarRight}>
           <button className={styles.importBtn} onClick={() => setShowImport(true)}>
-            Import Recipe
+            <Download size={15} style={{ verticalAlign: 'middle', marginRight: 4 }} />Import Recipe
           </button>
           <button className={styles.createBtn} onClick={() => { setImportPrefill(null); setEditingRecipe('new') }}>
-            + New Recipe
+            <Plus size={15} style={{ verticalAlign: 'middle', marginRight: 2 }} />New Recipe
           </button>
         </div>
       </div>
 
       {/* ── Tag filter bar ── */}
-      {allTags.length > 0 && (
+      {filterMode !== 'collections' && allTags.length > 0 && (
         <div className={styles.tagBar}>
           <button
             className={`${styles.tagPill} ${activeTag === '' ? styles.tagPillActive : ''}`}
@@ -179,7 +213,16 @@ export default function CookbookPage() {
       )}
 
       {/* ── Content ── */}
-      {loading ? (
+      {filterMode === 'collections' ? (
+        <CollectionsTab
+          collections={collections}
+          recipes={recipes}
+          onSaveCollection={handleSaveCollection}
+          onDeleteCollection={handleDeleteCollection}
+          onCreateCollection={async (name) => { await createCollection(name); await load() }}
+          onViewRecipe={openView}
+        />
+      ) : loading ? (
         <div className={styles.empty}>Loading recipes…</div>
       ) : filtered.length === 0 ? (
         <div className={styles.empty}>
@@ -203,6 +246,7 @@ export default function CookbookPage() {
             <RecipeCard
               key={recipe.id}
               recipe={recipe}
+              collections={collections}
               onView={() => openView(recipe)}
               onEdit={() => openEdit(recipe)}
               onToggleFavorite={() => handleToggleFavorite(recipe)}
@@ -210,6 +254,8 @@ export default function CookbookPage() {
               onDelete={() => handleDelete(recipe)}
               onUseTemplate={() => handleUseTemplate(recipe)}
               onAddToMealPlan={() => setAddToPlanRecipe(recipe)}
+              onAddToCollection={(collectionId) => handleAddToCollection(collectionId, recipe.id)}
+              onCreateCollection={(name) => handleCreateAndAddCollection(name, recipe.id)}
             />
           ))}
         </div>

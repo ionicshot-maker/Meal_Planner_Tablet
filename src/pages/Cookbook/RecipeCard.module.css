@@ -32,19 +32,34 @@
 }
 .nameBtn:hover .name { color: var(--color-accent); }
 
+.headerIcons { display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0; }
+
 .favBtn {
   background: none;
   border: none;
-  font-size: 1.3rem;
   cursor: pointer;
   color: var(--color-text-muted);
-  flex-shrink: 0;
   line-height: 1;
-  padding: 2px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
   transition: color var(--transition), transform var(--transition);
 }
 .favActive { color: #E74C3C; }
 .favBtn:hover { transform: scale(1.2); }
+
+.collectionBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  line-height: 1;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  transition: color var(--transition), transform var(--transition);
+}
+.collectionBtn:hover { color: var(--color-accent); transform: scale(1.1); }
 
 .templateBadge {
   display: inline-flex;

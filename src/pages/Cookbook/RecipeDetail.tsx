@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Heart, Pencil, Trash2, X, Printer, Clock } from 'lucide-react'
 import { buildIngredientMap, calcRecipeMacros, calcRecipeCost, scaleIngredients, formatMacro } from '@/utils/recipeCalculations'
 import { formatMinutes, formatQuantity } from '@/utils/units'
 import type { Recipe, Ingredient } from '@/types'
@@ -109,18 +110,18 @@ ${recipe.notes ? `<h2>Notes</h2><div class="notes">${recipe.notes}</div>` : ''}
               onClick={onToggleFavorite}
               title={recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             >
-              {recipe.isFavorite ? '♥' : '♡'}
+              <Heart size={18} fill={recipe.isFavorite ? 'currentColor' : 'none'} />
             </button>
-            <button className={styles.iconBtn} onClick={onEdit} title="Edit">✏</button>
-            <button className={styles.iconBtnDanger} onClick={onDelete} title="Delete">🗑</button>
-            <button className={styles.closeBtn} onClick={onClose} aria-label="Close">✕</button>
+            <button className={styles.iconBtn} onClick={onEdit} title="Edit"><Pencil size={16} /></button>
+            <button className={styles.iconBtnDanger} onClick={onDelete} title="Delete"><Trash2 size={16} /></button>
+            <button className={styles.closeBtn} onClick={onClose} aria-label="Close"><X size={18} /></button>
           </div>
         </header>
 
         {/* Meta row */}
         <div className={styles.metaRow}>
           {totalTime > 0 && (
-            <span className={styles.metaItem} title="Total time">⏱ {formatMinutes(totalTime)}</span>
+            <span className={styles.metaItem} title="Total time"><Clock size={13} style={{ verticalAlign: 'middle', marginRight: 3 }} />{formatMinutes(totalTime)}</span>
           )}
           {recipe.prepTimeMinutes > 0 && (
             <span className={styles.metaItem}>Prep: {formatMinutes(recipe.prepTimeMinutes)}</span>
@@ -244,7 +245,7 @@ ${recipe.notes ? `<h2>Notes</h2><div class="notes">${recipe.notes}</div>` : ''}
           {onAddToMealPlan && !recipe.isTemplate && (
             <button className={styles.btnSecondary} onClick={onAddToMealPlan}>+ Add to Plan</button>
           )}
-          <button className={styles.btnSecondary} onClick={printRecipe}>🖨 Print</button>
+          <button className={styles.btnSecondary} onClick={printRecipe}><Printer size={15} style={{ verticalAlign: 'middle', marginRight: 4 }} />Print</button>
           <button className={styles.btnSecondary} onClick={onEdit}>Edit Recipe</button>
           <button className={styles.btnPrimary} onClick={onClose}>Done</button>
         </footer>

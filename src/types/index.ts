@@ -261,6 +261,15 @@ export interface HouseholdItem {
   createdAt: string
 }
 
+// ─── Recipe Collections ───────────────────────────────────────────────────────
+export interface RecipeCollection {
+  id: string
+  name: string
+  recipeIds: string[]
+  createdAt: string
+  updatedAt: string
+}
+
 // ─── Grocery List ─────────────────────────────────────────────────────────────
 export interface GroceryItem {
   id: string

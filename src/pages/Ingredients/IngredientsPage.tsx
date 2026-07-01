@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSettings, useHouseholdTitle } from '@/context/SettingsContext'
 import { Button, Input, Select, Card, Modal, Toggle } from '@/components/ui'
+import { Download, Info, X } from 'lucide-react'
 import { getAllIngredients, saveIngredient, archiveIngredient, deleteIngredient, searchIngredients } from '@/db/ingredients'
 import { newId, now } from '@/utils/ids'
 import { IngredientForm } from './IngredientForm'
@@ -81,7 +82,7 @@ export default function IngredientsPage() {
       <header className={styles.header}>
         <h1 className={styles.heading}>{pageTitle}</h1>
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <Button variant="secondary" onClick={() => navigate('/import-ingredients')}>📥 Import</Button>
+          <Button variant="secondary" onClick={() => navigate('/import-ingredients')}><Download size={16} style={{ marginRight: 4, verticalAlign: 'middle' }} />Import</Button>
           <Button onClick={createNew}>+ Add Ingredient</Button>
         </div>
       </header>
@@ -122,7 +123,7 @@ export default function IngredientsPage() {
       {settings.starterLibrarySeeded && !bannerDismissed && (
         <div className={styles.infoBanner}>
           <span className={styles.infoBannerText}>
-            <strong>ℹ️ Pre-loaded ingredients use USDA average values for generic raw items.</strong>{' '}
+            <strong><Info size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Pre-loaded ingredients use USDA average values for generic raw items.</strong>{' '}
             Nutritional values vary by variety, ripeness, and preparation — cooked weights differ from raw.
             Always verify against a food label for packaged products.
           </span>
@@ -130,7 +131,7 @@ export default function IngredientsPage() {
             className={styles.infoBannerDismiss}
             onClick={() => { localStorage.setItem('starter_banner_dismissed', '1'); setBannerDismissed(true) }}
             aria-label="Dismiss"
-          >✕</button>
+          ><X size={14} /></button>
         </div>
       )}
 
