@@ -844,9 +844,11 @@
   color: var(--color-text);
   font-size: var(--text-sm);
   font-family: inherit;
-  resize: vertical;
+  resize: none;
+  overflow: hidden;
   outline: none;
   line-height: 1.5;
+  min-height: 3rem;
   transition: border-color var(--transition);
 }
 .stepText:focus { border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-selected); }

@@ -19,6 +19,7 @@ interface GeminiNutrition {
   sodium: number
   servingSize?: number
   servingUnit?: string
+  category?: string
   notFound?: boolean
 }
 
@@ -85,8 +86,26 @@ Use this exact schema:
   "fat": number (grams per serving, 1 decimal),
   "sodium": number (mg per serving),
   "servingSize": number (numeric quantity, e.g. 85, 1, 0.25),
-  "servingUnit": string — MUST be one of exactly: "tsp", "tbsp", "cup", "floz", "oz", "g", "kg", "ml", "l", "lb", "each", "package", "jar", "can", "bag", "box", "slice", "piece"
+  "servingUnit": string — MUST be one of exactly: "tsp", "tbsp", "cup", "floz", "oz", "g", "kg", "ml", "l", "lb", "each", "package", "jar", "can", "bag", "box", "slice", "piece",
+  "category": string — MUST be one of exactly: "Meat", "Seafood", "Dairy", "Eggs", "Produce", "Frozen", "Pantry", "Bakery", "Condiments", "Seasonings", "Beverages", "Snacks", "Canned Goods", "Deli", "Household"
 }
+
+CRITICAL rules for category:
+- "Seasonings": spices, herbs, seasoning blends, taco seasoning, garlic powder, onion powder, paprika, cumin, chili powder, Italian seasoning, bouillon, salt, pepper, and ANY spice mix or seasoning packet — this is the most commonly confused category.
+- "Meat": beef, chicken, pork, turkey, lamb, game, sausage, hot dogs, bacon, deli meat, pepperoni.
+- "Seafood": fish, shrimp, crab, lobster, tuna, salmon, sardines, clams, oysters.
+- "Dairy": milk, cheese, yogurt, butter, cream, sour cream, cream cheese.
+- "Eggs": eggs and egg products.
+- "Produce": fresh or raw fruits and vegetables.
+- "Frozen": frozen meals, frozen pizza, ice cream, frozen vegetables, frozen meat/fish sold frozen.
+- "Pantry": pasta, rice, flour, sugar, oil, vinegar, baking ingredients, cereal, oats, dried beans, nuts, peanut butter, jam.
+- "Bakery": bread, rolls, tortillas, bagels, muffins, cakes, cookies, crackers, pie crust.
+- "Condiments": ketchup, mustard, mayo, salad dressing, hot sauce, soy sauce, Worcestershire, relish, marinades.
+- "Beverages": water, juice, soda, coffee, tea, sports drinks, alcohol, energy drinks.
+- "Snacks": chips, popcorn, granola bars, protein bars, candy, chocolate, pretzels, rice cakes.
+- "Canned Goods": canned vegetables, canned soup, canned beans, canned tomatoes, canned fruit, canned fish.
+- "Deli": deli meats, prepared salads from deli counter, lunch meat.
+- "Household": non-food items like cleaning supplies, paper products.
 
 CRITICAL rules for servingSize and servingUnit:
 - Return the serving size in the EXACT unit shown on the label or the standard unit for the food — do NOT convert between units.
@@ -166,17 +185,53 @@ Return ONLY the JSON object with no explanation, no markdown, no code fences.`
       candidates?: Array<{ content: { parts: Array<{ text: string }> } }>
     }
 
-    const text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    console.log('[gemini-nutrition] success | model:', model, '| preview:', text.slice(0, 120))
+    const rawText = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    console.log('[gemini-nutrition] success | model:', model, '| preview:', rawText.slice(0, 120))
 
-    let nutrition: GeminiNutrition
-    try {
-      nutrition = JSON.parse(text) as GeminiNutrition
-    } catch {
+    // Strip markdown fences and any surrounding whitespace
+    function stripFences(s: string): string {
+      return s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+    }
+
+    function tryParse(s: string): GeminiNutrition | null {
+      try { return JSON.parse(stripFences(s)) as GeminiNutrition } catch { return null }
+    }
+
+    let nutrition = tryParse(rawText)
+
+    // If first parse failed, retry Gemini with a stripped-down prompt
+    if (!nutrition) {
+      console.log('[gemini-nutrition] first parse failed — retrying with simple prompt')
+      const simplePrompt = `Return ONLY a valid JSON object (no markdown) with nutrition facts for "${nameWithBrand}". Schema: {"calories":number,"protein":number,"carbs":number,"fiber":number,"sugar":number,"fat":number,"sodium":number,"servingSize":number,"servingUnit":string}. If unknown return {"notFound":true}.`
+      try {
+        const retry = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: simplePrompt }] }],
+            generationConfig: { responseMimeType: 'application/json' },
+          }),
+        })
+        if (retry.ok) {
+          const retryRaw = await retry.json() as {
+            candidates?: Array<{ content: { parts: Array<{ text: string }> } }>
+          }
+          const retryText = retryRaw.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+          console.log('[gemini-nutrition] retry preview:', retryText.slice(0, 120))
+          nutrition = tryParse(retryText)
+        }
+      } catch (retryErr) {
+        console.error('[gemini-nutrition] retry request failed:', retryErr)
+      }
+    }
+
+    if (!nutrition) {
       return {
         statusCode: 502,
         headers: NO_CACHE,
-        body: JSON.stringify({ error: 'Failed to parse Gemini response', raw: text }),
+        body: JSON.stringify({
+          error: `Gemini could not return valid nutrition data for "${nameWithBrand}". Try adding the brand name or use USDA lookup instead.`,
+        }),
       }
     }
 

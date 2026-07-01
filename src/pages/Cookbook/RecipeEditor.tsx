@@ -12,6 +12,37 @@ import type { Recipe, RecipeIngredient, RecipeStep, Ingredient, IngredientUnit }
 import type { AIRecipeResult } from '@/utils/aiImport'
 import styles from './RecipeEditor.module.css'
 
+// ─── Auto-expanding textarea for step instructions ────────────────────────────
+
+function StepTextarea({ stepId, value, placeholder, onChange, onKeyDown }: {
+  stepId: string
+  value: string
+  placeholder: string
+  onChange: (v: string) => void
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+  }, [value])
+
+  return (
+    <textarea
+      ref={ref}
+      className={styles.stepText}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      onKeyDown={onKeyDown}
+      data-step-id={stepId}
+      placeholder={placeholder}
+    />
+  )
+}
+
 // ─── Draft ingredient row (supports unlinked missing ingredients) ─────────────
 interface DraftIngRow {
   _rowId: string
@@ -694,19 +725,17 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
               {steps.map((step, idx) => (
                 <div key={step.id} className={styles.stepRow}>
                   <span className={styles.stepNum}>{idx + 1}</span>
-                  <textarea
-                    className={styles.stepText}
+                  <StepTextarea
+                    stepId={step.id}
                     value={step.text}
-                    onChange={e => updateStep(step.id, e.target.value)}
+                    placeholder={`Step ${idx + 1}… (Enter to add next step, Shift+Enter for new line)`}
+                    onChange={text => updateStep(step.id, text)}
                     onKeyDown={e => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault()
                         addStepAndFocus()
                       }
                     }}
-                    data-step-id={step.id}
-                    placeholder={`Step ${idx + 1}… (Enter to add next step, Shift+Enter for new line)`}
-                    rows={2}
                   />
                   <div className={styles.stepBtns}>
                     <button

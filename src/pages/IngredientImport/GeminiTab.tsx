@@ -15,18 +15,28 @@ interface GeminiNutrition {
   sodium: number
   servingSize?: number
   servingUnit?: string
+  category?: string
+}
+
+function matchCategory(geminiCategory: string | undefined, userCategories: string[], fallback: string): string {
+  if (!geminiCategory) return fallback
+  const normalized = geminiCategory.trim().toLowerCase()
+  const found = userCategories.find(c => c.toLowerCase() === normalized)
+  return found ?? fallback
 }
 
 function geminiToIngredient(
   productName: string,
   brand: string,
   nutrition: GeminiNutrition,
-  defaultCategory: string
+  defaultCategory: string,
+  userCategories: string[]
 ): Ingredient {
   const variantId = newId()
   const ingredientId = newId()
   const servingSize = nutrition.servingSize ?? 100
   const servingUnit = (nutrition.servingUnit ?? 'g') as IngredientUnit
+  const category = matchCategory(nutrition.category, userCategories, defaultCategory)
 
   const macros: Macros = {
     calories: nutrition.calories ?? 0,
@@ -41,7 +51,7 @@ function geminiToIngredient(
   return {
     id: ingredientId,
     name: productName,
-    category: defaultCategory,
+    category,
     perishable: false,
     frozen: false,
     alwaysOnHand: false,
@@ -74,7 +84,8 @@ export function GeminiTab({ onReview, initialQuery }: Props) {
   const [error, setError] = useState('')
   const didAutoLookup = useRef(false)
 
-  const defaultCategory = settings.ingredientCategories[0] ?? 'Pantry'
+  const userCategories = settings.ingredientCategories
+  const defaultCategory = userCategories[0] ?? 'Pantry'
   const hasKey = Boolean(settings.geminiApiKey)
 
   // Auto-trigger lookup when the tab is opened with a pre-filled name from the recipe editor
@@ -105,7 +116,7 @@ export function GeminiTab({ onReview, initialQuery }: Props) {
         setError(json.error ?? 'No nutrition data found for this product. Try a different name.')
         return
       }
-      const draft = geminiToIngredient(productName.trim(), brand.trim(), json.nutrition, defaultCategory)
+      const draft = geminiToIngredient(productName.trim(), brand.trim(), json.nutrition, defaultCategory, userCategories)
       onReview(draft)
     } catch (err) {
       setError(`Request failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -158,7 +169,14 @@ export function GeminiTab({ onReview, initialQuery }: Props) {
         {loading ? 'Getting nutrition…' : 'Look Up with Gemini'}
       </Button>
 
-      {error && <p className={styles.error}>{error}</p>}
+      {error && (
+        <div className={styles.errorBox}>
+          <p className={styles.error}>{error}</p>
+          <button className={styles.retryBtn} onClick={handleLookup} disabled={loading || !productName.trim()}>
+            Try Again
+          </button>
+        </div>
+      )}
 
       <p className={styles.hint}>
         Powered by Google Gemini AI — verify values against the product label before saving.

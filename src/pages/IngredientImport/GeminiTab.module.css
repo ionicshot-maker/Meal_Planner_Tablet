@@ -19,6 +19,12 @@
   gap: var(--space-3);
 }
 
+.errorBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .error {
   font-size: var(--text-sm);
   color: var(--color-danger);
@@ -26,7 +32,24 @@
   border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
   padding: var(--space-3);
   border-radius: var(--radius-md);
+  margin: 0;
 }
+
+.retryBtn {
+  align-self: flex-start;
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.retryBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+}
+.retryBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .hint {
   font-size: var(--text-xs);
