@@ -14,13 +14,20 @@
 
 /* ── Data accuracy disclaimer ───────────────────────────────────── */
 .disclaimer {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  background: color-mix(in srgb, var(--color-accent) 6%, var(--color-bg));
-  border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+  font-size: var(--text-sm);
+  color: #7c4d00;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-left: 4px solid #f59e0b;
   border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  line-height: 1.5;
+  padding: var(--space-3) var(--space-4);
+  line-height: 1.6;
+}
+[data-theme="dark"] .disclaimer {
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.5);
+  border-left-color: #f59e0b;
 }
 
 /* ── Manual entry row ───────────────────────────────────────────── */

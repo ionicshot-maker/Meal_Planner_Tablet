@@ -371,8 +371,8 @@ export function BarcodeTab({ onReview }: Props) {
       </p>
 
       <div className={styles.disclaimer}>
-        Open Food Facts is a community-maintained, open database. Nutrition data may be incomplete or inaccurate.
-        Always compare values against the product label before saving.
+        <strong>⚠️ Always verify nutrition values against the product label before saving.</strong>{' '}
+        Community database data may be incomplete or inaccurate.
       </div>
 
       {/* ── Manual barcode entry (always visible) ── */}

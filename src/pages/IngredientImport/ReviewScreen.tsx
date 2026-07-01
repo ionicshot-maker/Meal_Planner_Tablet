@@ -151,10 +151,10 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
   return (
     <div className={styles.container}>
       <div className={styles.scrollArea}>
-        {nutritionSource === 'openfoodfacts' && (
-          <div className={styles.barcodeNote}>
-            Data is from Open Food Facts, a community-maintained database — values may be incomplete or inaccurate.
-            Compare everything below with the product label before saving.
+        {(nutritionSource === 'openfoodfacts' || nutritionSource === 'gemini') && (
+          <div className={styles.accuracyWarning}>
+            <strong>⚠️ Please compare these nutrition values to the label on your product before saving</strong>{' '}
+            — data may not be exact.
           </div>
         )}
 
