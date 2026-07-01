@@ -12,6 +12,64 @@ import type { Recipe, RecipeIngredient, RecipeStep, Ingredient, IngredientUnit }
 import type { AIRecipeResult } from '@/utils/aiImport'
 import styles from './RecipeEditor.module.css'
 
+// ─── Gemini brand-name prompt dialog ─────────────────────────────────────────
+
+function GeminiNamePrompt({ originalName, onSearchAsTyped, onEditSearch, onClose }: {
+  originalName: string
+  onSearchAsTyped: () => void
+  onEditSearch: (name: string) => void
+  onClose: () => void
+}) {
+  const [value, setValue] = useState(originalName)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [])
+
+  return (
+    <div
+      className={styles.geminiPromptOverlay}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className={styles.geminiPromptBox}>
+        <button className={styles.geminiPromptClose} onClick={onClose} aria-label="Close">✕</button>
+        <p className={styles.geminiPromptHint}>
+          <strong>✨ For best results, include the brand name.</strong>
+          <br />
+          <span className={styles.geminiPromptExample}>
+            Example: <em>Ranch Style Chili Beans</em> instead of <em>chili beans</em>
+          </span>
+        </p>
+        <input
+          ref={inputRef}
+          className={styles.geminiPromptInput}
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); if (value.trim()) onEditSearch(value) }
+            if (e.key === 'Escape') onClose()
+          }}
+          placeholder="Product or ingredient name…"
+        />
+        <div className={styles.geminiPromptBtns}>
+          <button className={styles.geminiPromptBtnSecondary} onClick={onSearchAsTyped}>
+            Search as typed
+          </button>
+          <button
+            className={styles.geminiPromptBtnPrimary}
+            onClick={() => onEditSearch(value)}
+            disabled={!value.trim()}
+          >
+            Edit search
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Auto-expanding textarea for step instructions ────────────────────────────
 
 function StepTextarea({ stepId, value, placeholder, onChange, onKeyDown }: {
@@ -114,6 +172,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
   const [photoUrl, setPhotoUrl]   = useState(recipe?.photoUrl ?? '')
   const [isDragging, setIsDragging] = useState(false)
   const [photoUrlInput, setPhotoUrlInput] = useState('')
+  const [geminiPrompt, setGeminiPrompt] = useState<string | null>(null)
   const [selectedTags, setSelectedTags] = useState<string[]>(recipe?.tags ?? prefill?.suggestedTags ?? [])
   const [openTagGroup, setOpenTagGroup] = useState<string | null>(null)
 
@@ -441,6 +500,14 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
         </div>
       )}
       <div className={`${styles.editor} ${referenceText ? styles.editorFlexFill : ''}`}>
+        {geminiPrompt !== null && (
+          <GeminiNamePrompt
+            originalName={geminiPrompt}
+            onSearchAsTyped={() => { openImportTab('gemini', geminiPrompt); setGeminiPrompt(null) }}
+            onEditSearch={name => { openImportTab('gemini', name); setGeminiPrompt(null) }}
+            onClose={() => setGeminiPrompt(null)}
+          />
+        )}
         {/* ── Header ── */}
         <header className={styles.header}>
           <div className={styles.headerLeft}>
@@ -704,6 +771,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
                     onMoveDown={() => moveRow(row._rowId, 1)}
                     onAddAfter={addBlankRow}
                     allIngredients={allIngredients}
+                    onAskGemini={name => setGeminiPrompt(name)}
                   />
                 ))}
               </div>
@@ -902,7 +970,7 @@ function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
 const QUICK_UNITS: IngredientUnit[] = ['cup', 'tbsp', 'tsp', 'oz', 'lb']
 
 function IngredientRow({
-  row, isFirst, isLast, units, ingredient, onUpdate, onRemove, onMoveUp, onMoveDown, onAddAfter, allIngredients,
+  row, isFirst, isLast, units, ingredient, onUpdate, onRemove, onMoveUp, onMoveDown, onAddAfter, allIngredients, onAskGemini,
 }: {
   row: DraftIngRow
   isFirst: boolean
@@ -915,6 +983,7 @@ function IngredientRow({
   onMoveDown: () => void
   onAddAfter: () => void
   allIngredients: Ingredient[]
+  onAskGemini: (name: string) => void
 }) {
   const isMissing = !row.ingredientId
   const variant = ingredient?.variants.find(v => v.id === row.variantId) ?? ingredient?.variants[0]
@@ -939,7 +1008,7 @@ function IngredientRow({
                       <div className={styles.ingActionBtns}>
                         <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('barcode', row.name)}>📷 Scan Barcode</button>
                         <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('usda', row.name)}>🔬 Search USDA</button>
-                        <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('gemini', row.name)}>✨ Ask Gemini</button>
+                        <button type="button" className={styles.ingActionBtn} onClick={() => onAskGemini(row.name)}>✨ Ask Gemini</button>
                       </div>
                     </>
                   )}
