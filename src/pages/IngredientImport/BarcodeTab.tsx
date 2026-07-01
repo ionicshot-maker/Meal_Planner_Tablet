@@ -296,7 +296,7 @@ export function BarcodeTab({ onReview }: Props) {
           productName,
           brand,
           apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-flash-latest',
+          model: settings.geminiModel || 'gemini-2.5-flash',
         }),
       })
       const json = await res.json() as { status: number; nutrition?: GeminiNutrition }

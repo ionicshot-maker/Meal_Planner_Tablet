@@ -38,7 +38,7 @@ const handler: Handler = async (event) => {
   const productName = body.productName?.trim()
   const brand       = body.brand?.trim() ?? ''
   const apiKey      = body.apiKey?.trim()
-  const model       = body.model?.trim() || 'gemini-flash-latest'
+  const model       = body.model?.trim() || 'gemini-2.5-flash'
 
   if (!productName) {
     return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'Missing productName' }) }

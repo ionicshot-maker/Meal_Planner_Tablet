@@ -53,7 +53,7 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'Provide either a url or text to import.' }) }
   }
 
-  const primaryModel = model?.trim() || 'gemini-flash-latest'
+  const primaryModel = model?.trim() || 'gemini-2.5-flash'
   const key = apiKey.trim()
 
   console.log(

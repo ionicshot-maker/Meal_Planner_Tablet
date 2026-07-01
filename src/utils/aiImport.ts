@@ -118,7 +118,7 @@ async function callAI(prompt: string, config: AIConfig, geminiModel?: string): P
     const res = await fetch('/api/gemini-recipe-import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: prompt, apiKey, model: geminiModel || 'gemini-flash-latest' }),
+      body: JSON.stringify({ text: prompt, apiKey, model: geminiModel || 'gemini-2.5-flash' }),
     })
     const json = await res.json() as { status?: number; recipe?: unknown; error?: string }
     if (!res.ok || !json.recipe) {
@@ -187,7 +187,7 @@ export async function importRecipeFromUrl(url: string, config: AIConfig, geminiM
     const res = await fetch('/api/gemini-recipe-import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, apiKey: config.apiKey, model: geminiModel || 'gemini-flash-latest' }),
+      body: JSON.stringify({ url, apiKey: config.apiKey, model: geminiModel || 'gemini-2.5-flash' }),
     })
     const json = await res.json() as { status?: number; recipe?: unknown; error?: string }
     if (!res.ok || !json.recipe) {

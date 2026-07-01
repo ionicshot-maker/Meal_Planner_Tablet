@@ -12,6 +12,14 @@ const PROVIDER_OPTIONS: { value: AIProvider; label: string }[] = [
   { value: 'ollama',    label: 'Ollama (local / free)' },
 ]
 
+const GEMINI_MODELS: { id: string; name: string; badge: string }[] = [
+  { id: 'gemini-2.5-flash',      name: 'Gemini 2.5 Flash',      badge: 'Recommended' },
+  { id: 'gemini-2.0-flash',      name: 'Gemini 2.0 Flash',      badge: '' },
+  { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', badge: 'Most Free Requests' },
+  { id: 'gemini-flash-latest',   name: 'Latest Flash',           badge: 'May Change' },
+  { id: 'gemini-2.5-pro',        name: 'Gemini 2.5 Pro',         badge: '50/day limit' },
+]
+
 const PROVIDER_HINTS: Record<AIProvider, string> = {
   none:      'AI features disabled. You can still enter recipes manually.',
   anthropic: 'Requires an Anthropic API key. Used for recipe import and ingredient parsing.',
@@ -31,6 +39,8 @@ export function AISection() {
   const [modelFetchLoading, setModelFetchLoading] = useState(false)
   const [fetchedModels, setFetchedModels] = useState<FetchedModel[]>([])
   const [modelFetchError, setModelFetchError] = useState('')
+
+  const availableModelIds = new Set(fetchedModels.map(m => m.id))
 
   async function handleFetchModels() {
     if (!geminiApiKey) return
@@ -174,42 +184,46 @@ export function AISection() {
             </Button>
           </div>
 
-          <div className={styles.modelRow}>
-            <Input
-              label="Gemini Model"
-              value={geminiModel || 'gemini-flash-latest'}
-              onChange={e => updateSettings({ geminiModel: e.target.value })}
-              placeholder="gemini-flash-latest"
-              hint="Model used for nutrition lookups"
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              className={styles.modelCheckBtn}
-              onClick={handleFetchModels}
-              disabled={!geminiApiKey || modelFetchLoading}
-            >
-              {modelFetchLoading ? 'Loading…' : 'Check for newer model'}
-            </Button>
-          </div>
-
-          {modelFetchError && (
-            <p className={styles.modelError}>{modelFetchError}</p>
-          )}
-
-          {fetchedModels.length > 0 && (
-            <div className={styles.modelPickRow}>
-              <Select
-                label="Select from available models"
-                options={fetchedModels.map(m => ({ value: m.id, label: m.displayName }))}
-                value={geminiModel || 'gemini-flash-latest'}
-                onChange={e => updateSettings({ geminiModel: e.target.value })}
-              />
-              <p className={styles.hint}>
-                {fetchedModels.length} models available. Selecting here also updates the model field above.
-              </p>
+          <div className={styles.modelChipsGroup}>
+            <span className={styles.modelChipsLabel}>Gemini Model</span>
+            <div className={styles.modelChips}>
+              {GEMINI_MODELS.map(m => {
+                const isActive = (geminiModel || 'gemini-2.5-flash') === m.id
+                const isAvail  = availableModelIds.has(m.id)
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={`${styles.modelChip} ${isActive ? styles.modelChipActive : ''}`}
+                    onClick={() => updateSettings({ geminiModel: m.id })}
+                  >
+                    <span className={styles.modelChipName}>{m.name}</span>
+                    {m.badge && <span className={styles.modelChipBadge}>{m.badge}</span>}
+                    {isAvail && <span className={styles.modelChipAvail} title="Available on your account">✓</span>}
+                  </button>
+                )
+              })}
             </div>
-          )}
+            <p className={styles.hint}>
+              Not sure which to use? Start with Gemini 2.5 Flash. If you hit rate limits try Gemini 2.0 Flash Lite.
+            </p>
+            <div className={styles.modelCheckRow}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleFetchModels}
+                disabled={!geminiApiKey || modelFetchLoading}
+              >
+                {modelFetchLoading ? 'Checking…' : 'Check available models'}
+              </Button>
+              {fetchedModels.length > 0 && (
+                <span className={styles.modelAvailResult}>
+                  {GEMINI_MODELS.filter(m => availableModelIds.has(m.id)).length} of {GEMINI_MODELS.length} preset models available on your account
+                </span>
+              )}
+            </div>
+            {modelFetchError && <p className={styles.modelError}>{modelFetchError}</p>}
+          </div>
 
           {geminiApiKey && (
             <p className={styles.keyStored}>

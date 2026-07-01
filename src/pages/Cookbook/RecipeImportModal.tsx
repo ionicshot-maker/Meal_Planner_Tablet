@@ -28,7 +28,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
   const aiConfigured = isRecipeImportAvailable(settings)
   const aiLabel = recipeAILabel(settings)
   const effectiveAI = effectiveRecipeAI(settings)
-  const geminiModel = settings.geminiModel || 'gemini-flash-latest'
+  const geminiModel = settings.geminiModel || 'gemini-2.5-flash'
 
   function goToSettings() {
     onClose()
