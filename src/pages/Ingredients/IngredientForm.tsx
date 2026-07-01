@@ -20,7 +20,7 @@ interface Props {
 }
 
 export function IngredientForm({ ingredient, onSave, onClose }: Props) {
-  const { settings } = useSettings()
+  const { settings, updateSettings } = useSettings()
   const [draft, setDraft] = useState<Ingredient>({
     ...ingredient,
     variants: ingredient.variants.length > 0 ? ingredient.variants : [{
@@ -145,7 +145,18 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
         costPerServing: calcCostPerServing(v),
       })),
     }
+    // Capture new brand names before the await — parent re-renders can cause stale closure after
+    const knownBrands = settings.brands ?? []
+    const newBrands = [...new Set(
+      toSave.variants
+        .map(v => v.brand.trim())
+        .filter(b => b && b.toLowerCase() !== 'generic' &&
+          !knownBrands.some(x => x.toLowerCase() === b.toLowerCase()))
+    )]
     await onSave(toSave)
+    if (newBrands.length > 0) {
+      await updateSettings({ brands: [...knownBrands, ...newBrands].sort((a, b) => a.localeCompare(b)) })
+    }
     setSaving(false)
   }
 
