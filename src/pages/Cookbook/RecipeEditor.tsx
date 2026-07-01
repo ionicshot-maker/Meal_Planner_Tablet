@@ -310,8 +310,20 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     setIsDragging(false)
+
+    // Prefer actual file (local drag or OS drag)
     const file = e.dataTransfer.files[0]
-    if (file?.type.startsWith('image/')) processPhotoFile(file)
+    if (file?.type.startsWith('image/')) { processPhotoFile(file); return }
+
+    // Fall back to URL text — browsers pass image URLs as text/uri-list when
+    // dragging from a webpage (e.g. Google Images drag-and-drop)
+    const urlText = (
+      e.dataTransfer.getData('text/uri-list') ||
+      e.dataTransfer.getData('text/plain')
+    ).trim()
+    if (urlText && /\.(jpe?g|png|gif|webp)(\?.*)?$/i.test(urlText)) {
+      setPhotoUrl(urlText)
+    }
   }
 
   function handlePhotoUrlLoad() {

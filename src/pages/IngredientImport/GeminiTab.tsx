@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button, Input } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { newId, now } from '@/utils/ids'
@@ -63,17 +63,27 @@ function geminiToIngredient(
 
 interface Props {
   onReview: (draft: Ingredient) => void
+  initialQuery?: string
 }
 
-export function GeminiTab({ onReview }: Props) {
+export function GeminiTab({ onReview, initialQuery }: Props) {
   const { settings } = useSettings()
-  const [productName, setProductName] = useState('')
+  const [productName, setProductName] = useState(initialQuery ?? '')
   const [brand, setBrand] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const didAutoLookup = useRef(false)
 
   const defaultCategory = settings.ingredientCategories[0] ?? 'Pantry'
   const hasKey = Boolean(settings.geminiApiKey)
+
+  // Auto-trigger lookup when the tab is opened with a pre-filled name from the recipe editor
+  useEffect(() => {
+    if (initialQuery?.trim() && hasKey && !didAutoLookup.current) {
+      didAutoLookup.current = true
+      handleLookup()
+    }
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLookup() {
     if (!productName.trim() || !hasKey) return

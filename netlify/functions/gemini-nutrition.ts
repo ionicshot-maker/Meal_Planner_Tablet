@@ -88,11 +88,14 @@ Use this exact schema:
   "servingUnit": string — MUST be one of exactly: "tsp", "tbsp", "cup", "floz", "oz", "g", "kg", "ml", "l", "lb", "each", "package", "jar", "can", "bag", "box", "slice", "piece"
 }
 
-IMPORTANT for servingUnit:
-- Use "g" when the serving weight is in GRAMS (e.g. a 85g can of tuna → servingSize: 85, servingUnit: "g")
-- Use "oz" ONLY when the label explicitly states ounces (e.g. 3oz serving → servingSize: 3, servingUnit: "oz")
-- Use "can", "jar", "bag", "box", "package" for whole-container servings when no weight is given
-- Never use "oz" to mean grams
+CRITICAL rules for servingSize and servingUnit:
+- Return the serving size in the EXACT unit shown on the label or the standard unit for the food — do NOT convert between units.
+- Use "g" when the serving weight is in grams (e.g. 85g → servingSize: 85, servingUnit: "g").
+- Use "oz" ONLY when the label explicitly lists the serving in ounces AND the value is a small number (e.g. 1 oz, 1.5 oz, 3 oz).
+- A servingSize greater than 30 with servingUnit "oz" is almost certainly wrong — serving sizes in ounces are typically 1–6 oz; if the value is above 30 use "g" instead.
+- Use "ml" for liquids measured in milliliters, "l" for liters, "cup"/"tbsp"/"tsp" for volume measures.
+- Use "can", "jar", "bag", "box", "package" for whole-container servings when no specific weight is listed.
+- Never mix units: never return a gram value labelled as oz, or vice versa.
 
 If you cannot find reliable nutrition data for this specific product, return: {"notFound": true}
 Return ONLY the JSON object with no explanation, no markdown, no code fences.`
@@ -179,6 +182,13 @@ Return ONLY the JSON object with no explanation, no markdown, no code fences.`
 
     if (nutrition.notFound) {
       return { statusCode: 200, headers: NO_CACHE, body: JSON.stringify({ status: 0 }) }
+    }
+
+    // Heuristic: realistic food servings in ounces are 1–6 oz.
+    // A value > 30 labelled "oz" is almost certainly grams (e.g. 113 oz for a 4oz/113g beef serving).
+    if (nutrition.servingUnit === 'oz' && typeof nutrition.servingSize === 'number' && nutrition.servingSize > 30) {
+      console.log('[gemini-nutrition] heuristic oz→g correction:', nutrition.servingSize, 'oz → g')
+      nutrition.servingUnit = 'g'
     }
 
     return {

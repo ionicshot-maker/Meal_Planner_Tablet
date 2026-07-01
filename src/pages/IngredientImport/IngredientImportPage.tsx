@@ -233,7 +233,7 @@ export default function IngredientImportPage() {
               <USDATab onReview={handleUsdaReview} initialQuery={usdaInitialQuery} />
             )}
             {activeTab === 'gemini' && (
-              <GeminiTab onReview={handleGeminiReview} />
+              <GeminiTab onReview={handleGeminiReview} initialQuery={searchParams.get('q') ?? ''} />
             )}
             {activeTab === 'bulk' && (
               <BulkEntryTab onSaved={handleBulkSaved} />
