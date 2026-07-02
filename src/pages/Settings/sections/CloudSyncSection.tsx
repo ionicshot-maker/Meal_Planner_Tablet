@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 import { Button, Card, Input, Select, Modal } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import {
@@ -77,6 +78,42 @@ export function CloudSyncSection() {
     }
     setDupToResolve(null)
   }
+
+  async function resolveOne(dup: SyncDuplicate, action: 'keep-local' | 'keep-cloud' | 'keep-newer'): Promise<'keep-local' | 'keep-cloud'> {
+    const resolvedAction: 'keep-local' | 'keep-cloud' = action === 'keep-newer'
+      ? (new Date(dup.cloudItem.updatedAt).getTime() > new Date(dup.localItem.updatedAt).getTime() ? 'keep-cloud' : 'keep-local')
+      : action
+    if (dup.type === 'ingredient') {
+      await resolveIngredientDuplicate(resolvedAction, dup as SyncDuplicate & { type: 'ingredient' })
+    } else {
+      await resolveRecipeDuplicate(resolvedAction, dup as SyncDuplicate & { type: 'recipe' })
+    }
+    return resolvedAction
+  }
+
+  function makeBulkResolver(setSummaryState: Dispatch<SetStateAction<SyncSummary | null>>) {
+    return async function bulkResolve(
+      dups: SyncDuplicate[],
+      action: 'keep-local' | 'keep-cloud' | 'keep-newer',
+    ): Promise<{ keptLocal: number; keptCloud: number }> {
+      let keptLocal = 0
+      let keptCloud = 0
+      for (const dup of dups) {
+        const resolvedAction = await resolveOne(dup, action)
+        if (resolvedAction === 'keep-local') keptLocal++
+        else keptCloud++
+      }
+      const resolvedSet = new Set(dups)
+      setSummaryState(prev => prev && {
+        ...prev,
+        duplicatesForReview: prev.duplicatesForReview.filter(d => !resolvedSet.has(d)),
+      })
+      return { keptLocal, keptCloud }
+    }
+  }
+
+  const bulkResolveHousehold = makeBulkResolver(setSummary)
+  const bulkResolveFamily = makeBulkResolver(setFamilySummary)
 
   const roleOptions: { value: FamilyShareRole; label: string }[] = [
     { value: 'owner',       label: 'Owner (full access)' },
@@ -160,7 +197,7 @@ export function CloudSyncSection() {
           </Button>
         </div>
 
-        {summary && <SyncResultDisplay summary={summary} onReviewDuplicate={setDupToResolve} />}
+        {summary && <SyncResultDisplay summary={summary} onReviewDuplicate={setDupToResolve} onBulkResolve={bulkResolveHousehold} />}
       </Card>
 
       {/* ── Family Share ───────────────────────────────────────────── */}
@@ -216,7 +253,7 @@ export function CloudSyncSection() {
           <p className={styles.roleNote}>Read-only mode: you can pull from family but not push changes.</p>
         )}
 
-        {familySummary && <SyncResultDisplay summary={familySummary} onReviewDuplicate={setDupToResolve} />}
+        {familySummary && <SyncResultDisplay summary={familySummary} onReviewDuplicate={setDupToResolve} onBulkResolve={bulkResolveFamily} />}
       </Card>
 
       {/* ── Duplicate review modal ─────────────────────────────────── */}
@@ -265,16 +302,56 @@ export function CloudSyncSection() {
   )
 }
 
+const BULK_ACTION_LABELS: Record<'keep-local' | 'keep-cloud' | 'keep-newer', string> = {
+  'keep-local': 'Mine',
+  'keep-cloud': 'Cloud',
+  'keep-newer': 'Newer',
+}
+
 function SyncResultDisplay({
   summary,
   onReviewDuplicate,
+  onBulkResolve,
 }: {
   summary: SyncSummary
   onReviewDuplicate: (d: SyncDuplicate) => void
+  onBulkResolve: (dups: SyncDuplicate[], action: 'keep-local' | 'keep-cloud' | 'keep-newer') => Promise<{ keptLocal: number; keptCloud: number }>
 }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [resolving, setResolving] = useState(false)
+  const [bulkResult, setBulkResult] = useState<{ action: 'keep-local' | 'keep-cloud' | 'keep-newer'; count: number; keptLocal: number; keptCloud: number } | null>(null)
+
   const hasActivity = summary.addedLocally + summary.uploadedToCloud + summary.updatedToNewer > 0
   const hasErrors   = summary.errors.length > 0
-  const hasDups     = summary.duplicatesForReview.length > 0
+  const dups        = summary.duplicatesForReview
+  const hasDups     = dups.length > 0
+  const allSelected = hasDups && selected.size === dups.length
+
+  function toggleSelectAll() {
+    setSelected(allSelected ? new Set() : new Set(dups.map(d => d.localItem.id)))
+  }
+
+  function toggleOne(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleBulkAction(action: 'keep-local' | 'keep-cloud' | 'keep-newer') {
+    const targets = selected.size > 0 ? dups.filter(d => selected.has(d.localItem.id)) : dups
+    if (targets.length === 0 || resolving) return
+    setResolving(true)
+    try {
+      const { keptLocal, keptCloud } = await onBulkResolve(targets, action)
+      setSelected(new Set())
+      setBulkResult({ action, count: targets.length, keptLocal, keptCloud })
+    } finally {
+      setResolving(false)
+    }
+  }
 
   return (
     <div className={`${styles.syncResult} ${!hasErrors ? styles.syncResultOk : ''}`}>
@@ -287,18 +364,59 @@ function SyncResultDisplay({
           {summary.addedLocally} new {summary.addedLocally === 1 ? 'item' : 'items'} added from cloud,{' '}
           {summary.uploadedToCloud} {summary.uploadedToCloud === 1 ? 'item' : 'items'} uploaded,{' '}
           {summary.updatedToNewer} updated to newer version.
-          {!hasActivity && !hasDups && ' Everything is already up to date.'}
+          {!hasActivity && !hasDups && !bulkResult && ' Everything is already up to date.'}
+        </p>
+      )}
+      {bulkResult && (
+        <p className={styles.syncSuccess}>
+          ✓ {bulkResult.count} duplicate{bulkResult.count !== 1 ? 's' : ''} resolved using{' '}
+          <strong>Keep {bulkResult.action === 'keep-newer' ? 'All Newer' : `All ${BULK_ACTION_LABELS[bulkResult.action]}`}</strong>
+          {bulkResult.action === 'keep-newer'
+            ? ` — ${bulkResult.keptLocal} kept local, ${bulkResult.keptCloud} kept cloud.`
+            : bulkResult.action === 'keep-local' ? ' — kept your local version for all.' : ' — kept the cloud version for all.'}
         </p>
       )}
       {hasDups && (
         <div className={styles.dupList}>
-          <p className={styles.dupTitle}>{summary.duplicatesForReview.length} duplicate{summary.duplicatesForReview.length !== 1 ? 's' : ''} need review:</p>
-          {summary.duplicatesForReview.map((dup, i) => (
-            <button key={i} className={styles.dupItem} onClick={() => onReviewDuplicate(dup)}>
+          <p className={styles.dupSummaryLine}>
+            {dups.length} duplicate{dups.length !== 1 ? 's' : ''} found — most are likely from the starter ingredient
+            library seeding on multiple devices. Use Keep All Newer to resolve automatically.
+          </p>
+
+          <div className={styles.dupBulkBtnGroup}>
+            <Button variant="secondary" size="sm" disabled={resolving} onClick={() => handleBulkAction('keep-local')}>
+              {selected.size > 0 ? `Keep Mine (${selected.size})` : 'Keep All Mine'}
+            </Button>
+            <Button variant="secondary" size="sm" disabled={resolving} onClick={() => handleBulkAction('keep-cloud')}>
+              {selected.size > 0 ? `Keep Cloud (${selected.size})` : 'Keep All Cloud'}
+            </Button>
+            <Button size="sm" disabled={resolving} onClick={() => handleBulkAction('keep-newer')}>
+              {selected.size > 0 ? `Keep Newer (${selected.size})` : 'Keep All Newer'}
+            </Button>
+          </div>
+
+          <label className={styles.dupSelectAllRow}>
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              aria-label="Select all duplicates"
+            />
+            {selected.size > 0 ? `${selected.size} selected` : 'Select all'}
+          </label>
+
+          {dups.map(dup => (
+            <div key={dup.localItem.id} className={styles.dupItem}>
+              <input
+                type="checkbox"
+                checked={selected.has(dup.localItem.id)}
+                onChange={() => toggleOne(dup.localItem.id)}
+                aria-label={`Select ${(dup.localItem as Ingredient | Recipe).name}`}
+              />
               {dup.type === 'ingredient' ? '🥕' : '📖'}{' '}
               <strong>{(dup.localItem as Ingredient | Recipe).name}</strong>
-              <span className={styles.dupReviewLink}>Review →</span>
-            </button>
+              <button className={styles.dupReviewLink} onClick={() => onReviewDuplicate(dup)}>Review →</button>
+            </div>
           ))}
         </div>
       )}
