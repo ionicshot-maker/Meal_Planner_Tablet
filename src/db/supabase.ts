@@ -1,8 +1,16 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { getAllIngredients, saveIngredient } from './ingredients'
 import { getAllRecipes, saveRecipe } from './recipes'
+import { getAllHouseholdItems, saveHouseholdItem } from './householdItems'
+import { getAllCollections, saveCollection } from './collections'
+import { saveMealPlanDay } from './mealPlan'
+import { saveGroceryList } from './groceryLists'
+import { loadSettings, saveSettingsWithTimestamp } from './settings'
 import { getDB } from './schema'
-import type { Ingredient, Recipe, AppSettings, MealPlanDay, GroceryList } from '@/types'
+import type {
+  Ingredient, Recipe, AppSettings, MealPlanDay, GroceryList,
+  HouseholdItem, RecipeCollection, AIProvider,
+} from '@/types'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -77,6 +85,22 @@ create table if not exists grocery_lists (
 );
 create index if not exists grocery_lists_code_idx on grocery_lists (household_code);
 
+create table if not exists household_items (
+  id text primary key,
+  household_code text not null,
+  data jsonb not null,
+  updated_at timestamptz not null
+);
+create index if not exists household_items_code_idx on household_items (household_code);
+
+create table if not exists collections (
+  id text primary key,
+  household_code text not null,
+  data jsonb not null,
+  updated_at timestamptz not null
+);
+create index if not exists collections_code_idx on collections (household_code);
+
 create table if not exists sync_settings (
   id text primary key,
   household_code text not null,
@@ -86,17 +110,21 @@ create table if not exists sync_settings (
 create index if not exists sync_settings_code_idx on sync_settings (household_code);
 
 -- Enable Row Level Security and allow public access via anon key
-alter table ingredients   enable row level security;
-alter table recipes        enable row level security;
-alter table meal_plans     enable row level security;
-alter table grocery_lists  enable row level security;
-alter table sync_settings  enable row level security;
+alter table ingredients      enable row level security;
+alter table recipes          enable row level security;
+alter table meal_plans       enable row level security;
+alter table grocery_lists    enable row level security;
+alter table household_items  enable row level security;
+alter table collections      enable row level security;
+alter table sync_settings    enable row level security;
 
-create policy if not exists "Public access" on ingredients   for all using (true) with check (true);
-create policy if not exists "Public access" on recipes        for all using (true) with check (true);
-create policy if not exists "Public access" on meal_plans     for all using (true) with check (true);
-create policy if not exists "Public access" on grocery_lists  for all using (true) with check (true);
-create policy if not exists "Public access" on sync_settings  for all using (true) with check (true);`
+create policy if not exists "Public access" on ingredients      for all using (true) with check (true);
+create policy if not exists "Public access" on recipes          for all using (true) with check (true);
+create policy if not exists "Public access" on meal_plans       for all using (true) with check (true);
+create policy if not exists "Public access" on grocery_lists    for all using (true) with check (true);
+create policy if not exists "Public access" on household_items  for all using (true) with check (true);
+create policy if not exists "Public access" on collections      for all using (true) with check (true);
+create policy if not exists "Public access" on sync_settings    for all using (true) with check (true);`
 
 // ─── Generate a memorable sync code ─────────────────────────────────────────
 
@@ -143,6 +171,56 @@ function stripCostData(ingredient: Ingredient): Ingredient {
   }
 }
 
+// Generic push/pull/merge for stores keyed by id (or any unique string), using
+// newest-timestamp-wins merge logic. Ingredients and recipes use their own
+// variant of this (below) because they also need name-based duplicate detection.
+async function syncStore<T>(
+  supabase: SupabaseClient,
+  code: string,
+  direction: 'both' | 'push' | 'pull',
+  table: string,
+  localItems: T[],
+  getKey: (item: T) => string | undefined,
+  getUpdatedAt: (item: T) => string | undefined,
+  saveItem: (item: T) => Promise<void>,
+): Promise<Pick<SyncSummary, 'addedLocally' | 'uploadedToCloud' | 'updatedToNewer'>> {
+  const result = { addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0 }
+  const localMap = new Map(localItems.map(i => [getKey(i), i]))
+
+  if (direction !== 'pull') {
+    for (const item of localItems) {
+      const key = getKey(item)
+      if (!key) continue
+      await upsertCloudRow(supabase, table, code, key, item, getUpdatedAt(item) || new Date().toISOString())
+      result.uploadedToCloud++
+    }
+  }
+
+  if (direction !== 'push') {
+    const cloudRows = await fetchCloudRows(supabase, table, code)
+    for (const row of cloudRows) {
+      const cloudItem = row.data as T
+      const key = getKey(cloudItem)
+      if (!key) continue
+
+      const local = localMap.get(key)
+      if (!local) {
+        await saveItem(cloudItem)
+        result.addedLocally++
+      } else {
+        const cloudTime = new Date(row.updated_at).getTime()
+        const localTime = new Date(getUpdatedAt(local) || 0).getTime()
+        if (cloudTime > localTime) {
+          await saveItem(cloudItem)
+          result.updatedToNewer++
+        }
+      }
+    }
+  }
+
+  return result
+}
+
 // ─── Main sync functions ─────────────────────────────────────────────────────
 
 export async function syncIngredients(
@@ -183,7 +261,7 @@ export async function syncIngredients(
           await saveIngredient(cloudItem)
           result.addedLocally++
         }
-      } else if (direction === 'both') {
+      } else {
         const cloudTime = new Date(row.updated_at).getTime()
         const localTime = new Date(local.updatedAt).getTime()
         if (cloudTime > localTime) {
@@ -230,7 +308,7 @@ export async function syncRecipes(
           await saveRecipe(cloudItem)
           result.addedLocally++
         }
-      } else if (direction === 'both') {
+      } else {
         const cloudTime = new Date(row.updated_at).getTime()
         const localTime = new Date(local.updatedAt).getTime()
         if (cloudTime > localTime) {
@@ -248,63 +326,110 @@ async function syncMealPlans(
   supabase: SupabaseClient,
   code: string,
   direction: 'both' | 'push' | 'pull',
-): Promise<{ uploaded: number; downloaded: number }> {
+) {
   const db = await getDB()
   const localDays = await db.getAll('mealPlanDays') as MealPlanDay[]
-
-  let uploaded = 0
-  let downloaded = 0
-
-  if (direction !== 'pull') {
-    for (const day of localDays) {
-      await upsertCloudRow(supabase, 'meal_plans', code, day.date, day, new Date().toISOString())
-      uploaded++
-    }
-  }
-
-  if (direction !== 'push') {
-    const cloudRows = await fetchCloudRows(supabase, 'meal_plans', code)
-    const tx = db.transaction('mealPlanDays', 'readwrite')
-    for (const row of cloudRows) {
-      const day = row.data as MealPlanDay
-      if (!day?.date) continue
-      await tx.store.put(day)
-      downloaded++
-    }
-    await tx.done
-  }
-
-  return { uploaded, downloaded }
+  return syncStore(
+    supabase, code, direction, 'meal_plans', localDays,
+    day => day.date,
+    day => day.updatedAt,
+    saveMealPlanDay,
+  )
 }
 
 async function syncGroceryLists(
   supabase: SupabaseClient,
   code: string,
   direction: 'both' | 'push' | 'pull',
-): Promise<{ uploaded: number; downloaded: number }> {
+) {
   const db = await getDB()
   const localLists = await db.getAll('groceryLists') as GroceryList[]
+  return syncStore(
+    supabase, code, direction, 'grocery_lists', localLists,
+    list => list.id,
+    list => list.updatedAt || list.generatedAt,
+    saveGroceryList,
+  )
+}
 
+async function syncHouseholdItems(
+  supabase: SupabaseClient,
+  code: string,
+  direction: 'both' | 'push' | 'pull',
+) {
+  const localItems = await getAllHouseholdItems()
+  return syncStore<HouseholdItem>(
+    supabase, code, direction, 'household_items', localItems,
+    item => item.id,
+    item => item.updatedAt || item.createdAt,
+    saveHouseholdItem,
+  )
+}
+
+async function syncCollections(
+  supabase: SupabaseClient,
+  code: string,
+  direction: 'both' | 'push' | 'pull',
+) {
+  const localItems = await getAllCollections()
+  return syncStore<RecipeCollection>(
+    supabase, code, direction, 'collections', localItems,
+    c => c.id,
+    c => c.updatedAt,
+    saveCollection,
+  )
+}
+
+// Settings fields that are safe to share across a household — excludes API keys,
+// theme, and other per-device/personal fields (see runSync for the full list).
+const SYNCED_SETTINGS_KEYS = [
+  'householdName', 'unitSystem', 'geminiModel', 'nutrientToggles', 'macroHistoryDays',
+  'storePreferenceEnabled', 'householdSize', 'people', 'setupComplete',
+  'ingredientCategories', 'recipeTags', 'brands', 'stores',
+] as const
+
+function pickSyncableSettings(settings: AppSettings): Record<string, unknown> {
+  const picked: Record<string, unknown> = {}
+  for (const key of SYNCED_SETTINGS_KEYS) picked[key] = settings[key]
+  picked.aiProvider = settings.ai.provider
+  return picked
+}
+
+async function syncSettings(
+  supabase: SupabaseClient,
+  code: string,
+  direction: 'both' | 'push' | 'pull',
+): Promise<{ uploaded: number; downloaded: number }> {
   let uploaded = 0
   let downloaded = 0
+  const local = await loadSettings()
+  const rowId = `${code}:settings`
 
   if (direction !== 'pull') {
-    for (const list of localLists) {
-      await upsertCloudRow(supabase, 'grocery_lists', code, list.id, list, list.generatedAt)
-      uploaded++
-    }
+    await upsertCloudRow(supabase, 'sync_settings', code, rowId, pickSyncableSettings(local), local.updatedAt)
+    uploaded = 1
   }
 
   if (direction !== 'push') {
-    const cloudRows = await fetchCloudRows(supabase, 'grocery_lists', code)
-    const tx = db.transaction('groceryLists', 'readwrite')
-    for (const row of cloudRows) {
-      const list = row.data as GroceryList
-      if (!list?.id) continue
-      await tx.store.put(list)
-      downloaded++
+    const rows = await fetchCloudRows(supabase, 'sync_settings', code)
+    const row = rows.find(r => r.id === rowId)
+    if (row) {
+      const cloudTime = new Date(row.updated_at).getTime()
+      const localTime = new Date(local.updatedAt || 0).getTime()
+      if (cloudTime > localTime) {
+        const cloud = row.data as Record<string, unknown>
+        const patch: Partial<AppSettings> = {}
+        for (const key of SYNCED_SETTINGS_KEYS) {
+          if (key in cloud) (patch as Record<string, unknown>)[key] = cloud[key]
+        }
+        const merged: AppSettings = { ...local, ...patch }
+        if (typeof cloud.aiProvider === 'string') {
+          merged.ai = { ...local.ai, provider: cloud.aiProvider as AIProvider }
+        }
+        await saveSettingsWithTimestamp(merged, row.updated_at)
+        downloaded = 1
+      }
     }
-    await tx.done
   }
 
   return { uploaded, downloaded }
@@ -357,19 +482,47 @@ export async function runSync(
   }
 
   try {
+    const col = await syncCollections(supabase, code, direction)
+    summary.addedLocally    += col.addedLocally
+    summary.uploadedToCloud += col.uploadedToCloud
+    summary.updatedToNewer  += col.updatedToNewer
+  } catch (e) {
+    summary.errors.push(`Recipe collections: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
+  try {
     const mp = await syncMealPlans(supabase, code, direction)
-    summary.addedLocally    += mp.downloaded
-    summary.uploadedToCloud += mp.uploaded
+    summary.addedLocally    += mp.addedLocally
+    summary.uploadedToCloud += mp.uploadedToCloud
+    summary.updatedToNewer  += mp.updatedToNewer
   } catch (e) {
     summary.errors.push(`Meal plans: ${e instanceof Error ? e.message : String(e)}`)
   }
 
   try {
     const gl = await syncGroceryLists(supabase, code, direction)
-    summary.addedLocally    += gl.downloaded
-    summary.uploadedToCloud += gl.uploaded
+    summary.addedLocally    += gl.addedLocally
+    summary.uploadedToCloud += gl.uploadedToCloud
+    summary.updatedToNewer  += gl.updatedToNewer
   } catch (e) {
     summary.errors.push(`Grocery lists: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
+  try {
+    const hi = await syncHouseholdItems(supabase, code, direction)
+    summary.addedLocally    += hi.addedLocally
+    summary.uploadedToCloud += hi.uploadedToCloud
+    summary.updatedToNewer  += hi.updatedToNewer
+  } catch (e) {
+    summary.errors.push(`Household items: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
+  try {
+    const st = await syncSettings(supabase, code, direction)
+    summary.uploadedToCloud += st.uploaded
+    summary.updatedToNewer  += st.downloaded
+  } catch (e) {
+    summary.errors.push(`Settings: ${e instanceof Error ? e.message : String(e)}`)
   }
 
   return summary

@@ -13,7 +13,7 @@ import styles from './CloudSyncSection.module.css'
 type SyncDirection = 'both' | 'push' | 'pull'
 
 export function CloudSyncSection() {
-  const { settings, updateSettings } = useSettings()
+  const { settings, updateSettings, reloadSettings } = useSettings()
   const [syncing, setSyncing] = useState(false)
   const [familySyncing, setFamilySyncing] = useState(false)
   const [summary, setSummary] = useState<SyncSummary | null>(null)
@@ -29,6 +29,8 @@ export function CloudSyncSection() {
     try {
       const result = await runSync(settings, direction)
       setSummary(result)
+      // Settings may have been written directly to IndexedDB during sync — refresh context state
+      await reloadSettings()
     } catch (e) {
       setSummary({ addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0, duplicatesForReview: [], errors: [String(e)] })
     } finally {
@@ -108,8 +110,12 @@ export function CloudSyncSection() {
       {/* ── Household Sync ─────────────────────────────────────────── */}
       <h3 className={styles.subTitle}>Household Sync</h3>
       <p className={styles.desc}>
-        Sync everything between your devices — ingredients, recipes, meal plans, grocery lists.
-        Use the same code on every device in your home.
+        Sync everything between your devices — ingredients, recipes, recipe collections, meal plans,
+        grocery lists, household items, and settings. Use the same code on every device in your home.
+      </p>
+      <p className={styles.desc}>
+        Household Sync shares everything except personal API keys and device theme preferences.
+        Macro logs and weight history are personal and stay on each device.
       </p>
 
       <Card padding="md">

@@ -1,4 +1,5 @@
 import { getDB } from './schema'
+import { now } from '@/utils/ids'
 import type { GroceryList } from '@/types'
 
 export async function getActiveGroceryList(): Promise<GroceryList | undefined> {
@@ -15,6 +16,7 @@ export async function getGroceryHistory(): Promise<GroceryList[]> {
 
 export async function saveGroceryList(list: GroceryList): Promise<void> {
   const db = await getDB()
+  list.updatedAt = now()
   await db.put('groceryLists', list)
 }
 

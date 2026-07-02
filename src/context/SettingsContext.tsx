@@ -5,6 +5,7 @@ import type { AppSettings } from '@/types'
 interface SettingsContextValue {
   settings: AppSettings
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>
+  reloadSettings: () => Promise<void>
   isLoading: boolean
 }
 
@@ -27,8 +28,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     await saveSettings(updated)
   }
 
+  // Re-reads settings from IndexedDB — used after a cloud sync writes settings
+  // directly to the DB, bypassing this context's local state.
+  async function reloadSettings() {
+    const fresh = await loadSettings()
+    setSettings(fresh)
+  }
+
   return (
-    <SettingsContext.Provider value={{ settings, updateSettings, isLoading }}>
+    <SettingsContext.Provider value={{ settings, updateSettings, reloadSettings, isLoading }}>
       {children}
     </SettingsContext.Provider>
   )

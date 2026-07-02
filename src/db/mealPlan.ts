@@ -1,4 +1,5 @@
 import { getDB } from './schema'
+import { now } from '@/utils/ids'
 import type { MealPlanDay, MealPlanWeekTemplate, GroceryList } from '@/types'
 
 export async function getMealPlanDay(date: string): Promise<MealPlanDay | undefined> {
@@ -20,6 +21,7 @@ export async function getMealPlanDays(dates: string[]): Promise<Map<string, Meal
 
 export async function saveMealPlanDay(day: MealPlanDay): Promise<void> {
   const db = await getDB()
+  day.updatedAt = now()
   await db.put('mealPlanDays', day)
 }
 

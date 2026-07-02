@@ -107,6 +107,7 @@ export interface AppSettings {
   householdSyncCode: string
   familyShareCode: string
   familyShareRole: FamilyShareRole
+  updatedAt: string
 }
 
 export interface RecipeTagGroup {
@@ -225,6 +226,7 @@ export interface DayMeals {
 export interface MealPlanDay {
   date: string     // ISO date string
   meals: DayMeals
+  updatedAt?: string
 }
 
 export interface MealPlanWeekTemplate {
@@ -263,6 +265,7 @@ export interface HouseholdItem {
   notes?: string
   alwaysOnHand?: boolean
   createdAt: string
+  updatedAt?: string
 }
 
 // ─── Recipe Collections ───────────────────────────────────────────────────────
@@ -301,4 +304,5 @@ export interface GroceryList {
   manualItems: GroceryItem[]
   remainderItems: GroceryItem[]
   status: 'active' | 'completed' | 'archived'
+  updatedAt?: string
 }

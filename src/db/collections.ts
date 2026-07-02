@@ -10,6 +10,7 @@ export async function getAllCollections(): Promise<RecipeCollection[]> {
 
 export async function saveCollection(c: RecipeCollection): Promise<void> {
   const db = await getDB()
+  c.updatedAt = now()
   await db.put('collections', c)
 }
 

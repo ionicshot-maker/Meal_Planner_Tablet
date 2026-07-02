@@ -1,4 +1,5 @@
 import { getDB } from './schema'
+import { now } from '@/utils/ids'
 import type { AppSettings, RecipeTagGroup } from '@/types'
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -85,6 +86,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   householdSyncCode: '',
   familyShareCode: '',
   familyShareRole: 'owner',
+  updatedAt: new Date(0).toISOString(),
 }
 
 function mergeDefaultTags(current: RecipeTagGroup[]): RecipeTagGroup[] {
@@ -119,7 +121,15 @@ export async function loadSettings(): Promise<AppSettings> {
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
   const db = await getDB()
+  settings.updatedAt = now()
   await db.put('settings', settings, 'app')
+}
+
+// Used when applying a cloud settings merge, where we want to preserve the
+// cloud row's timestamp rather than stamping "now" so future comparisons stay accurate.
+export async function saveSettingsWithTimestamp(settings: AppSettings, updatedAt: string): Promise<void> {
+  const db = await getDB()
+  await db.put('settings', { ...settings, updatedAt }, 'app')
 }
 
 export async function patchSettings(patch: Partial<AppSettings>): Promise<AppSettings> {

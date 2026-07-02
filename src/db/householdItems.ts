@@ -1,4 +1,5 @@
 import { getDB } from './schema'
+import { now } from '@/utils/ids'
 import type { HouseholdItem } from '@/types'
 
 export async function getAllHouseholdItems(): Promise<HouseholdItem[]> {
@@ -9,6 +10,7 @@ export async function getAllHouseholdItems(): Promise<HouseholdItem[]> {
 
 export async function saveHouseholdItem(item: HouseholdItem): Promise<void> {
   const db = await getDB()
+  item.updatedAt = now()
   await db.put('householdItems', item)
 }
 
