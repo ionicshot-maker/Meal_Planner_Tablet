@@ -1,6 +1,6 @@
 .toast {
   position: fixed;
-  bottom: var(--space-6);
+  bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%) translateY(0);
   background: var(--color-success);

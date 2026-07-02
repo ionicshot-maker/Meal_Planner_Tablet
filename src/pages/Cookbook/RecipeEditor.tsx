@@ -9,7 +9,7 @@ import { buildIngredientMap, calcRecipeMacros, calcRecipeCost, normalizeUnit, fo
 import { availableUnits, parseTimeToMinutes, formatMinutes } from '@/utils/units'
 import { newId, now } from '@/utils/ids'
 import type { Recipe, RecipeIngredient, RecipeStep, Ingredient, IngredientUnit } from '@/types'
-import type { AIRecipeResult } from '@/utils/aiImport'
+import type { AIRecipeResult, UncertainField } from '@/utils/aiImport'
 import styles from './RecipeEditor.module.css'
 
 // ─── Gemini brand-name prompt dialog ─────────────────────────────────────────
@@ -112,10 +112,18 @@ interface DraftIngRow {
   servingDisplay: string
 }
 
+export interface ImportNotice {
+  level: 'success' | 'warning'
+  message: string
+  subMessage?: string
+}
+
 interface Props {
   recipe?: Recipe                  // undefined = new
   prefill?: AIRecipeResult         // from AI import
   fromImport?: boolean             // show review banner + clear button
+  importNotice?: ImportNotice      // overrides the generic import banner text/styling
+  uncertainFields?: UncertainField[] // fields the AI could not read confidently — highlighted in amber
   referenceText?: string           // side-by-side text reference (no-AI paste mode)
   onSave: (recipe: Recipe) => Promise<void>
   onClose: () => void
@@ -149,9 +157,12 @@ function rowsToIngredients(rows: DraftIngRow[]): RecipeIngredient[] {
     }))
 }
 
-export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSave, onClose }: Props) {
+export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncertainFields: uncertainFieldsProp, referenceText, onSave, onClose }: Props) {
   const { settings } = useSettings()
   const isNew = !recipe?.id
+
+  // Fields the AI couldn't read confidently — highlighted in amber until fixed
+  const uncertainFields = useMemo(() => new Set(uncertainFieldsProp ?? []), [uncertainFieldsProp])
 
   // All ingredients from DB (for macro calc)
   const [allIngredients, setAllIngredients] = useState<Ingredient[]>([])
@@ -515,7 +526,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
               <label className={styles.nameLabel} htmlFor="recipe-name">Recipe Name</label>
               <input
                 id="recipe-name"
-                className={styles.nameInput}
+                className={uncertainFields.has('name') ? `${styles.nameInput} ${styles.fieldWarning}` : styles.nameInput}
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="e.g. Creamy Garlic Pasta"
@@ -541,8 +552,15 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
 
         {/* ── Import review notice ── */}
         {showImportBanner && (
-          <div className={styles.importBanner}>
-            <span>Import complete — please review and correct everything before saving.</span>
+          <div className={
+            importNotice?.level === 'success' ? `${styles.importBanner} ${styles.importBannerSuccess}`
+              : importNotice?.level === 'warning' ? `${styles.importBanner} ${styles.importBannerWarning}`
+              : styles.importBanner
+          }>
+            <div>
+              <span>{importNotice?.message ?? 'Import complete — please review and correct everything before saving.'}</span>
+              {importNotice?.subMessage && <div className={styles.importBannerSub}>{importNotice.subMessage}</div>}
+            </div>
             <button className={styles.importBannerClose} onClick={() => setShowImportBanner(false)} aria-label="Dismiss">✕</button>
           </div>
         )}
@@ -576,7 +594,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
                   min={1}
                   value={servings}
                   onChange={e => setServings(Math.max(1, +e.target.value))}
-                  className={styles.numInput}
+                  className={uncertainFields.has('servings') ? `${styles.numInput} ${styles.fieldWarning}` : styles.numInput}
                 />
               </div>
               <div className={styles.fieldGroup}>
@@ -587,7 +605,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
                   onChange={e => setPrepInput(e.target.value)}
                   onBlur={handleTimePrepBlur}
                   placeholder="e.g. 20 min"
-                  className={styles.textInput}
+                  className={uncertainFields.has('prep') ? `${styles.textInput} ${styles.fieldWarning}` : styles.textInput}
                 />
               </div>
               <div className={styles.fieldGroup}>
@@ -598,7 +616,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
                   onChange={e => setCookInput(e.target.value)}
                   onBlur={handleTimeCookBlur}
                   placeholder="e.g. 1 hr 30 min"
-                  className={styles.textInput}
+                  className={uncertainFields.has('cook') ? `${styles.textInput} ${styles.fieldWarning}` : styles.textInput}
                 />
               </div>
             </div>
@@ -746,7 +764,17 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
 
           {/* ─ Ingredients ─ */}
           <section className={styles.section}>
-            <h3 className={styles.sectionTitle}>Ingredients</h3>
+            <h3 className={uncertainFields.has('ingredients') ? `${styles.sectionTitle} ${styles.sectionTitleWarning}` : styles.sectionTitle}>
+              Ingredients
+            </h3>
+            {uncertainFields.has('ingredients') && (
+              <p className={styles.fieldWarningHint}>No ingredients could be read from the photo — add them below.</p>
+            )}
+            {importNotice?.level === 'warning' && !uncertainFields.has('ingredients') && (
+              <p className={styles.fieldWarningHint}>
+                Always verify ingredient quantities carefully — measurement errors in recipes can significantly affect results.
+              </p>
+            )}
 
             {rows.length > 0 && (
               <div className={styles.ingTable}>
@@ -788,7 +816,12 @@ export function RecipeEditor({ recipe, prefill, fromImport, referenceText, onSav
 
           {/* ─ Instructions ─ */}
           <section className={styles.section}>
-            <h3 className={styles.sectionTitle}>Instructions</h3>
+            <h3 className={uncertainFields.has('steps') ? `${styles.sectionTitle} ${styles.sectionTitleWarning}` : styles.sectionTitle}>
+              Instructions
+            </h3>
+            {uncertainFields.has('steps') && (
+              <p className={styles.fieldWarningHint}>No steps could be read from the photo — add them below.</p>
+            )}
             <div className={styles.stepsList}>
               {steps.map((step, idx) => (
                 <div key={step.id} className={styles.stepRow}>

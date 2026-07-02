@@ -1,22 +1,34 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Camera, Image as ImageIcon } from 'lucide-react'
 import { useSettings } from '@/context/SettingsContext'
 import {
-  importRecipeFromUrl, importRecipeFromText,
+  importRecipeFromUrl, importRecipeFromText, importRecipeFromPhoto,
   isRecipeImportAvailable, effectiveRecipeAI, recipeAILabel,
+  isPhotoImportAvailable, effectivePhotoGeminiKey,
 } from '@/utils/aiImport'
-import type { AIRecipeResult } from '@/utils/aiImport'
+import type { AIRecipeResult, UncertainField } from '@/utils/aiImport'
+import type { ImportNotice } from './RecipeEditor'
 import styles from './RecipeImportModal.module.css'
 
-type Tab = 'url' | 'paste'
+type Tab = 'url' | 'paste' | 'photo'
+type PhotoStage = 'select' | 'preview' | 'lowConfidence'
+
+// Rough heuristic for "this device likely has a camera worth offering" — phones/tablets
+// with a coarse (touch) pointer. Desktops fall back to the file picker only.
+const isTouchDevice =
+  typeof window !== 'undefined' &&
+  (('ontouchstart' in window) || navigator.maxTouchPoints > 0) &&
+  window.matchMedia?.('(pointer: coarse)').matches
 
 interface Props {
-  onImported: (result: AIRecipeResult) => void
+  onImported: (result: AIRecipeResult, notice?: ImportNotice, uncertainFields?: UncertainField[]) => void
   onManualWithReference: (text: string) => void
+  onManualEntry: () => void
   onClose: () => void
 }
 
-export function RecipeImportModal({ onImported, onManualWithReference, onClose }: Props) {
+export function RecipeImportModal({ onImported, onManualWithReference, onManualEntry, onClose }: Props) {
   const { settings } = useSettings()
   const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('url')
@@ -25,14 +37,28 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Photo tab state
+  const [photoStage, setPhotoStage] = useState<PhotoStage>('select')
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
+  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false)
+  const [lowConfidenceReason, setLowConfidenceReason] = useState('')
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const aiConfigured = isRecipeImportAvailable(settings)
   const aiLabel = recipeAILabel(settings)
   const effectiveAI = effectiveRecipeAI(settings)
   const geminiModel = settings.geminiModel || 'gemini-2.5-flash'
+  const photoConfigured = isPhotoImportAvailable(settings)
 
   function goToSettings() {
     onClose()
     navigate('/settings')
+  }
+
+  function goToHelp() {
+    onClose()
+    navigate('/help')
   }
 
   async function handleUrlImport() {
@@ -58,6 +84,72 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
       onImported(result)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Import failed. Check your AI provider settings.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Photo tab ──────────────────────────────────────────────────────────────
+
+  function loadPhotoFile(file: File | undefined) {
+    if (!file || !file.type.startsWith('image/')) return
+    setError('')
+    const reader = new FileReader()
+    reader.onload = () => {
+      setPhotoDataUrl(reader.result as string)
+      setPhotoStage('preview')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  function handlePhotoInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    loadPhotoFile(e.target.files?.[0])
+    e.target.value = ''
+  }
+
+  function handlePhotoDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setIsDraggingPhoto(false)
+    loadPhotoFile(e.dataTransfer.files?.[0])
+  }
+
+  function resetPhoto() {
+    setPhotoDataUrl(null)
+    setPhotoStage('select')
+    setLowConfidenceReason('')
+    setError('')
+  }
+
+  async function handlePhotoParse() {
+    if (!photoDataUrl) return
+    setError('')
+    setLoading(true)
+    try {
+      const commaIdx = photoDataUrl.indexOf(',')
+      const base64 = photoDataUrl.slice(commaIdx + 1)
+      const mimeMatch = photoDataUrl.slice(0, commaIdx).match(/data:(.*);base64/)
+      const mimeType = mimeMatch?.[1] || 'image/jpeg'
+      const geminiKey = effectivePhotoGeminiKey(settings)
+
+      const outcome = await importRecipeFromPhoto(base64, mimeType, geminiKey, geminiModel)
+
+      if (outcome.lowConfidence) {
+        setLowConfidenceReason(outcome.reason)
+        setPhotoStage('lowConfidence')
+        return
+      }
+
+      const isComplete = outcome.uncertainFields.length === 0
+      const notice: ImportNotice = isComplete
+        ? { level: 'success', message: 'Recipe extracted successfully — please review everything before saving.' }
+        : {
+            level: 'warning',
+            message: 'Some fields could not be read clearly from the photo — highlighted fields below need your attention before saving.',
+            subMessage: 'Always verify ingredient quantities carefully — measurement errors in recipes can significantly affect results.',
+          }
+      onImported(outcome.result, notice, outcome.uncertainFields)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Could not read the recipe photo. Try again.')
     } finally {
       setLoading(false)
     }
@@ -90,6 +182,13 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
             onClick={() => { setTab('paste'); setError('') }}
           >
             Paste Recipe Text
+          </button>
+          <button
+            className={`${styles.tab} ${tab === 'photo' ? styles.tabActive : ''}`}
+            onClick={() => { setTab('photo'); setError('') }}
+          >
+            <Camera size={15} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+            Photo
           </button>
         </div>
 
@@ -209,6 +308,127 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
             </div>
           )}
 
+          {/* ── Photo tab ── */}
+          {tab === 'photo' && photoConfigured && (
+            <div className={styles.tabPane}>
+
+              {photoStage === 'select' && (
+                <>
+                  <div
+                    className={`${styles.dropzone} ${isDraggingPhoto ? styles.dropzoneActive : ''}`}
+                    onDragOver={e => { e.preventDefault(); setIsDraggingPhoto(true) }}
+                    onDragLeave={() => setIsDraggingPhoto(false)}
+                    onDrop={handlePhotoDrop}
+                  >
+                    <p className={styles.dropzoneText}>Drag and drop a recipe photo here</p>
+                    <div className={styles.photoButtons}>
+                      {isTouchDevice && (
+                        <button type="button" className={styles.btnPhotoAction} onClick={() => cameraInputRef.current?.click()}>
+                          <Camera size={18} /> Take Photo
+                        </button>
+                      )}
+                      <button type="button" className={styles.btnPhotoAction} onClick={() => fileInputRef.current?.click()}>
+                        <ImageIcon size={18} /> Choose Photo
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handlePhotoInputChange}
+                    className={styles.hiddenFileInput}
+                  />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoInputChange}
+                    className={styles.hiddenFileInput}
+                  />
+
+                  <div className={styles.photoTips}>
+                    <p className={styles.photoTipsTitle}>📸 Tips for best results:</p>
+                    <ul className={styles.photoTipsList}>
+                      <li>Place the recipe on a flat surface in good lighting</li>
+                      <li>Make sure all text is in focus and fully visible</li>
+                      <li>Take the photo straight on, not at an angle</li>
+                      <li>If the recipe spans multiple pages, take one photo per page and import separately</li>
+                      <li>Handwritten recipes work, but printed recipes give better results</li>
+                    </ul>
+                  </div>
+                </>
+              )}
+
+              {photoStage === 'preview' && photoDataUrl && (
+                <>
+                  <img src={photoDataUrl} alt="Recipe to import" className={styles.photoPreview} />
+                  <div className={styles.qualityChecklist}>
+                    <p className={styles.qualityTitle}>Before we read this, double check:</p>
+                    <ul className={styles.photoTipsList}>
+                      <li>Is the recipe text clearly visible and in focus?</li>
+                      <li>Is the lighting good with no shadows over the text?</li>
+                      <li>Is the entire recipe visible in the frame, including ingredients and instructions?</li>
+                      <li>Is the photo taken straight on, not at an angle?</li>
+                    </ul>
+                  </div>
+                  {error && <div className={styles.error}>{error}</div>}
+                  <div className={styles.photoActionsRow}>
+                    <button type="button" className={styles.btnCancel} onClick={resetPhoto} disabled={loading}>
+                      Retake Photo
+                    </button>
+                    <button type="button" className={styles.btnImport} onClick={handlePhotoParse} disabled={loading}>
+                      {loading ? 'Reading recipe…' : 'Looks Good — Parse Recipe'}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {photoStage === 'lowConfidence' && (
+                <div className={styles.lowConfidenceBox}>
+                  <p className={styles.lowConfidenceTitle}>
+                    ⚠️ We could not confidently read this recipe photo.
+                  </p>
+                  <p className={styles.lowConfidenceBody}>
+                    This usually means the photo was blurry, too dark, at an angle, or the text was too small.
+                    Please try again with a clearer photo.
+                  </p>
+                  {lowConfidenceReason && (
+                    <p className={styles.lowConfidenceReason}>Gemini said: "{lowConfidenceReason}"</p>
+                  )}
+                  <div className={styles.photoActionsRow}>
+                    <button type="button" className={styles.btnCancel} onClick={resetPhoto}>
+                      Try Again with Better Photo
+                    </button>
+                    <button type="button" className={styles.btnImport} onClick={() => { onManualEntry(); onClose() }}>
+                      Type Recipe Manually Instead
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'photo' && !photoConfigured && (
+            <div className={styles.tabPane}>
+              <div className={styles.noAiBox}>
+                <p className={styles.noAiTitle}>A free Gemini key is required for Photo import</p>
+                <p className={styles.noAiBody}>
+                  Reading a recipe from a photo uses Google's Gemini vision AI, which is free to use.
+                  Go to Settings → Integrations and enter your Gemini key, or visit the Help page for a
+                  step-by-step guide to getting one at no cost.
+                </p>
+                <button className={styles.btnSettings} onClick={goToSettings}>
+                  Go to Settings → Integrations
+                </button>
+                <button className={styles.btnSettings} onClick={goToHelp}>
+                  Help — Getting a free Gemini key
+                </button>
+              </div>
+            </div>
+          )}
+
         </div>
 
         <footer className={styles.footer}>
@@ -240,13 +460,14 @@ export function RecipeImportModal({ onImported, onManualWithReference, onClose }
               Use as Reference While I Type →
             </button>
           )}
+          {/* Photo tab: actions live inline in the pane above, footer only needs Cancel */}
         </footer>
 
         {loading && (
           <div className={styles.loadingOverlay}>
             <div className={styles.spinner} />
             <p className={styles.loadingText}>
-              {tab === 'url' ? 'Fetching and parsing recipe…' : 'Parsing recipe text…'}
+              {tab === 'url' ? 'Fetching and parsing recipe…' : tab === 'photo' ? 'Reading recipe from photo…' : 'Parsing recipe text…'}
             </p>
           </div>
         )}

@@ -173,5 +173,7 @@
     z-index: 800;
     background: var(--color-surface);
     border-left: none;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }

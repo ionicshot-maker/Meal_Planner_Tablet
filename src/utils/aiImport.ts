@@ -1,6 +1,7 @@
 import type { AIConfig, AppSettings } from '@/types'
 import { normalizeUnit } from './recipeCalculations'
 import { parseTimeToMinutes } from './units'
+import { parseFraction } from './fractionInput'
 import { fetchPageAsText } from './recipeParse'
 
 export interface AIRecipeResult {
@@ -204,6 +205,87 @@ export async function importRecipeFromUrl(url: string, config: AIConfig, geminiM
   const result = parseAIResponse(raw)
   result.sourceUrl = url
   return result
+}
+
+// ─── Photo import ─────────────────────────────────────────────────────────────
+// Photo import always uses Gemini (vision) regardless of the main AI provider setting.
+
+export function effectivePhotoGeminiKey(settings: AppSettings): string {
+  if (settings.geminiApiKey?.trim()) return settings.geminiApiKey.trim()
+  if (settings.ai.provider === 'gemini' && settings.ai.apiKey.trim()) return settings.ai.apiKey.trim()
+  return ''
+}
+
+export function isPhotoImportAvailable(settings: AppSettings): boolean {
+  return Boolean(effectivePhotoGeminiKey(settings))
+}
+
+// Field keys a caller can flag as low-confidence/missing so the editor highlights them in amber
+export type UncertainField = 'name' | 'servings' | 'prep' | 'cook' | 'ingredients' | 'steps'
+
+export type PhotoImportOutcome =
+  | { lowConfidence: true; reason: string }
+  | { lowConfidence: false; result: AIRecipeResult; uncertainFields: UncertainField[] }
+
+interface PhotoRecipeRaw {
+  name?: unknown
+  servings?: unknown
+  prepTime?: unknown
+  cookTime?: unknown
+  notes?: unknown
+  ingredients?: Array<{ quantity?: unknown; unit?: unknown; name?: unknown }>
+  steps?: unknown[]
+}
+
+// Sends a photo to the Gemini vision recipe parser. Returns a discriminated result
+// so the caller can decide whether to open the editor or show a "try again" prompt.
+export async function importRecipeFromPhoto(
+  base64Image: string,
+  mimeType: string,
+  geminiApiKey: string,
+  geminiModel?: string,
+): Promise<PhotoImportOutcome> {
+  const res = await fetch('/api/gemini-photo-recipe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: base64Image, mimeType, apiKey: geminiApiKey, model: geminiModel || 'gemini-2.5-flash' }),
+  })
+  const json = await res.json() as { status?: number; recipe?: PhotoRecipeRaw; lowConfidence?: boolean; reason?: string; error?: string }
+
+  if (json.lowConfidence) {
+    return { lowConfidence: true, reason: json.reason ?? 'The photo was unclear.' }
+  }
+  if (!res.ok || !json.recipe) {
+    throw new Error(json.error ?? `Photo import failed (${res.status})`)
+  }
+
+  const raw = json.recipe
+  const uncertainFields: UncertainField[] = []
+
+  if (!String(raw.name ?? '').trim()) uncertainFields.push('name')
+  if (!raw.servings) uncertainFields.push('servings')
+  if (!raw.prepTime) uncertainFields.push('prep')
+  if (!raw.cookTime) uncertainFields.push('cook')
+  if (!raw.ingredients?.length) uncertainFields.push('ingredients')
+  if (!raw.steps?.length) uncertainFields.push('steps')
+
+  const ingredients: AIIngredientLine[] = (raw.ingredients ?? []).map(i => ({
+    name: String(i?.name ?? ''),
+    quantity: parseFraction(String(i?.quantity ?? '')) ?? 1,
+    unit: normalizeUnit(String(i?.unit ?? 'each')),
+  }))
+
+  const result: AIRecipeResult = {
+    name: String(raw.name ?? 'Imported Recipe'),
+    servings: Math.max(1, Number(raw.servings) || 4),
+    prepTimeMinutes: raw.prepTime ? parseTimeToMinutes(String(raw.prepTime)) : 0,
+    cookTimeMinutes: raw.cookTime ? parseTimeToMinutes(String(raw.cookTime)) : 0,
+    notes: raw.notes ? String(raw.notes) : undefined,
+    ingredients,
+    steps: (raw.steps ?? []).map(s => String(s)),
+  }
+
+  return { lowConfidence: false, result, uncertainFields }
 }
 
 export function normalizeTimeMinutes(value: number | string | undefined): number {

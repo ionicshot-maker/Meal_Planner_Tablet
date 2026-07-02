@@ -13,6 +13,7 @@
   max-height: 85vh;
   display: flex; flex-direction: column;
   overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .header {

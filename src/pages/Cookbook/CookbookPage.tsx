@@ -7,9 +7,9 @@ import { getAllIngredients } from '@/db/ingredients'
 import { getAllCollections, createCollection, addRecipeToCollection, saveCollection, deleteCollection } from '@/db/collections'
 import { attachRecipeMacros, buildIngredientMap } from '@/utils/recipeCalculations'
 import type { Recipe, Ingredient, RecipeCollection } from '@/types'
-import type { AIRecipeResult } from '@/utils/aiImport'
+import type { AIRecipeResult, UncertainField } from '@/utils/aiImport'
 import { RecipeCard } from './RecipeCard'
-import { RecipeEditor } from './RecipeEditor'
+import { RecipeEditor, type ImportNotice } from './RecipeEditor'
 import { RecipeDetail } from './RecipeDetail'
 import { RecipeImportModal } from './RecipeImportModal'
 import { AddToMealPlanModal } from './AddToMealPlanModal'
@@ -35,6 +35,8 @@ export default function CookbookPage() {
   const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null)
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null | 'new'>(null)
   const [importPrefill, setImportPrefill] = useState<AIRecipeResult | null>(null)
+  const [importNotice, setImportNotice] = useState<ImportNotice | undefined>(undefined)
+  const [importUncertainFields, setImportUncertainFields] = useState<UncertainField[] | undefined>(undefined)
   const [referenceText, setReferenceText] = useState<string | null>(null)
   const [showImport, setShowImport] = useState(false)
   const [addToPlanRecipe, setAddToPlanRecipe] = useState<Recipe | null>(null)
@@ -79,6 +81,8 @@ export default function CookbookPage() {
     await load()
     setEditingRecipe(null)
     setImportPrefill(null)
+    setImportNotice(undefined)
+    setImportUncertainFields(undefined)
     setReferenceText(null)
   }
 
@@ -108,9 +112,11 @@ export default function CookbookPage() {
     setEditingRecipe(copy)
   }
 
-  function handleImported(result: AIRecipeResult) {
+  function handleImported(result: AIRecipeResult, notice?: ImportNotice, uncertainFields?: UncertainField[]) {
     setShowImport(false)
     setImportPrefill(result)
+    setImportNotice(notice)
+    setImportUncertainFields(uncertainFields)
     setEditingRecipe('new')
   }
 
@@ -118,12 +124,24 @@ export default function CookbookPage() {
     setShowImport(false)
     setReferenceText(text)
     setImportPrefill(null)
+    setImportNotice(undefined)
+    setImportUncertainFields(undefined)
+    setEditingRecipe('new')
+  }
+
+  function handleManualEntry() {
+    setShowImport(false)
+    setImportPrefill(null)
+    setImportNotice(undefined)
+    setImportUncertainFields(undefined)
     setEditingRecipe('new')
   }
 
   function openEdit(recipe: Recipe) {
     setViewingRecipe(null)
     setImportPrefill(null)
+    setImportNotice(undefined)
+    setImportUncertainFields(undefined)
     setEditingRecipe(recipe)
   }
 
@@ -266,6 +284,7 @@ export default function CookbookPage() {
         <RecipeImportModal
           onImported={handleImported}
           onManualWithReference={handleManualWithReference}
+          onManualEntry={handleManualEntry}
           onClose={() => setShowImport(false)}
         />
       )}
@@ -276,9 +295,17 @@ export default function CookbookPage() {
           recipe={editingRecipe === 'new' ? undefined : editingRecipe}
           prefill={importPrefill ?? undefined}
           fromImport={importPrefill !== null}
+          importNotice={importNotice}
+          uncertainFields={importUncertainFields}
           referenceText={referenceText ?? undefined}
           onSave={handleSave}
-          onClose={() => { setEditingRecipe(null); setImportPrefill(null); setReferenceText(null) }}
+          onClose={() => {
+            setEditingRecipe(null)
+            setImportPrefill(null)
+            setImportNotice(undefined)
+            setImportUncertainFields(undefined)
+            setReferenceText(null)
+          }}
         />
       )}
 
