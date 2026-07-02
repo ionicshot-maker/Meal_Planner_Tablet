@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { Link, Link2, Link2Off } from 'lucide-react'
 import { useSettings } from '@/context/SettingsContext'
 import { Button, Toggle } from '@/components/ui'
 import { IngredientPicker } from './IngredientPicker'
 import type { PickedIngredient } from './IngredientPicker'
+import { IngredientLinkModal } from './IngredientLinkModal'
 import { getAllIngredients } from '@/db/ingredients'
 import { buildIngredientMap, calcRecipeMacros, calcRecipeCost, normalizeUnit, formatMacro } from '@/utils/recipeCalculations'
 import { availableUnits, parseTimeToMinutes, formatMinutes } from '@/utils/units'
 import { newId, now } from '@/utils/ids'
-import type { Recipe, RecipeIngredient, RecipeStep, Ingredient, IngredientUnit } from '@/types'
+import { scoreIngredientMatch } from '@/utils/ingredientMatch'
+import type { Recipe, RecipeIngredient, RecipeStep, Ingredient, IngredientVariant, IngredientUnit } from '@/types'
 import type { AIRecipeResult, UncertainField } from '@/utils/aiImport'
 import styles from './RecipeEditor.module.css'
 
@@ -209,6 +212,19 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
   // Keyboard-nav focus tracking
   const [autoFocusRowId, setAutoFocusRowId] = useState<string | null>(null)
   const [autoFocusStepId, setAutoFocusStepId] = useState<string | null>(null)
+
+  // Ingredient link picker modal — shared across all rows, keyed by row id
+  const [linkPickerRowId, setLinkPickerRowId] = useState<string | null>(null)
+  const linkPickerRow = rows.find(r => r._rowId === linkPickerRowId) ?? null
+
+  function openLinkPicker(rowId: string) {
+    setLinkPickerRowId(rowId)
+  }
+
+  function handleLinkPick(ing: Ingredient, variant: IngredientVariant) {
+    if (linkPickerRowId) updateRow(linkPickerRowId, { ingredientId: ing.id, variantId: variant.id, name: ing.name })
+    setLinkPickerRowId(null)
+  }
 
   useEffect(() => {
     if (!autoFocusRowId) return
@@ -800,6 +816,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
                     onAddAfter={addBlankRow}
                     allIngredients={allIngredients}
                     onAskGemini={name => setGeminiPrompt(name)}
+                    onOpenLinkPicker={() => openLinkPicker(row._rowId)}
                   />
                 ))}
               </div>
@@ -914,6 +931,14 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
           </div>
         </footer>
       </div>
+
+      <IngredientLinkModal
+        open={linkPickerRowId !== null}
+        initialQuery={linkPickerRow?.name ?? ''}
+        allIngredients={allIngredients}
+        onClose={() => setLinkPickerRowId(null)}
+        onPick={handleLinkPick}
+      />
     </div>,
     document.body
   )
@@ -923,17 +948,6 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
 
 function openImportTab(tab: string, name: string) {
   window.open(`/import-ingredients?tab=${tab}&q=${encodeURIComponent(name.trim())}`, '_blank')
-}
-
-function scoreMatch(name: string, query: string): number {
-  const n = name.toLowerCase()
-  const q = query.toLowerCase()
-  if (n === q) return 100
-  if (n.startsWith(q)) return 80
-  if (n.includes(q)) return 60
-  if (n.split(/\s+/).some(w => w.startsWith(q))) return 40
-  if (q.split(/\s+/).every(qw => n.includes(qw))) return 20
-  return 0
 }
 
 function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
@@ -949,7 +963,7 @@ function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
     if (q.length < 1) return []
     return allIngredients
       .filter(i => !i.archived)
-      .map(i => ({ ing: i, score: scoreMatch(i.name, q) }))
+      .map(i => ({ ing: i, score: scoreIngredientMatch(i.name, q) }))
       .filter(x => x.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
@@ -1003,7 +1017,7 @@ function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
 const QUICK_UNITS: IngredientUnit[] = ['cup', 'tbsp', 'tsp', 'oz', 'lb']
 
 function IngredientRow({
-  row, isFirst, isLast, units, ingredient, onUpdate, onRemove, onMoveUp, onMoveDown, onAddAfter, allIngredients, onAskGemini,
+  row, isFirst, isLast, units, ingredient, onUpdate, onRemove, onMoveUp, onMoveDown, onAddAfter, allIngredients, onAskGemini, onOpenLinkPicker,
 }: {
   row: DraftIngRow
   isFirst: boolean
@@ -1017,6 +1031,7 @@ function IngredientRow({
   onAddAfter: () => void
   allIngredients: Ingredient[]
   onAskGemini: (name: string) => void
+  onOpenLinkPicker: () => void
 }) {
   const isMissing = !row.ingredientId
   const variant = ingredient?.variants.find(v => v.id === row.variantId) ?? ingredient?.variants[0]
@@ -1026,49 +1041,73 @@ function IngredientRow({
       <div className={styles.ingRow}>
         {/* Name / suggest input for unlinked, static display for linked */}
         <div className={styles.ingName}>
+          <div className={styles.ingNameMain}>
+            <div className={styles.ingNameContent}>
+              {isMissing
+                ? (
+                    <IngredientNameInput
+                      value={row.name}
+                      allIngredients={allIngredients}
+                      onChange={name => onUpdate({ name })}
+                      onLink={(ing, variantId) => onUpdate({ ingredientId: ing.id, variantId, name: ing.name })}
+                    />
+                  )
+                : <span className={styles.ingNameText}>{row.name}</span>
+              }
+            </div>
+            <button
+              type="button"
+              className={styles.linkBtn}
+              onClick={onOpenLinkPicker}
+              title={isMissing ? 'Link to a database ingredient' : 'Change linked ingredient'}
+              aria-label="Link ingredient"
+            >
+              <Link size={13} />
+            </button>
+          </div>
+
           {isMissing
             ? (
-                <>
-                  <IngredientNameInput
-                    value={row.name}
-                    allIngredients={allIngredients}
-                    onChange={name => onUpdate({ name })}
-                    onLink={(ing, variantId) => onUpdate({ ingredientId: ing.id, variantId, name: ing.name })}
-                  />
-                  {row.name.trim() && (
-                    <>
-                      <span className={styles.notLinkedBadge}>not linked — add it first:</span>
-                      <div className={styles.ingActionBtns}>
-                        <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('barcode', row.name)}>📷 Scan Barcode</button>
-                        <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('usda', row.name)}>🔬 Search USDA</button>
-                        <button type="button" className={styles.ingActionBtn} onClick={() => onAskGemini(row.name)}>✨ Ask Gemini</button>
-                      </div>
-                    </>
-                  )}
-                </>
+                <span className={styles.linkStatusOff}>
+                  <Link2Off size={12} className={styles.linkStatusIcon} />
+                  Not linked
+                </span>
               )
             : (
-                <div>
-                  <span className={styles.ingNameText}>{row.name}</span>
+                <span className={styles.linkStatusOn}>
+                  <Link2 size={12} className={styles.linkStatusIcon} />
+                  Linked to: <strong>{ingredient?.name}</strong>
                   {ingredient && ingredient.variants.length > 0 && (
-                    <select
-                      className={styles.variantSelect}
-                      value={row.variantId ?? ''}
-                      onChange={e => onUpdate({ variantId: e.target.value })}
-                    >
-                      {ingredient.variants.map(v => (
-                        <option key={v.id} value={v.id}>{v.brand}</option>
-                      ))}
-                    </select>
+                    <>
+                      {' → '}
+                      <select
+                        className={styles.variantSelect}
+                        value={row.variantId ?? ''}
+                        onChange={e => onUpdate({ variantId: e.target.value })}
+                      >
+                        {ingredient.variants.map(v => (
+                          <option key={v.id} value={v.id}>{v.brand}</option>
+                        ))}
+                      </select>
+                    </>
                   )}
-                  {variant && (
-                    <span className={styles.ingMacroHint}>
-                      {Math.round(variant.macros.calories)} cal · {variant.macros.protein}g P per serving
-                    </span>
-                  )}
-                </div>
+                </span>
               )
           }
+
+          {isMissing && row.name.trim() && (
+            <div className={styles.ingActionBtns}>
+              <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('barcode', row.name)}>📷 Scan Barcode</button>
+              <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('usda', row.name)}>🔬 Search USDA</button>
+              <button type="button" className={styles.ingActionBtn} onClick={() => onAskGemini(row.name)}>✨ Ask Gemini</button>
+            </div>
+          )}
+
+          {variant && (
+            <span className={styles.ingMacroHint}>
+              {Math.round(variant.macros.calories)} cal · {variant.macros.protein}g P per serving
+            </span>
+          )}
         </div>
 
         {/* Quantity — Enter adds new row */}

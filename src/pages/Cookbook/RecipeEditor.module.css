@@ -593,8 +593,7 @@
   align-items: start;
 }
 
-.ingRowMissing { background: rgba(240, 173, 78, 0.1); border: 1px solid rgba(240, 173, 78, 0.45); border-radius: var(--radius-sm); }
-[data-theme="dark"] .ingRowMissing { background: rgba(240, 173, 78, 0.07); border-color: rgba(240, 173, 78, 0.28); }
+.ingRowMissing { background: var(--color-bg); border-left: 3px solid var(--color-warning); border-radius: var(--radius-sm); }
 
 /* ── Quick unit pills ── */
 .quickUnits {
@@ -624,6 +623,50 @@
 
 .ingName { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
 .ingNameText { font-size: var(--text-sm); font-weight: 500; color: var(--color-text); }
+
+.ingNameMain { display: flex; align-items: center; gap: var(--space-2); }
+.ingNameContent { flex: 1; min-width: 0; }
+
+.linkBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: border-color var(--transition), color var(--transition);
+}
+.linkBtn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+.linkStatusIcon { flex-shrink: 0; }
+
+.linkStatusOff {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-warning);
+}
+
+.linkStatusOn {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+.linkStatusOn .linkStatusIcon { color: var(--color-success); }
+.linkStatusOn strong { color: var(--color-text); font-weight: 600; }
 
 /* ── Unlinked ingredient name input + suggestions ── */
 .nameSuggestWrap { position: relative; width: 100%; }
@@ -728,20 +771,6 @@
   white-space: nowrap;
 }
 .noMatchBtn:hover { border-color: var(--color-accent); color: var(--color-accent); }
-
-/* ── Not-linked badge ── */
-.notLinkedBadge {
-  display: inline-block;
-  font-size: var(--text-xs);
-  color: #92400e;
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  border-radius: var(--radius-full);
-  padding: 1px var(--space-2);
-  margin-top: 3px;
-  font-weight: 500;
-}
-[data-theme="dark"] .notLinkedBadge { color: #fbbf24; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.25); }
 
 /* ── Ingredient row quick-add action buttons ── */
 .ingActionBtns {
