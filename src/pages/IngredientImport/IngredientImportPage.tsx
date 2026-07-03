@@ -130,12 +130,12 @@ export default function IngredientImportPage() {
     setReviewNutritionSource('gemini')
   }
 
-  function handleSaved(name: string) {
+  function handleSaved(ingredient: Ingredient) {
     setReviewDraft(null)
     setReviewNutritionSource(null)
     localStorage.removeItem(DRAFT_KEY)
     setPendingDraft(null)
-    addToast(name)
+    addToast(ingredient.name)
   }
 
   function handleCancelReview() {

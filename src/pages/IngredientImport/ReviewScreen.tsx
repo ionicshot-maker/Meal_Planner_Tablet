@@ -35,7 +35,7 @@ const SOURCE_LABELS: Record<NutritionSource, string> = {
 
 interface Props {
   draft: Ingredient
-  onSaved: (name: string) => void
+  onSaved: (ingredient: Ingredient) => void
   onCancel: () => void
   onSearchUSDA?: () => void
   nutritionSource?: NutritionSource
@@ -127,7 +127,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
     }
     await saveIngredient(toSave)
     await autoAddBrand(toSave.variants[0]?.brand)
-    onSaved(toSave.name)
+    onSaved(toSave)
   }
 
   async function autoAddBrand(brand: string | undefined) {
@@ -155,7 +155,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
     await autoAddBrand(d.variants[0]?.brand)
     setSmartMatches(null)
     setSaving(false)
-    setToast({ message: `Added as a variant of ${parent.name}`, onDone: () => onSaved(parent.name) })
+    setToast({ message: `Added as a variant of ${parent.name}`, onDone: () => onSaved(updated) })
   }
 
   async function handleSaveAsNew() {

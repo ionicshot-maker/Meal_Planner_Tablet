@@ -43,9 +43,28 @@
 .resultRow:hover .resultBrand { color: var(--color-selected-text); opacity: 0.85; }
 .resultRow:hover .resultName { color: var(--color-selected-text); }
 
+.resultRowNew {
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-bg));
+  border-left: 3px solid var(--color-success);
+}
+.resultRowNew:hover { background: color-mix(in srgb, var(--color-success) 20%, var(--color-bg)); }
+
 .resultMain { display: flex; flex-direction: column; min-width: 0; }
+.resultNameRow { display: flex; align-items: center; gap: var(--space-2); }
 .resultName { font-size: var(--text-sm); font-weight: 500; color: var(--color-text); }
 .resultBrand { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 1px; }
+
+.newBadge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-success-text);
+  background: color-mix(in srgb, var(--color-success) 25%, transparent);
+  border-radius: var(--radius-full);
+  padding: 1px 6px;
+}
 
 .resultMeta {
   display: flex;

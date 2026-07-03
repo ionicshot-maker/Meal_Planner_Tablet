@@ -226,6 +226,13 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
     setLinkPickerRowId(null)
   }
 
+  // Keep the in-editor ingredient database in sync in real time when a new
+  // ingredient (or variant) is saved from the mini import panel, so the link
+  // picker shows it immediately without a page refresh or recipe save.
+  function handleIngredientSaved(saved: Ingredient) {
+    setAllIngredients(prev => [...prev.filter(i => i.id !== saved.id), saved])
+  }
+
   useEffect(() => {
     if (!autoFocusRowId) return
     const el = document.querySelector(`input[data-row-qty="${autoFocusRowId}"]`) as HTMLInputElement | null
@@ -938,6 +945,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
         allIngredients={allIngredients}
         onClose={() => setLinkPickerRowId(null)}
         onPick={handleLinkPick}
+        onIngredientSaved={handleIngredientSaved}
       />
     </div>,
     document.body
