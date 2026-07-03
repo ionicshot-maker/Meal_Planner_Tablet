@@ -1,0 +1,62 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color var(--transition), color var(--transition), border-color var(--transition);
+}
+.btn:hover { color: var(--color-accent); border-color: var(--color-accent); background: var(--color-selected); }
+.btnActive { color: var(--color-accent); border-color: var(--color-accent); background: var(--color-selected); }
+
+/* Icon-only on desktop — the "Page Help" title attribute covers hover
+   discoverability there. Mobile gets a short visible label since there's
+   no reliable hover affordance on touch. */
+.label {
+  display: none;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .label { display: inline; }
+}
+
+.popover {
+  position: fixed;
+  z-index: 2000;
+  width: min(300px, calc(100vw - 24px));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.popoverText {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.popoverClose {
+  align-self: flex-end;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}

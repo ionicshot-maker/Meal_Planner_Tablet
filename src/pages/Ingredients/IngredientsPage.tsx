@@ -6,6 +6,7 @@ import { Download, Info, X } from 'lucide-react'
 import { getAllIngredients, saveIngredient, archiveIngredient, deleteIngredient, searchIngredients } from '@/db/ingredients'
 import { newId, now } from '@/utils/ids'
 import { IngredientForm } from './IngredientForm'
+import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import type { Ingredient } from '@/types'
 import styles from './IngredientsPage.module.css'
 
@@ -81,9 +82,10 @@ export default function IngredientsPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <h1 className={styles.heading}>{pageTitle}</h1>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           <Button variant="secondary" onClick={() => navigate('/import-ingredients')}><Download size={16} style={{ marginRight: 4, verticalAlign: 'middle' }} />Import</Button>
           <Button onClick={createNew}>+ Add Ingredient</Button>
+          <PageHelpButton />
         </div>
       </header>
 

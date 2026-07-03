@@ -3,6 +3,7 @@ import { useSettings, useHouseholdTitle } from '@/context/SettingsContext'
 import { toISODate, parseDateLocal } from '@/utils/mealPlanUtils'
 import { DayLog } from './DayLog'
 import { WeeklySummary } from './WeeklySummary'
+import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import styles from './MacroTrackerPage.module.css'
 
 export default function MacroTrackerPage() {
@@ -38,11 +39,14 @@ export default function MacroTrackerPage() {
       {/* Title row */}
       <div className={styles.titleRow}>
         <h1 className={styles.pageTitle}>{pageTitle}</h1>
-        {selectedPerson && (
-          <button className={styles.weeklyBtn} onClick={() => setShowWeekly(true)}>
-            📊 Weekly
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          {selectedPerson && (
+            <button className={styles.weeklyBtn} onClick={() => setShowWeekly(true)}>
+              📊 Weekly
+            </button>
+          )}
+          <PageHelpButton />
+        </div>
       </div>
 
       {/* Person tabs */}

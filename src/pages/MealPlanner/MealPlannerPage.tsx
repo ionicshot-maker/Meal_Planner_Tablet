@@ -23,6 +23,7 @@ import {
 import { CalendarGrid } from './CalendarGrid'
 import { DayDetail } from './DayDetail'
 import { TemplateModal } from './TemplateModal'
+import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import styles from './MealPlannerPage.module.css'
 
 export default function MealPlannerPage() {
@@ -169,6 +170,7 @@ export default function MealPlannerPage() {
           <button className={styles.templateBtn} onClick={() => setShowTemplateModal(true)}>
             Templates
           </button>
+          <PageHelpButton />
         </div>
       </div>
 

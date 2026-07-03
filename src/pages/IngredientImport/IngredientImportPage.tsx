@@ -9,6 +9,7 @@ import { BulkEntryTab } from './BulkEntryTab'
 import { GeminiTab } from './GeminiTab'
 import { ReviewScreen } from './ReviewScreen'
 import { Toast } from './Toast'
+import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import type { Ingredient, NutritionSource } from '@/types'
 import styles from './IngredientImportPage.module.css'
 
@@ -180,9 +181,12 @@ export default function IngredientImportPage() {
           </button>
           <h1 className={styles.heading}>{pageTitle}</h1>
         </div>
-        <button className={styles.doneBtn} onClick={() => navigate('/ingredients')}>
-          Done
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <button className={styles.doneBtn} onClick={() => navigate('/ingredients')}>
+            Done
+          </button>
+          <PageHelpButton />
+        </div>
       </header>
 
       {reviewDraft ? (

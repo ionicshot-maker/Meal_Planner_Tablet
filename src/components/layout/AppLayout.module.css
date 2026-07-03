@@ -101,68 +101,6 @@
   padding-bottom: var(--safe-bottom);
 }
 
-/* ── Page help — nav button + fixed tooltip ───────────────────────────────── */
-.helpNavBtn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-4);
-  margin: 0 var(--space-3) var(--space-1);
-  border-radius: var(--radius-md);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  background: none;
-  border: none;
-  transition: background-color var(--transition), color var(--transition);
-  text-align: left;
-  width: calc(100% - var(--space-6));
-}
-.helpNavBtn:hover { background-color: var(--color-border); color: var(--color-text); }
-.helpNavBtnActive { background-color: var(--color-selected); color: var(--color-selected-text); }
-
-.helpBackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-}
-
-/* Tooltip anchored to the right of the nav sidebar, aligned with the help button */
-.helpTooltip {
-  position: fixed;
-  left: calc(var(--nav-width) + var(--space-3));
-  bottom: 70px;
-  z-index: 100;
-  width: 300px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.helpTooltipText {
-  font-size: var(--text-sm);
-  color: var(--color-text);
-  line-height: 1.6;
-  margin: 0;
-}
-
-.helpTooltipClose {
-  align-self: flex-end;
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--color-accent);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-}
-
 /* ── Print: hide nav, expand content full width ───────────────────────────── */
 @media print {
   .nav { display: none !important; }
@@ -192,34 +130,4 @@
   .navItem { padding: var(--space-2); }
   .themeBtn { padding: var(--space-2); margin: 0; }
   .main { height: calc(100dvh - var(--header-h)); }
-
-  /* Page Help is deliberately pulled out of the horizontal nav row and
-     floated over the content area instead — sitting inline next to the
-     "Help" nav icon made the two (both circular icon buttons) impossible
-     to tell apart on a phone-width screen. Floating it here, with a
-     different icon and a visible label, removes the ambiguity. */
-  .helpNavBtn {
-    position: fixed;
-    top: calc(var(--header-h) + var(--safe-top) + var(--space-2));
-    right: var(--space-3);
-    z-index: 60;
-    width: auto;
-    min-height: var(--tap-min);
-    margin: 0;
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-full);
-    box-shadow: var(--shadow-md);
-  }
-  .helpNavBtn .navLabel { display: inline; font-size: var(--text-xs); }
-
-  /* On mobile the tooltip opens below the floating Page Help button */
-  .helpTooltip {
-    left: var(--space-3);
-    right: var(--space-3);
-    width: auto;
-    bottom: auto;
-    top: calc(var(--header-h) + var(--safe-top) + var(--space-8));
-  }
 }

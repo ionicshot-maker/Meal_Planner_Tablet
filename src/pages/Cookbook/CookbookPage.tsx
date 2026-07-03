@@ -15,6 +15,7 @@ import { RecipeImportModal } from './RecipeImportModal'
 import { AddToMealPlanModal } from './AddToMealPlanModal'
 import { CollectionsTab } from './CollectionsTab'
 import { useHouseholdTitle } from '@/context/SettingsContext'
+import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import styles from './CookbookPage.module.css'
 
 type FilterMode = 'all' | 'favorites' | 'templates' | 'collections'
@@ -206,6 +207,7 @@ export default function CookbookPage() {
           <button className={styles.createBtn} onClick={() => { setImportPrefill(null); setEditingRecipe('new') }}>
             <Plus size={15} style={{ verticalAlign: 'middle', marginRight: 2 }} />New Recipe
           </button>
+          <PageHelpButton />
         </div>
       </div>
 

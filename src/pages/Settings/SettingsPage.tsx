@@ -7,6 +7,7 @@ import { AISection } from './sections/AISection'
 import { ListsSection } from './sections/ListsSection'
 import { DataSection } from './sections/DataSection'
 import { SetupChecklist } from './sections/SetupChecklist'
+import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import { Users, Palette, Plug, Salad, List, HardDrive } from 'lucide-react'
 import styles from './SettingsPage.module.css'
 import type { ThemePreference, UnitSystem } from '@/types'
@@ -31,6 +32,7 @@ export default function SettingsPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <h1 className={styles.heading}>Settings</h1>
+        <PageHelpButton />
       </header>
 
       <SetupChecklist onSwitchSection={s => setActive(s as Section)} />

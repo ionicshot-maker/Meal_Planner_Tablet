@@ -9,6 +9,7 @@ import type { GroceryList, GroceryItem, HouseholdItem } from '@/types'
 import { GroceryGenerator } from './GroceryGenerator'
 import { GroceryListView } from './GroceryListView'
 import { HouseholdModal } from './HouseholdModal'
+import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import styles from './GroceryListPage.module.css'
 
 export default function GroceryListPage() {
@@ -91,6 +92,7 @@ export default function GroceryListPage() {
           >
             {activeList ? '↺ New List' : '+ Generate List'}
           </button>
+          <PageHelpButton />
         </div>
       </div>
 

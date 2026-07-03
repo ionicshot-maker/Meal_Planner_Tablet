@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import styles from './HelpPage.module.css'
 
 export default function HelpPage() {
@@ -24,8 +25,11 @@ export default function HelpPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.heading}>Help & Guide</h1>
-        <p className={styles.subheading}>Everything you need to know, written in plain English.</p>
+        <div>
+          <h1 className={styles.heading}>Help & Guide</h1>
+          <p className={styles.subheading}>Everything you need to know, written in plain English.</p>
+        </div>
+        <PageHelpButton />
       </header>
 
       <div className={styles.content}>
