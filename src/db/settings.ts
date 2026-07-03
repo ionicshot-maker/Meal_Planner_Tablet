@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   householdName: '',
   unitSystem: 'imperial',
   theme: 'system',
+  fontSizePt: 14,
   ai: { provider: 'none', apiKey: '' },
   usdaApiKey: '',
   geminiApiKey: '',

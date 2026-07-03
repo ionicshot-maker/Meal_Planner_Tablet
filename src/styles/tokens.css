@@ -78,6 +78,11 @@
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
   --font-mono: 'Consolas', 'SF Mono', monospace;
 
+  /* Text Size setting (Settings → Preferences) — applied to the root element's
+     font-size in global.css, so every --text-* token below (all rem-based)
+     scales proportionally. Overridden inline per-device; never synced. */
+  --font-size-base: 14pt;
+
   --text-xs:   0.75rem;
   --text-sm:   0.875rem;
   --text-base: 1rem;

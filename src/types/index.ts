@@ -85,6 +85,9 @@ export interface AppSettings {
   householdName: string
   unitSystem: UnitSystem
   theme: ThemePreference
+  // Device-local — deliberately excluded from cloud sync (see SYNCED_SETTINGS_KEYS
+  // in db/supabase.ts) since a kitchen tablet may want larger text than a desktop.
+  fontSizePt: number
   ai: AIConfig
   usdaApiKey: string
   geminiApiKey: string

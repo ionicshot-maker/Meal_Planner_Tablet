@@ -23,6 +23,13 @@ const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'data',         label: 'Data',         icon: <HardDrive size={18} /> },
 ]
 
+const FONT_SIZE_PRESETS: { pt: number; label: string }[] = [
+  { pt: 12, label: 'Small' },
+  { pt: 14, label: 'Medium' },
+  { pt: 16, label: 'Large' },
+  { pt: 18, label: 'Extra Large' },
+]
+
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings()
   const { preference, setPreference } = useTheme()
@@ -137,6 +144,38 @@ function PreferencesSection({
                 </label>
               ))}
             </div>
+          </div>
+
+          <div className={styles.divider} />
+
+          <div className={styles.field}>
+            <span className={styles.fieldLabel}>Text Size</span>
+            <div className={styles.fontSizePresetRow}>
+              {FONT_SIZE_PRESETS.map(preset => (
+                <button
+                  key={preset.pt}
+                  type="button"
+                  className={`${styles.fontSizePresetBtn} ${settings.fontSizePt === preset.pt ? styles.fontSizePresetBtnActive : ''}`}
+                  onClick={() => updateSettings({ fontSizePt: preset.pt })}
+                >
+                  {preset.label} ({preset.pt}pt)
+                </button>
+              ))}
+            </div>
+            <div className={styles.fontSizeSliderRow}>
+              <input
+                type="range"
+                min={10}
+                max={20}
+                step={0.5}
+                value={settings.fontSizePt ?? 14}
+                onChange={e => updateSettings({ fontSizePt: parseFloat(e.target.value) })}
+                className={styles.fontSizeSlider}
+                aria-label="Custom text size"
+              />
+              <span className={styles.fontSizeValue}>{settings.fontSizePt ?? 14}pt</span>
+            </div>
+            <p className={styles.fontSizePreview}>This is what your text will look like at this size</p>
           </div>
 
           <div className={styles.divider} />

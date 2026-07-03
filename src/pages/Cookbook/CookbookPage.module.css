@@ -61,6 +61,7 @@
 
 .importBtn {
   padding: var(--space-2) var(--space-4);
+  min-height: var(--tap-min);
   background: var(--color-bg);
   color: var(--color-text);
   border: 1px solid var(--color-border);
@@ -75,6 +76,7 @@
 
 .createBtn {
   padding: var(--space-2) var(--space-4);
+  min-height: var(--tap-min);
   background: var(--color-accent);
   color: #fff;
   border: none;
@@ -89,9 +91,9 @@
 
 @media (max-width: 430px) {
   .page { padding: 8px var(--space-3); gap: var(--space-2); }
-  .pageTitle { font-size: 18px; }
+  .pageTitle { font-size: var(--text-lg); }
   .search { min-width: 0; flex-basis: 100%; }
-  .importBtn, .createBtn { padding: var(--space-2) var(--space-3); min-height: var(--tap-min); }
+  .importBtn, .createBtn { padding: var(--space-2) var(--space-3); }
   .btnLabel { display: none; }
 }
 

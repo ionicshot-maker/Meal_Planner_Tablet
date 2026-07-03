@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SettingsProvider, useSettings } from '@/context/SettingsContext'
 import { ThemeProvider } from '@/context/ThemeContext'
@@ -17,6 +17,12 @@ const HelpPage              = lazy(() => import('@/pages/Help/HelpPage'))
 
 function AppRoutes() {
   const { settings, updateSettings, isLoading } = useSettings()
+
+  // Text Size setting — device-local, applied as a CSS custom property on the
+  // root element so every rem-based --text-* token scales proportionally.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--font-size-base', `${settings.fontSizePt ?? 14}pt`)
+  }, [settings.fontSizePt])
 
   return (
     <ThemeProvider

@@ -62,7 +62,7 @@
     gap: var(--space-2);
     padding: 6px var(--space-3);
   }
-  .heading { font-size: 18px; }
+  .heading { font-size: var(--text-lg); }
   .btnLabel { display: none; }
 
   .toolbar {

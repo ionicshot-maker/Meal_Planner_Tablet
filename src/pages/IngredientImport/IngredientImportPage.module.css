@@ -19,7 +19,7 @@
 
 @media (max-width: 430px) {
   .header { padding: 8px var(--space-3); }
-  .heading { font-size: 18px; }
+  .heading { font-size: var(--text-lg); }
 }
 
 .headerLeft {
