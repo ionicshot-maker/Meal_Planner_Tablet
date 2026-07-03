@@ -54,8 +54,10 @@
 .footer {
   display: flex; align-items: center; justify-content: space-between;
   padding: var(--space-3) var(--space-5);
-  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  padding-bottom: var(--safe-bottom);
   border-top: 1px solid var(--color-border); background: var(--color-bg); flex-shrink: 0;
+  flex-wrap: wrap;
+  row-gap: var(--space-2);
 }
 .footerRight { display: flex; gap: var(--space-2); }
 .clearBtn {

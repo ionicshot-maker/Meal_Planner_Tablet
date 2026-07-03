@@ -6,7 +6,7 @@
   background: var(--color-surface); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg); width: min(640px, 95vw);
   max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: var(--safe-bottom);
 }
 .header {
   display: flex; align-items: center; justify-content: space-between;

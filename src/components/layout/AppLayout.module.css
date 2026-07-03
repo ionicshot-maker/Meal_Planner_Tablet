@@ -98,7 +98,7 @@
   min-width: 0;
   overflow-y: auto;
   height: 100dvh;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: var(--safe-bottom);
 }
 
 /* ── Page help — nav button + fixed tooltip ───────────────────────────────── */
@@ -191,15 +191,35 @@
   .navLabel { display: none; }
   .navItem { padding: var(--space-2); }
   .themeBtn { padding: var(--space-2); margin: 0; }
-  .helpNavBtn { padding: var(--space-2); margin: 0; width: auto; }
-  .main { height: calc(100dvh - 56px); }
+  .main { height: calc(100dvh - var(--header-h)); }
 
-  /* On mobile the tooltip opens below the horizontal nav bar */
+  /* Page Help is deliberately pulled out of the horizontal nav row and
+     floated over the content area instead — sitting inline next to the
+     "Help" nav icon made the two (both circular icon buttons) impossible
+     to tell apart on a phone-width screen. Floating it here, with a
+     different icon and a visible label, removes the ambiguity. */
+  .helpNavBtn {
+    position: fixed;
+    top: calc(var(--header-h) + var(--safe-top) + var(--space-2));
+    right: var(--space-3);
+    z-index: 60;
+    width: auto;
+    min-height: var(--tap-min);
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-md);
+  }
+  .helpNavBtn .navLabel { display: inline; font-size: var(--text-xs); }
+
+  /* On mobile the tooltip opens below the floating Page Help button */
   .helpTooltip {
     left: var(--space-3);
     right: var(--space-3);
     width: auto;
     bottom: auto;
-    top: calc(56px + var(--space-2));
+    top: calc(var(--header-h) + var(--safe-top) + var(--space-8));
   }
 }

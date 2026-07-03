@@ -4,7 +4,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { useSettings } from '@/context/SettingsContext'
 import {
   Carrot, Download, BookOpen, Calendar, BarChart2, ShoppingCart,
-  Settings, HelpCircle, UtensilsCrossed, Sun, Moon, Monitor,
+  Settings, HelpCircle, Info, UtensilsCrossed, Sun, Moon, Monitor,
 } from 'lucide-react'
 import styles from './AppLayout.module.css'
 
@@ -89,7 +89,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             aria-expanded={helpOpen}
             aria-label="What is this page?"
           >
-            <span className={styles.navIcon} aria-hidden="true"><HelpCircle size={18} /></span>
+            <span className={styles.navIcon} aria-hidden="true"><Info size={18} /></span>
             <span className={styles.navLabel}>Page Help</span>
           </button>
         )}

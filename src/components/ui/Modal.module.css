@@ -48,11 +48,12 @@
 
 .footer {
   padding: var(--space-4) var(--space-6);
-  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+  padding-bottom: var(--safe-bottom);
   border-top: 1px solid var(--color-border);
   display: flex;
   justify-content: flex-end;
   gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
 @keyframes slideIn {

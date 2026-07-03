@@ -16,8 +16,15 @@
 
 /* Sizes */
 .sm { font-size: var(--text-sm); padding: var(--space-1) var(--space-3); }
-.md { font-size: var(--text-base); padding: var(--space-2) var(--space-4); }
-.lg { font-size: var(--text-lg); padding: var(--space-3) var(--space-6); }
+.md { font-size: var(--text-base); padding: var(--space-2) var(--space-4); min-height: var(--tap-min); }
+.lg { font-size: var(--text-lg); padding: var(--space-3) var(--space-6); min-height: var(--tap-min); }
+
+/* iOS Human Interface Guidelines call for a 44x44pt minimum tap target —
+   bump even the compact "sm" size up to that on phone-width viewports,
+   where fingers (not a mouse) are doing the tapping. */
+@media (max-width: 640px) {
+  .sm { min-height: var(--tap-min); }
+}
 
 /* Variants */
 .primary {

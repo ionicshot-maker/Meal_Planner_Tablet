@@ -65,6 +65,12 @@
   --nav-width-sm: 60px;
   --header-h:     56px;
   --transition:   150ms ease;
+
+  /* Minimum safe bottom padding for any fixed/sticky bottom bar or modal
+     footer — iOS home-indicator inset plus a comfortable tap buffer. */
+  --safe-bottom: calc(env(safe-area-inset-bottom) + 20px);
+  --safe-top:    env(safe-area-inset-top);
+  --tap-min:     44px;
 }
 
 /* ── Typography ───────────────────────────────────────────────────────────── */
