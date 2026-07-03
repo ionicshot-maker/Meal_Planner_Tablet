@@ -14,19 +14,6 @@ import styles from './RecipeImportModal.module.css'
 type Tab = 'url' | 'paste' | 'photo'
 type PhotoStage = 'select' | 'preview' | 'lowConfidence'
 
-// Rough heuristic for "this device likely has a camera worth offering" — phones/tablets
-// with a coarse (touch) pointer. Desktops fall back to the file picker only. Computed
-// lazily (inside the component, not at module load) so it reads the real environment;
-// if matchMedia is unavailable for some reason we fail open toward *showing* the camera
-// button on any touch-capable device rather than silently hiding it.
-function detectCameraCaptureSupport(): boolean {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
-  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
-  if (!hasTouch) return false
-  if (typeof window.matchMedia !== 'function') return true
-  return window.matchMedia('(pointer: coarse)').matches
-}
-
 interface Props {
   onImported: (result: AIRecipeResult, notice?: ImportNotice, uncertainFields?: UncertainField[]) => void
   onManualWithReference: (text: string) => void
@@ -48,7 +35,6 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false)
   const [lowConfidenceReason, setLowConfidenceReason] = useState('')
-  const [showCameraOption] = useState(detectCameraCaptureSupport)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -341,15 +327,17 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
 
               {photoStage === 'select' && (
                 <>
-                  {showCameraOption && (
-                    <button
-                      type="button"
-                      className={styles.btnTakePhoto}
-                      onClick={() => cameraInputRef.current?.click()}
-                    >
-                      <Camera size={20} /> Take Photo
-                    </button>
-                  )}
+                  {/* Always shown on every device — capture="environment" opens the
+                      rear camera directly on mobile; on desktop it's simply ignored
+                      and this behaves like a normal file picker. No harm either way,
+                      so we don't try to detect touch/mobile to decide whether to show it. */}
+                  <button
+                    type="button"
+                    className={styles.btnTakePhoto}
+                    onClick={() => cameraInputRef.current?.click()}
+                  >
+                    <Camera size={20} /> Take Photo or Scan Recipe
+                  </button>
 
                   <div
                     className={`${styles.dropzone} ${isDraggingPhoto ? styles.dropzoneActive : ''}`}
@@ -357,16 +345,14 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
                     onDragLeave={() => setIsDraggingPhoto(false)}
                     onDrop={handlePhotoDrop}
                   >
-                    <p className={styles.dropzoneText}>
-                      {showCameraOption ? 'Or drag and drop / paste a recipe photo here' : 'Drag and drop or paste a recipe photo here'}
-                    </p>
+                    <p className={styles.dropzoneText}>Or drag and drop / paste a recipe photo here</p>
                     <div className={styles.photoButtons}>
                       <button
                         type="button"
-                        className={showCameraOption ? styles.btnPhotoActionSecondary : styles.btnPhotoAction}
+                        className={styles.btnPhotoActionSecondary}
                         onClick={() => fileInputRef.current?.click()}
                       >
-                        <ImageIcon size={18} /> Choose Photo
+                        <ImageIcon size={18} /> Choose from Library
                       </button>
                     </div>
                   </div>

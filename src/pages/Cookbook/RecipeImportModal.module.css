@@ -373,25 +373,8 @@
   justify-content: center;
 }
 
-.btnPhotoAction {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-5);
-  background: var(--color-accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--transition);
-}
-.btnPhotoAction:hover { background: var(--color-accent-hover); }
-
-/* Secondary styling for "Choose Photo" once "Take Photo" is the primary
-   action (mobile) — still a full, comfortable tap target, just visually
-   subordinate to the camera button above it. */
+/* Secondary styling for "Choose from Library" — still a full, comfortable
+   tap target, just visually subordinate to the Take Photo button above it. */
 .btnPhotoActionSecondary {
   display: flex;
   align-items: center;
@@ -408,8 +391,10 @@
 }
 .btnPhotoActionSecondary:hover { background: var(--color-border); }
 
-/* The primary, most-likely-to-be-used action on mobile — big, full-width,
-   opens the rear camera directly via the hidden capture="environment" input. */
+/* Primary action, shown on every device — big, full-width. The hidden input's
+   capture="environment" opens the rear camera directly on mobile; on desktop
+   the attribute is simply ignored and it behaves like a normal file picker,
+   which is a perfectly fine fallback there. */
 .btnTakePhoto {
   display: flex;
   align-items: center;
