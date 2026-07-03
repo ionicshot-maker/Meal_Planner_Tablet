@@ -15,6 +15,9 @@
   overflow: hidden;
 }
 
+/* Wider on the calendar step so two months can sit side by side on desktop. */
+.panelWide { width: min(720px, 95vw); }
+
 .header {
   display: flex; align-items: center; justify-content: space-between;
   padding: var(--space-4) var(--space-5);
@@ -34,16 +37,6 @@
 }
 
 .stepTitle { font-size: var(--text-base); font-weight: 700; color: var(--color-text); }
-
-.dateRow { display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap; }
-.dateField { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-xs); font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-.dateInput {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border); border-radius: var(--radius-md);
-  background: var(--color-bg); color: var(--color-text); font-size: var(--text-sm); font-family: inherit;
-}
-.dateInput:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; }
-.dateSep { font-size: var(--text-sm); color: var(--color-text-muted); padding-bottom: 8px; }
 
 .error { color: var(--color-danger); font-size: var(--text-sm); }
 .loadingMsg { color: var(--color-text-muted); font-size: var(--text-sm); font-style: italic; }
@@ -99,7 +92,8 @@
   border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 600;
   cursor: pointer; transition: background var(--transition);
 }
-.btnPrimary:hover { background: var(--color-accent-hover); }
+.btnPrimary:hover:not(:disabled) { background: var(--color-accent-hover); }
+.btnPrimary:disabled { opacity: 0.5; cursor: default; }
 
 .btnSecondary {
   padding: var(--space-2) var(--space-4);

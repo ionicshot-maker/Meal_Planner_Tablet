@@ -15,6 +15,12 @@ export function addDays(date: Date, n: number): Date {
   return d
 }
 
+export function addMonths(date: Date, n: number): Date {
+  const d = new Date(date)
+  d.setMonth(d.getMonth() + n)
+  return d
+}
+
 export function toISODate(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
@@ -166,6 +172,16 @@ export function hasMissingMeals(day: MealPlanDay): boolean {
     day.meals.breakfast.length === 0 ||
     day.meals.lunch.length === 0 ||
     day.meals.dinner.length === 0
+  )
+}
+
+export function dayHasAnyMeals(day: MealPlanDay): boolean {
+  return (
+    day.meals.breakfast.length > 0 ||
+    day.meals.lunch.length > 0 ||
+    day.meals.dinner.length > 0 ||
+    day.meals.snacks.length > 0 ||
+    (day.meals.drinks?.length ?? 0) > 0
   )
 }
 

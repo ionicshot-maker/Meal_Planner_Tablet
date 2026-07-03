@@ -7,6 +7,7 @@ import { getAllHouseholdItems } from '@/db/householdItems'
 import { buildIngredientMap } from '@/utils/recipeCalculations'
 import { consolidateIngredients, aggToGroceryItem } from '@/utils/groceryUtils'
 import { toISODate } from '@/utils/mealPlanUtils'
+import { MealPlanCalendarPicker } from './MealPlanCalendarPicker'
 import type { GroceryList, GroceryItem, HouseholdItem, IngredientUnit } from '@/types'
 import type { AggregatedItem } from '@/utils/groceryUtils'
 import styles from './GroceryGenerator.module.css'
@@ -160,9 +161,11 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
   const aohCount = aohItems.length
   const aohHouseholdCount = aohHouseholdItems.length
 
+  const validRange = Boolean(startDate && endDate && startDate <= endDate)
+
   return createPortal(
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.panel} onClick={e => e.stopPropagation()}>
+      <div className={`${styles.panel} ${step !== 'aoh' ? styles.panelWide : ''}`} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
           <span className={styles.title}>Generate Shopping List</span>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
@@ -172,19 +175,11 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
           {(step === 'dates' || step === 'generating') && (
             <>
               <div className={styles.stepTitle}>Select shopping window</div>
-              <div className={styles.dateRow}>
-                <label className={styles.dateField}>
-                  <span>From</span>
-                  <input type="date" className={styles.dateInput} value={startDate}
-                    onChange={e => setStartDate(e.target.value)} />
-                </label>
-                <span className={styles.dateSep}>→</span>
-                <label className={styles.dateField}>
-                  <span>To</span>
-                  <input type="date" className={styles.dateInput} value={endDate}
-                    onChange={e => setEndDate(e.target.value)} />
-                </label>
-              </div>
+              <MealPlanCalendarPicker
+                startDate={startDate}
+                endDate={endDate}
+                onChange={(s, e) => { setStartDate(s); setEndDate(e) }}
+              />
               {error && <div className={styles.error}>{error}</div>}
               {step === 'generating' && (
                 <div className={styles.loadingMsg}>Analyzing your meal plan…</div>
@@ -278,7 +273,7 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
         {step === 'dates' && (
           <div className={styles.footer}>
             <button className={styles.btnSecondary} onClick={onClose}>Cancel</button>
-            <button className={styles.btnPrimary} onClick={handleAnalyze}>
+            <button className={styles.btnPrimary} onClick={handleAnalyze} disabled={!validRange}>
               Analyze Plan
             </button>
           </div>
