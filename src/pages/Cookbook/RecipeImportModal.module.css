@@ -389,6 +389,47 @@
 }
 .btnPhotoAction:hover { background: var(--color-accent-hover); }
 
+/* Secondary styling for "Choose Photo" once "Take Photo" is the primary
+   action (mobile) — still a full, comfortable tap target, just visually
+   subordinate to the camera button above it. */
+.btnPhotoActionSecondary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.btnPhotoActionSecondary:hover { background: var(--color-border); }
+
+/* The primary, most-likely-to-be-used action on mobile — big, full-width,
+   opens the rear camera directly via the hidden capture="environment" input. */
+.btnTakePhoto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--space-3) var(--space-5);
+  margin-bottom: var(--space-3);
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.btnTakePhoto:hover { background: var(--color-accent-hover); }
+
 .photoTips {
   padding: var(--space-3) var(--space-4);
   background: var(--color-bg);

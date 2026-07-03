@@ -715,20 +715,46 @@
   font-family: inherit;
   transition: background var(--transition), color var(--transition);
 }
-.suggestionItem:hover { background: var(--color-selected); color: var(--color-selected-text); }
+.suggestionItem:hover,
+.suggestionItemHighlighted { background: var(--color-selected); color: var(--color-selected-text); }
 
 .suggestionName {
   font-size: var(--text-sm);
   color: var(--color-text);
 }
-.suggestionItem:hover .suggestionName { color: var(--color-selected-text); }
+.suggestionItem:hover .suggestionName,
+.suggestionItemHighlighted .suggestionName { color: var(--color-selected-text); }
 
 .suggestionMeta {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
   margin-top: 1px;
 }
-.suggestionItem:hover .suggestionMeta { color: var(--color-selected-text); opacity: 0.8; }
+.suggestionItem:hover .suggestionMeta,
+.suggestionItemHighlighted .suggestionMeta { color: var(--color-selected-text); opacity: 0.8; }
+
+.suggestionDivider {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--color-border);
+  list-style: none;
+}
+
+.useAsTypedItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-style: italic;
+  color: var(--color-text-muted);
+  transition: background var(--transition), color var(--transition);
+}
+.useAsTypedItem:hover { background: var(--color-selected); color: var(--color-selected-text); }
 
 /* ── No-match helper ── */
 .noMatchHelper {

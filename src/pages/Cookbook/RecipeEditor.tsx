@@ -886,13 +886,16 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
 
 // ─── Ingredient row inside the editor ────────────────────────────────────────
 
-function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
+function IngredientNameInput({ value, rowId, allIngredients, onChange, onLink }: {
   value: string
+  rowId: string
   allIngredients: Ingredient[]
   onChange: (name: string) => void
   onLink: (ing: Ingredient, variantId: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  // null = nothing highlighted, i.e. Enter confirms the typed text as-is.
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null)
 
   const suggestions = useMemo(() => {
     const q = value.trim()
@@ -906,32 +909,97 @@ function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
       .map(x => x.ing)
   }, [value, allIngredients])
 
+  // A fresh suggestion list shouldn't keep a stale highlight from before —
+  // that could silently link the wrong ingredient on the next Enter press.
+  useEffect(() => {
+    setHighlightedIndex(null)
+  }, [suggestions])
+
+  function confirmAsTyped() {
+    setOpen(false)
+    setHighlightedIndex(null)
+  }
+
+  function selectSuggestion(ing: Ingredient) {
+    onLink(ing, ing.defaultVariantId || ing.variants[0]?.id || '')
+    setOpen(false)
+    setHighlightedIndex(null)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') {
+      // Dismiss the dropdown but leave whatever the user typed untouched.
+      // Stop propagation so this doesn't bubble up to the editor's own
+      // document-level Escape handler, which would close the whole editor.
+      e.stopPropagation()
+      confirmAsTyped()
+      return
+    }
+    if (e.key === 'ArrowDown' && open && suggestions.length > 0) {
+      e.preventDefault()
+      setHighlightedIndex(i => i === null ? 0 : Math.min(i + 1, suggestions.length - 1))
+      return
+    }
+    if (e.key === 'ArrowUp' && open && suggestions.length > 0) {
+      e.preventDefault()
+      setHighlightedIndex(i => i === null ? suggestions.length - 1 : Math.max(i - 1, 0))
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      // Only a deliberately highlighted suggestion gets picked — otherwise
+      // Enter simply confirms the free-typed name, unlinked.
+      if (open && highlightedIndex !== null && suggestions[highlightedIndex]) {
+        selectSuggestion(suggestions[highlightedIndex])
+      } else {
+        confirmAsTyped()
+      }
+      return
+    }
+    if (e.key === 'Tab') {
+      // Tab should never pick a suggestion — just close the dropdown and,
+      // moving forward, hand focus straight to the quantity field so an
+      // about-to-vanish suggestion button doesn't steal it instead.
+      setOpen(false)
+      setHighlightedIndex(null)
+      if (!e.shiftKey) {
+        e.preventDefault()
+        document.querySelector<HTMLInputElement>(`input[data-row-qty="${rowId}"]`)?.focus()
+      }
+    }
+  }
+
   return (
     <div className={styles.nameSuggestWrap}>
       <input
         type="text"
         className={styles.nameUnlinkedInput}
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={e => { onChange(e.target.value); setOpen(true) }}
         onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 200)}
+        onKeyDown={handleKeyDown}
         placeholder="Ingredient name…"
+        role="combobox"
+        aria-expanded={open && suggestions.length > 0}
+        aria-autocomplete="list"
       />
       {open && suggestions.length > 0 && (
-        <ul className={styles.suggestions}>
-          {suggestions.map(ing => {
+        <ul className={styles.suggestions} role="listbox">
+          {suggestions.map((ing, i) => {
             const dv = ing.variants.find(v => v.id === ing.defaultVariantId) ?? ing.variants[0]
             const brand = dv?.brand ?? ''
             const calories = dv ? Math.round(dv.macros.calories) : 0
             return (
-              <li key={ing.id}>
+              <li key={ing.id} role="option" aria-selected={highlightedIndex === i}>
                 <button
                   type="button"
-                  className={styles.suggestionItem}
+                  className={`${styles.suggestionItem} ${highlightedIndex === i ? styles.suggestionItemHighlighted : ''}`}
+                  onMouseEnter={() => setHighlightedIndex(i)}
                   onMouseDown={e => {
                     e.preventDefault()
-                    onLink(ing, ing.defaultVariantId || ing.variants[0]?.id || '')
-                    setOpen(false)
+                    selectSuggestion(ing)
                   }}
                 >
                   <span className={styles.suggestionName}>{ing.name}</span>
@@ -944,6 +1012,19 @@ function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
               </li>
             )
           })}
+          <li className={styles.suggestionDivider} role="separator" aria-hidden="true" />
+          <li>
+            <button
+              type="button"
+              className={styles.useAsTypedItem}
+              onMouseDown={e => {
+                e.preventDefault()
+                confirmAsTyped()
+              }}
+            >
+              Use "{value.trim()}" as typed
+            </button>
+          </li>
         </ul>
       )}
     </div>
@@ -982,6 +1063,7 @@ function IngredientRow({
                 ? (
                     <IngredientNameInput
                       value={row.name}
+                      rowId={row._rowId}
                       allIngredients={allIngredients}
                       onChange={name => onUpdate({ name })}
                       onLink={(ing, variantId) => onUpdate({ ingredientId: ing.id, variantId, name: ing.name })}

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Camera, Image as ImageIcon } from 'lucide-react'
 import { useSettings } from '@/context/SettingsContext'
@@ -15,11 +15,17 @@ type Tab = 'url' | 'paste' | 'photo'
 type PhotoStage = 'select' | 'preview' | 'lowConfidence'
 
 // Rough heuristic for "this device likely has a camera worth offering" — phones/tablets
-// with a coarse (touch) pointer. Desktops fall back to the file picker only.
-const isTouchDevice =
-  typeof window !== 'undefined' &&
-  (('ontouchstart' in window) || navigator.maxTouchPoints > 0) &&
-  window.matchMedia?.('(pointer: coarse)').matches
+// with a coarse (touch) pointer. Desktops fall back to the file picker only. Computed
+// lazily (inside the component, not at module load) so it reads the real environment;
+// if matchMedia is unavailable for some reason we fail open toward *showing* the camera
+// button on any touch-capable device rather than silently hiding it.
+function detectCameraCaptureSupport(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+  if (!hasTouch) return false
+  if (typeof window.matchMedia !== 'function') return true
+  return window.matchMedia('(pointer: coarse)').matches
+}
 
 interface Props {
   onImported: (result: AIRecipeResult, notice?: ImportNotice, uncertainFields?: UncertainField[]) => void
@@ -42,6 +48,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false)
   const [lowConfidenceReason, setLowConfidenceReason] = useState('')
+  const [showCameraOption] = useState(detectCameraCaptureSupport)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -112,6 +119,26 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
     setIsDraggingPhoto(false)
     loadPhotoFile(e.dataTransfer.files?.[0])
   }
+
+  // Desktop Ctrl+V: paste an image straight from the clipboard while the photo
+  // tab's picker is showing (screenshots, copied images, etc).
+  useEffect(() => {
+    if (tab !== 'photo' || photoStage !== 'select') return
+    function handlePaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault()
+          const file = item.getAsFile()
+          if (file) loadPhotoFile(file)
+          break
+        }
+      }
+    }
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [tab, photoStage])
 
   function resetPhoto() {
     setPhotoDataUrl(null)
@@ -314,20 +341,31 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
 
               {photoStage === 'select' && (
                 <>
+                  {showCameraOption && (
+                    <button
+                      type="button"
+                      className={styles.btnTakePhoto}
+                      onClick={() => cameraInputRef.current?.click()}
+                    >
+                      <Camera size={20} /> Take Photo
+                    </button>
+                  )}
+
                   <div
                     className={`${styles.dropzone} ${isDraggingPhoto ? styles.dropzoneActive : ''}`}
                     onDragOver={e => { e.preventDefault(); setIsDraggingPhoto(true) }}
                     onDragLeave={() => setIsDraggingPhoto(false)}
                     onDrop={handlePhotoDrop}
                   >
-                    <p className={styles.dropzoneText}>Drag and drop a recipe photo here</p>
+                    <p className={styles.dropzoneText}>
+                      {showCameraOption ? 'Or drag and drop / paste a recipe photo here' : 'Drag and drop or paste a recipe photo here'}
+                    </p>
                     <div className={styles.photoButtons}>
-                      {isTouchDevice && (
-                        <button type="button" className={styles.btnPhotoAction} onClick={() => cameraInputRef.current?.click()}>
-                          <Camera size={18} /> Take Photo
-                        </button>
-                      )}
-                      <button type="button" className={styles.btnPhotoAction} onClick={() => fileInputRef.current?.click()}>
+                      <button
+                        type="button"
+                        className={showCameraOption ? styles.btnPhotoActionSecondary : styles.btnPhotoAction}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
                         <ImageIcon size={18} /> Choose Photo
                       </button>
                     </div>

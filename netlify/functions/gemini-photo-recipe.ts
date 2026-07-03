@@ -9,7 +9,16 @@ interface RequestBody {
   model?: string
 }
 
-const PROMPT = `This is a photo of a recipe. Please extract all recipe information and return ONLY a valid JSON object with these exact fields: name (string), servings (number), prepTime (string in format like "30 min" or "1 hr 15 min"), cookTime (string), ingredients (array of objects with quantity string, unit string, name string), steps (array of strings), notes (string or null). If you cannot read the recipe clearly or are not confident about the values return a JSON object with a single field: confidence: "low" and a reason field explaining what was unclear. Do not guess at values you cannot clearly read. Return ONLY the JSON object, no explanation, no markdown, no code fences.`
+const PROMPT = `This is a photo of a recipe, possibly a page from a cookbook, a printed recipe card, or a handwritten note. Please extract all recipe information and return ONLY a valid JSON object with these exact fields: name (string), servings (number), prepTime (string in format like "30 min" or "1 hr 15 min"), cookTime (string), ingredients (array of objects with quantity string, unit string, name string), steps (array of strings), notes (string or null).
+
+Formatting notes for common cookbook layouts:
+- This recipe may have ingredients in two columns side by side — extract ALL ingredients from both the left and right columns.
+- If ingredients appear in multiple columns, read the left column top to bottom, then the right column top to bottom.
+- Common measurement abbreviations used in older cookbooks: T. or Tbsp. = tablespoon, tsp. = teaspoon, c. = cup, lg. = large, sm. = small, med. = medium, pkg. = package, oz. = ounce, lb. = pound. Convert these to their full words in your response.
+- Ignore decorative headers, section titles, chapter names, and author credits — focus only on the recipe name, ingredients, and instructions.
+- Recipe names may appear in decorative or script fonts — extract the recipe title as plain text.
+
+If you cannot read the recipe clearly or are not confident about the values return a JSON object with a single field: confidence: "low" and a reason field explaining what was unclear. Do not guess at values you cannot clearly read. Return ONLY the JSON object, no explanation, no markdown, no code fences.`
 
 const FALLBACK_MODEL = 'gemini-2.5-flash'
 
