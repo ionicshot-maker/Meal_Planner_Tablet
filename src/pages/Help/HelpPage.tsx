@@ -94,6 +94,7 @@ export default function HelpPage() {
               <li><strong>Scan a barcode:</strong> Tap Import Ingredients in the menu, then tap the Barcode Lookup tab. Tap Scan Barcode with Camera, point your camera at the barcode, and hold steady. The app will find the product automatically.</li>
               <li><strong>Search USDA:</strong> In Import Ingredients, tap the USDA Lookup tab. Type an ingredient name like "chicken breast" to find its nutrition data. Works great for fresh meats, produce, and grains.</li>
               <li><strong>Gemini Lookup:</strong> In Import Ingredients, tap the Gemini Lookup tab. Type a product name like "McCormick Ground Cinnamon" and the AI will fill in the nutrition facts. Great for packaged and branded products.</li>
+              <li><strong>Scan Label:</strong> In Import Ingredients, tap the Scan Label tab to photograph a nutrition facts label — take a photo or upload one, then crop tightly to just the nutrition panel (handy when a package shows more than one product) and the AI reads off the values for you. Works on desktop with a webcam and on mobile with the camera.</li>
               <li><strong>Bulk Entry:</strong> In Import Ingredients, use the Bulk Entry tab to add many simple ingredients at once by typing them in a list.</li>
               <li><strong>Always On Hand:</strong> Mark things like salt, pepper, and olive oil as "Always On Hand." The grocery list will never add these items even when recipes use them — because you always have them in the kitchen.</li>
               <li><strong>Beverages filter:</strong> On the Ingredients page, tap the Beverages quick-filter button to see only your drink ingredients.</li>
@@ -438,6 +439,7 @@ export default function HelpPage() {
                   'The product may not be in the Open Food Facts database yet.',
                   'Try the Gemini Lookup tab in Import Ingredients — type the product name instead.',
                   'Or search for it in the USDA Lookup tab if it is a generic food like canned tomatoes.',
+                  'Or use the Scan Label tab to photograph the nutrition facts panel directly.',
                 ],
               },
               {

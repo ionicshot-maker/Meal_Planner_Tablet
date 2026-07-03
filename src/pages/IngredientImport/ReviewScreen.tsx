@@ -33,15 +33,26 @@ const SOURCE_LABELS: Record<NutritionSource, string> = {
   manual:        'Manual',
 }
 
+interface ReviewNotice {
+  level: 'success' | 'warning'
+  message: string
+}
+
 interface Props {
   draft: Ingredient
   onSaved: (ingredient: Ingredient) => void
   onCancel: () => void
   onSearchUSDA?: () => void
   nutritionSource?: NutritionSource
+  /** Field keys (name, servingSize, or a Macros key) to highlight in amber — used when a
+   *  photo/AI-driven import could not confidently read some values. */
+  uncertainFields?: Set<string>
+  /** Overrides the default source-based accuracy banner with a specific message, e.g. from
+   *  a nutrition label scan that already knows whether the read was confident or partial. */
+  notice?: ReviewNotice
 }
 
-export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchUSDA, nutritionSource }: Props) {
+export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchUSDA, nutritionSource, uncertainFields, notice }: Props) {
   const { settings, updateSettings } = useSettings()
   const [draft, setDraft] = useState<Ingredient>(() => ensureVariant(initialDraft))
   const [saving, setSaving] = useState(false)
@@ -171,7 +182,11 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
   return (
     <div className={styles.container}>
       <div className={styles.scrollArea}>
-        {(nutritionSource === 'openfoodfacts' || nutritionSource === 'gemini') && (
+        {notice ? (
+          <div className={notice.level === 'success' ? styles.successNotice : styles.accuracyWarning}>
+            <strong>{notice.level === 'success' ? '✅ ' : '⚠️ '}{notice.message}</strong>
+          </div>
+        ) : (nutritionSource === 'openfoodfacts' || nutritionSource === 'gemini') && (
           <div className={styles.accuracyWarning}>
             <strong>⚠️ Please compare these nutrition values to the label on your product before saving</strong>{' '}
             — data may not be exact.
@@ -199,6 +214,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
               value={draft.name}
               onChange={e => setField('name', e.target.value)}
               placeholder="e.g. Chicken Breast"
+              className={uncertainFields?.has('name') ? styles.fieldWarning : undefined}
             />
             <Select
               label="Category"
@@ -238,6 +254,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
               value={v.servingSize}
               onChange={n => setVariantField({ servingSize: n ?? 0 })}
               placeholder="e.g. 1, 1/4, ½"
+              className={uncertainFields?.has('servingSize') ? styles.fieldWarning : undefined}
             />
             <Select
               label="Serving Unit"
@@ -294,13 +311,13 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
               ['fat',      'Fat',      'g'],
               ['sodium',   'Sodium',   'mg'],
             ] as [keyof Macros, string, string][]).map(([key, label, unit]) => (
-              <MacroField key={key} label={label} unit={unit} value={v.macros[key] ?? 0} onChange={n => setMacro(key, n)} />
+              <MacroField key={key} label={label} unit={unit} value={v.macros[key] ?? 0} onChange={n => setMacro(key, n)} warning={uncertainFields?.has(key)} />
             ))}
             {settings.nutrientToggles.saturatedFat && (
-              <MacroField label="Sat. Fat" unit="g" value={v.macros.saturatedFat ?? 0} onChange={n => setMacro('saturatedFat', n)} />
+              <MacroField label="Sat. Fat" unit="g" value={v.macros.saturatedFat ?? 0} onChange={n => setMacro('saturatedFat', n)} warning={uncertainFields?.has('saturatedFat')} />
             )}
             {settings.nutrientToggles.transFat && (
-              <MacroField label="Trans Fat" unit="g" value={v.macros.transFat ?? 0} onChange={n => setMacro('transFat', n)} />
+              <MacroField label="Trans Fat" unit="g" value={v.macros.transFat ?? 0} onChange={n => setMacro('transFat', n)} warning={uncertainFields?.has('transFat')} />
             )}
           </div>
         </Card>
@@ -362,8 +379,8 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
 }
 
 // ─── Compact macro number field with fraction support ────────────────────────
-function MacroField({ label, unit, value, onChange }: {
-  label: string; unit: string; value: number; onChange: (v: number) => void
+function MacroField({ label, unit, value, onChange, warning }: {
+  label: string; unit: string; value: number; onChange: (v: number) => void; warning?: boolean
 }) {
   const [text, setText] = useState(formatNumeric(value))
   const focused = useRef(false)
@@ -388,7 +405,7 @@ function MacroField({ label, unit, value, onChange }: {
   return (
     <div className={styles.macroField}>
       <label className={styles.macroLabel}>{label}</label>
-      <div className={styles.macroInput}>
+      <div className={`${styles.macroInput} ${warning ? styles.fieldWarning : ''}`}>
         <input
           type="text"
           inputMode="decimal"

@@ -2,11 +2,12 @@ import { useState, useEffect, ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useHouseholdTitle } from '@/context/SettingsContext'
 import { newId } from '@/utils/ids'
-import { ScanBarcode, Microscope, Sparkles, ClipboardList } from 'lucide-react'
+import { ScanBarcode, Microscope, Sparkles, ClipboardList, ScanText } from 'lucide-react'
 import { BarcodeTab } from './BarcodeTab'
 import { USDATab } from './USDATab'
 import { BulkEntryTab } from './BulkEntryTab'
 import { GeminiTab } from './GeminiTab'
+import { ScanLabelTab } from './ScanLabelTab'
 import { ReviewScreen } from './ReviewScreen'
 import { Toast } from './Toast'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
@@ -21,13 +22,14 @@ interface SavedDraft {
   savedAt: string
 }
 
-type TabId = 'barcode' | 'usda' | 'bulk' | 'gemini'
+type TabId = 'barcode' | 'usda' | 'bulk' | 'gemini' | 'scanLabel'
 
 const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
-  { id: 'barcode', label: 'Barcode Lookup',  icon: <ScanBarcode size={18} /> },
-  { id: 'usda',    label: 'USDA Lookup',     icon: <Microscope size={18} /> },
-  { id: 'gemini',  label: 'Gemini Lookup',   icon: <Sparkles size={18} /> },
-  { id: 'bulk',    label: 'Bulk Entry',      icon: <ClipboardList size={18} /> },
+  { id: 'barcode',   label: 'Barcode Lookup',  icon: <ScanBarcode size={18} /> },
+  { id: 'usda',      label: 'USDA Lookup',     icon: <Microscope size={18} /> },
+  { id: 'gemini',    label: 'Gemini Lookup',   icon: <Sparkles size={18} /> },
+  { id: 'scanLabel', label: 'Scan Label',      icon: <ScanText size={18} /> },
+  { id: 'bulk',      label: 'Bulk Entry',      icon: <ClipboardList size={18} /> },
 ]
 
 interface ToastItem { id: string; message: string }
@@ -95,6 +97,8 @@ export default function IngredientImportPage() {
   })
   const [reviewDraft, setReviewDraft] = useState<Ingredient | null>(null)
   const [reviewNutritionSource, setReviewNutritionSource] = useState<NutritionSource | null>(null)
+  const [reviewUncertainFields, setReviewUncertainFields] = useState<Set<string>>(new Set())
+  const [reviewNotice, setReviewNotice] = useState<{ level: 'success' | 'warning'; message: string } | null>(null)
   const [usdaInitialQuery, setUsdaInitialQuery] = useState(() => searchParams.get('q') ?? '')
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [pendingDraft, setPendingDraft] = useState<SavedDraft | null>(null)
@@ -119,21 +123,36 @@ export default function IngredientImportPage() {
   function handleBarcodeReview(draft: Ingredient, source: NutritionSource) {
     setReviewDraft(draft)
     setReviewNutritionSource(source)
+    setReviewUncertainFields(new Set())
+    setReviewNotice(null)
   }
 
   function handleUsdaReview(draft: Ingredient) {
     setReviewDraft(draft)
     setReviewNutritionSource('usda')
+    setReviewUncertainFields(new Set())
+    setReviewNotice(null)
   }
 
   function handleGeminiReview(draft: Ingredient) {
     setReviewDraft(draft)
     setReviewNutritionSource('gemini')
+    setReviewUncertainFields(new Set())
+    setReviewNotice(null)
+  }
+
+  function handleLabelScanReview(draft: Ingredient, uncertainFields: Set<string>, notice: { level: 'success' | 'warning'; message: string }) {
+    setReviewDraft(draft)
+    setReviewNutritionSource('gemini')
+    setReviewUncertainFields(uncertainFields)
+    setReviewNotice(notice)
   }
 
   function handleSaved(ingredient: Ingredient) {
     setReviewDraft(null)
     setReviewNutritionSource(null)
+    setReviewUncertainFields(new Set())
+    setReviewNotice(null)
     localStorage.removeItem(DRAFT_KEY)
     setPendingDraft(null)
     addToast(ingredient.name)
@@ -142,6 +161,8 @@ export default function IngredientImportPage() {
   function handleCancelReview() {
     setReviewDraft(null)
     setReviewNutritionSource(null)
+    setReviewUncertainFields(new Set())
+    setReviewNotice(null)
     checkForDraft()
   }
 
@@ -149,6 +170,8 @@ export default function IngredientImportPage() {
     if (!pendingDraft) return
     setReviewDraft(pendingDraft.ingredient)
     setReviewNutritionSource(pendingDraft.nutritionSource)
+    setReviewUncertainFields(new Set())
+    setReviewNotice(null)
     setPendingDraft(null)
   }
 
@@ -161,6 +184,8 @@ export default function IngredientImportPage() {
     const name = reviewDraft?.name ?? ''
     setReviewDraft(null)
     setReviewNutritionSource(null)
+    setReviewUncertainFields(new Set())
+    setReviewNotice(null)
     setUsdaInitialQuery(extractSearchTerm(name))
     setActiveTab('usda')
   }
@@ -200,6 +225,8 @@ export default function IngredientImportPage() {
             onCancel={handleCancelReview}
             onSearchUSDA={showNutritionWarning ? handleSearchUSDA : undefined}
             nutritionSource={reviewNutritionSource ?? 'manual'}
+            uncertainFields={reviewUncertainFields}
+            notice={reviewNotice ?? undefined}
           />
         </div>
       ) : (
@@ -239,6 +266,9 @@ export default function IngredientImportPage() {
             )}
             {activeTab === 'gemini' && (
               <GeminiTab onReview={handleGeminiReview} initialQuery={searchParams.get('q') ?? ''} />
+            )}
+            {activeTab === 'scanLabel' && (
+              <ScanLabelTab onReview={handleLabelScanReview} />
             )}
             {activeTab === 'bulk' && (
               <BulkEntryTab onSaved={handleBulkSaved} />

@@ -13,6 +13,10 @@
 [functions."gemini-photo-recipe"]
   timeout = 30
 
+# Increase timeout for nutrition label scanning: same Gemini vision call profile
+[functions."gemini-label-scan"]
+  timeout = 30
+
 # API proxy — must come before the SPA catch-all
 [[redirects]]
   from = "/api/*"
