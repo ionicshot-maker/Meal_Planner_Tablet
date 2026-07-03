@@ -15,64 +15,6 @@ import type { Recipe, RecipeIngredient, RecipeStep, Ingredient, IngredientVarian
 import type { AIRecipeResult, UncertainField } from '@/utils/aiImport'
 import styles from './RecipeEditor.module.css'
 
-// ─── Gemini brand-name prompt dialog ─────────────────────────────────────────
-
-function GeminiNamePrompt({ originalName, onSearchAsTyped, onEditSearch, onClose }: {
-  originalName: string
-  onSearchAsTyped: () => void
-  onEditSearch: (name: string) => void
-  onClose: () => void
-}) {
-  const [value, setValue] = useState(originalName)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    inputRef.current?.focus()
-    inputRef.current?.select()
-  }, [])
-
-  return (
-    <div
-      className={styles.geminiPromptOverlay}
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className={styles.geminiPromptBox}>
-        <button className={styles.geminiPromptClose} onClick={onClose} aria-label="Close">✕</button>
-        <p className={styles.geminiPromptHint}>
-          <strong>✨ For best results, include the brand name.</strong>
-          <br />
-          <span className={styles.geminiPromptExample}>
-            Example: <em>Ranch Style Chili Beans</em> instead of <em>chili beans</em>
-          </span>
-        </p>
-        <input
-          ref={inputRef}
-          className={styles.geminiPromptInput}
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') { e.preventDefault(); if (value.trim()) onEditSearch(value) }
-            if (e.key === 'Escape') onClose()
-          }}
-          placeholder="Product or ingredient name…"
-        />
-        <div className={styles.geminiPromptBtns}>
-          <button className={styles.geminiPromptBtnSecondary} onClick={onSearchAsTyped}>
-            Search as typed
-          </button>
-          <button
-            className={styles.geminiPromptBtnPrimary}
-            onClick={() => onEditSearch(value)}
-            disabled={!value.trim()}
-          >
-            Edit search
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ─── Auto-expanding textarea for step instructions ────────────────────────────
 
 function StepTextarea({ stepId, value, placeholder, onChange, onKeyDown }: {
@@ -186,7 +128,6 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
   const [photoUrl, setPhotoUrl]   = useState(recipe?.photoUrl ?? '')
   const [isDragging, setIsDragging] = useState(false)
   const [photoUrlInput, setPhotoUrlInput] = useState('')
-  const [geminiPrompt, setGeminiPrompt] = useState<string | null>(null)
   const [selectedTags, setSelectedTags] = useState<string[]>(recipe?.tags ?? prefill?.suggestedTags ?? [])
   const [openTagGroup, setOpenTagGroup] = useState<string | null>(null)
 
@@ -534,14 +475,6 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
         </div>
       )}
       <div className={`${styles.editor} ${referenceText ? styles.editorFlexFill : ''}`}>
-        {geminiPrompt !== null && (
-          <GeminiNamePrompt
-            originalName={geminiPrompt}
-            onSearchAsTyped={() => { openImportTab('gemini', geminiPrompt); setGeminiPrompt(null) }}
-            onEditSearch={name => { openImportTab('gemini', name); setGeminiPrompt(null) }}
-            onClose={() => setGeminiPrompt(null)}
-          />
-        )}
         {/* ── Header ── */}
         <header className={styles.header}>
           <div className={styles.headerLeft}>
@@ -592,7 +525,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
         {showMissingWarning && (
           <div className={styles.missingBanner}>
             <strong>Unlinked ingredients:</strong> {missingNames.join(', ')} — not in your ingredient database, so their macros and cost won't be counted.
-            {' '}Use the <strong>Scan Barcode</strong>, <strong>Search USDA</strong>, or <strong>Ask Gemini</strong> buttons on each unlinked row to add them, or save anyway to skip macro tracking for those items.
+            {' '}Use the <strong>Link</strong> button on each unlinked row to find or add them, or save anyway to skip macro tracking for those items.
             <div className={styles.missingActions}>
               <button className={styles.missingBtn} onClick={() => { setShowMissingWarning(false); handleSave() }}>
                 Save anyway
@@ -822,7 +755,6 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
                     onMoveDown={() => moveRow(row._rowId, 1)}
                     onAddAfter={addBlankRow}
                     allIngredients={allIngredients}
-                    onAskGemini={name => setGeminiPrompt(name)}
                     onOpenLinkPicker={() => openLinkPicker(row._rowId)}
                   />
                 ))}
@@ -954,10 +886,6 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
 
 // ─── Ingredient row inside the editor ────────────────────────────────────────
 
-function openImportTab(tab: string, name: string) {
-  window.open(`/import-ingredients?tab=${tab}&q=${encodeURIComponent(name.trim())}`, '_blank')
-}
-
 function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
   value: string
   allIngredients: Ingredient[]
@@ -1025,7 +953,7 @@ function IngredientNameInput({ value, allIngredients, onChange, onLink }: {
 const QUICK_UNITS: IngredientUnit[] = ['cup', 'tbsp', 'tsp', 'oz', 'lb']
 
 function IngredientRow({
-  row, isFirst, isLast, units, ingredient, onUpdate, onRemove, onMoveUp, onMoveDown, onAddAfter, allIngredients, onAskGemini, onOpenLinkPicker,
+  row, isFirst, isLast, units, ingredient, onUpdate, onRemove, onMoveUp, onMoveDown, onAddAfter, allIngredients, onOpenLinkPicker,
 }: {
   row: DraftIngRow
   isFirst: boolean
@@ -1038,7 +966,6 @@ function IngredientRow({
   onMoveDown: () => void
   onAddAfter: () => void
   allIngredients: Ingredient[]
-  onAskGemini: (name: string) => void
   onOpenLinkPicker: () => void
 }) {
   const isMissing = !row.ingredientId
@@ -1102,14 +1029,6 @@ function IngredientRow({
                 </span>
               )
           }
-
-          {isMissing && row.name.trim() && (
-            <div className={styles.ingActionBtns}>
-              <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('barcode', row.name)}>📷 Scan Barcode</button>
-              <button type="button" className={styles.ingActionBtn} onClick={() => openImportTab('usda', row.name)}>🔬 Search USDA</button>
-              <button type="button" className={styles.ingActionBtn} onClick={() => onAskGemini(row.name)}>✨ Ask Gemini</button>
-            </div>
-          )}
 
           {variant && (
             <span className={styles.ingMacroHint}>
