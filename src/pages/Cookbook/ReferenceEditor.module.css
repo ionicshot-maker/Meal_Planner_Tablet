@@ -199,6 +199,22 @@
 }
 .photoActions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 
+.photoDecision {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+}
+.photoDecisionQuestion {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 .scanError { color: var(--color-danger); font-size: var(--text-sm); margin: 0; }
 .scanLowConfidence {
   font-size: var(--text-sm);

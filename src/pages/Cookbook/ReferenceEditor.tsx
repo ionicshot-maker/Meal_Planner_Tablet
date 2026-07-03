@@ -46,6 +46,7 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState('')
   const [lowConfidenceReason, setLowConfidenceReason] = useState<string | null>(null)
+  const [photoDecisionPending, setPhotoDecisionPending] = useState(false)
 
   const contentRef = useRef<HTMLTextAreaElement>(null)
   const hasGeminiKey = Boolean(settings.geminiApiKey)
@@ -118,6 +119,7 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
     setShowPhotoCapture(false)
     setLowConfidenceReason('')
     setScanError('')
+    setPhotoDecisionPending(false)
   }
 
   async function handleExtractText() {
@@ -164,11 +166,30 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
         setTableMode(true)
         setTableData(r.tableData.map(row => Array.isArray(row) ? row.map(cell => String(cell)) : []))
       }
+
+      // What happens to the original photo after a successful extraction is
+      // governed by the household's Kitchen Reference Photos preference —
+      // only "ask" shows the keep/discard prompt below the photo.
+      const policy = settings.kitchenReferencePhotoPolicy ?? 'ask'
+      if (policy === 'discard') {
+        setPhotoDataUrl(undefined)
+      } else if (policy === 'ask') {
+        setPhotoDecisionPending(true)
+      }
     } catch (err) {
       setScanError(err instanceof Error ? err.message : 'Could not read this page. Try again.')
     } finally {
       setScanLoading(false)
     }
+  }
+
+  function handleKeepPhoto() {
+    setPhotoDecisionPending(false)
+  }
+
+  function handleDiscardPhoto() {
+    setPhotoDataUrl(undefined)
+    setPhotoDecisionPending(false)
   }
 
   function handleSave() {
@@ -322,25 +343,44 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
             {photoDataUrl ? (
               <div className={styles.photoPreviewWrap}>
                 <img src={photoDataUrl} alt="Reference page" className={styles.photoPreview} />
-                <div className={styles.photoActions}>
-                  <button type="button" className={styles.btnSecondary} onClick={() => setShowPhotoCapture(true)}>
-                    Retake
-                  </button>
-                  <button type="button" className={styles.btnSecondary} onClick={() => setPhotoDataUrl(undefined)}>
-                    <X size={13} style={{ verticalAlign: 'middle', marginRight: 2 }} />Remove
-                  </button>
-                  {hasGeminiKey && (
-                    <button type="button" className={styles.btnPrimary} onClick={handleExtractText} disabled={scanLoading}>
-                      <Sparkles size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                      {scanLoading ? 'Reading page…' : 'Extract Text with Gemini'}
-                    </button>
-                  )}
-                </div>
-                {scanError && <p className={styles.scanError}>{scanError}</p>}
-                {lowConfidenceReason && (
-                  <p className={styles.scanLowConfidence}>
-                    ⚠️ Could not read this page clearly{lowConfidenceReason ? `: ${lowConfidenceReason}` : '.'} Try a clearer photo, or fill in the fields manually.
-                  </p>
+
+                {photoDecisionPending ? (
+                  <div className={styles.photoDecision}>
+                    <p className={styles.photoDecisionQuestion}>
+                      Would you like to keep the original photo with this reference entry?
+                    </p>
+                    <div className={styles.photoActions}>
+                      <button type="button" className={styles.btnSecondary} onClick={handleKeepPhoto}>
+                        Keep Photo
+                      </button>
+                      <button type="button" className={styles.btnPrimary} onClick={handleDiscardPhoto} autoFocus>
+                        Text Only — Discard Photo
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className={styles.photoActions}>
+                      <button type="button" className={styles.btnSecondary} onClick={() => setShowPhotoCapture(true)}>
+                        Retake
+                      </button>
+                      <button type="button" className={styles.btnSecondary} onClick={() => { setPhotoDataUrl(undefined); setPhotoDecisionPending(false) }}>
+                        <X size={13} style={{ verticalAlign: 'middle', marginRight: 2 }} />Remove
+                      </button>
+                      {hasGeminiKey && (
+                        <button type="button" className={styles.btnPrimary} onClick={handleExtractText} disabled={scanLoading}>
+                          <Sparkles size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                          {scanLoading ? 'Reading page…' : 'Extract Text with Gemini'}
+                        </button>
+                      )}
+                    </div>
+                    {scanError && <p className={styles.scanError}>{scanError}</p>}
+                    {lowConfidenceReason && (
+                      <p className={styles.scanLowConfidence}>
+                        ⚠️ Could not read this page clearly{lowConfidenceReason ? `: ${lowConfidenceReason}` : '.'} Try a clearer photo, or fill in the fields manually.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             ) : (

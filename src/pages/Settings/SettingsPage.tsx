@@ -10,7 +10,7 @@ import { SetupChecklist } from './sections/SetupChecklist'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import { Users, Palette, Plug, Salad, List, HardDrive } from 'lucide-react'
 import styles from './SettingsPage.module.css'
-import type { ThemePreference, UnitSystem } from '@/types'
+import type { ThemePreference, UnitSystem, KitchenReferencePhotoPolicy } from '@/types'
 
 type Section = 'household' | 'preferences' | 'integrations' | 'nutrients' | 'lists' | 'data'
 
@@ -150,6 +150,34 @@ function PreferencesSection({
               checked={settings.storePreferenceEnabled}
               onChange={v => updateSettings({ storePreferenceEnabled: v })}
             />
+          </div>
+
+          <div className={styles.divider} />
+
+          <div className={styles.field}>
+            <span className={styles.fieldLabel}>Kitchen Reference Photos</span>
+            <div className={styles.radioGroup}>
+              {([
+                { value: 'ask',     label: 'Always ask' },
+                { value: 'keep',    label: 'Always keep photos' },
+                { value: 'discard', label: 'Always discard photos after extraction' },
+              ] as { value: KitchenReferencePhotoPolicy; label: string }[]).map(opt => (
+                <label key={opt.value} className={styles.radioLabel}>
+                  <input
+                    type="radio"
+                    name="kitchenReferencePhotoPolicy"
+                    value={opt.value}
+                    checked={(settings.kitchenReferencePhotoPolicy ?? 'ask') === opt.value}
+                    onChange={() => updateSettings({ kitchenReferencePhotoPolicy: opt.value })}
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+            <div className={styles.fieldHint}>
+              Photos are stored locally on your device. Each photo is approximately 1-3MB. Discarding
+              photos after text extraction saves significant storage space.
+            </div>
           </div>
         </div>
       </Card>

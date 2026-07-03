@@ -81,6 +81,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ],
   starterLibrarySeeded: false,
   starterLibraryVersion: 0,
+  kitchenReferencePhotoPolicy: 'ask',
   supabaseUrl: '',
   supabaseAnonKey: '',
   householdSyncCode: '',

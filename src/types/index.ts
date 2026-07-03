@@ -101,6 +101,7 @@ export interface AppSettings {
   stores: string[]
   starterLibrarySeeded: boolean
   starterLibraryVersion: number
+  kitchenReferencePhotoPolicy: KitchenReferencePhotoPolicy
   // Cloud sync
   supabaseUrl: string
   supabaseAnonKey: string
@@ -280,6 +281,10 @@ export interface RecipeCollection {
 // ─── Kitchen Reference ─────────────────────────────────────────────────────────
 export type ReferenceContentType =
   | 'tips' | 'herbs' | 'pantry' | 'measurements' | 'charts' | 'presentation' | 'terms' | 'notes'
+
+// Whether to keep the original scanned photo after Gemini extracts its text —
+// 'ask' prompts per-scan, 'keep'/'discard' apply automatically every time.
+export type KitchenReferencePhotoPolicy = 'ask' | 'keep' | 'discard'
 
 export interface KitchenReference {
   id: string
