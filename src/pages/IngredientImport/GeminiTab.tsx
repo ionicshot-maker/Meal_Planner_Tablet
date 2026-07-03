@@ -108,7 +108,7 @@ export function GeminiTab({ onReview, initialQuery }: Props) {
           productName: productName.trim(),
           brand: brand.trim(),
           apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-2.5-flash',
+          model: settings.geminiModel || 'gemini-3.1-flash-lite',
         }),
       })
       const json = await res.json() as { status: number; nutrition?: GeminiNutrition; error?: string }

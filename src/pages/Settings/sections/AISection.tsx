@@ -13,10 +13,12 @@ const PROVIDER_OPTIONS: { value: AIProvider; label: string }[] = [
 ]
 
 const GEMINI_MODELS: { id: string; name: string; badge: string }[] = [
-  { id: 'gemini-2.5-flash',        name: 'Gemini 2.5 Flash',        badge: 'Recommended' },
-  { id: 'gemini-2.5-flash-lite',   name: 'Gemini 2.5 Flash Lite',   badge: 'Most Free Requests' },
+  { id: 'gemini-3.1-flash-lite',   name: 'Gemini 3.1 Flash Lite',   badge: 'Recommended — 500/day free' },
+  { id: 'gemini-3-flash',          name: 'Gemini 3 Flash',          badge: '' },
+  { id: 'gemini-2.5-flash',        name: 'Gemini 2.5 Flash',        badge: '20/day free' },
+  { id: 'gemini-2.5-flash-lite',   name: 'Gemini 2.5 Flash Lite',   badge: '' },
   { id: 'gemini-3-flash-preview',  name: 'Gemini 3 Flash Preview',  badge: 'Preview' },
-  { id: 'gemini-3.5-flash',        name: 'Gemini 3.5 Flash',        badge: 'Newest' },
+  { id: 'gemini-3.5-flash',        name: 'Gemini 3.5 Flash',        badge: '20/day free' },
 ]
 
 const PROVIDER_HINTS: Record<AIProvider, string> = {
@@ -187,7 +189,7 @@ export function AISection() {
             <span className={styles.modelChipsLabel}>Gemini Model</span>
             <div className={styles.modelChips}>
               {GEMINI_MODELS.map(m => {
-                const isActive = (geminiModel || 'gemini-2.5-flash') === m.id
+                const isActive = (geminiModel || 'gemini-3.1-flash-lite') === m.id
                 const isAvail  = availableModelIds.has(m.id)
                 return (
                   <button
@@ -204,7 +206,8 @@ export function AISection() {
               })}
             </div>
             <p className={styles.hint}>
-              Not sure which to use? Start with Gemini 2.5 Flash. If you hit rate limits try Gemini 2.5 Flash Lite.
+              Not sure which to use? Start with Gemini 3.1 Flash Lite — it has the highest free daily
+              limit (500 requests/day vs. 20/day for Gemini 2.5 Flash and Gemini 3.5 Flash).
             </p>
             <div className={styles.modelCheckRow}>
               <Button

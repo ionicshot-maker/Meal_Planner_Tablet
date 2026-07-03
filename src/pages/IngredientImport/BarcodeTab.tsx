@@ -178,7 +178,7 @@ export function BarcodeTab({ onReview }: Props) {
       lookupBarcode(code)
     }
 
-    ;(async () => {
+    (async () => {
       try {
         await Quagga.init({
           inputStream: {
@@ -296,7 +296,7 @@ export function BarcodeTab({ onReview }: Props) {
           productName,
           brand,
           apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-2.5-flash',
+          model: settings.geminiModel || 'gemini-3.1-flash-lite',
         }),
       })
       const json = await res.json() as { status: number; nutrition?: GeminiNutrition }

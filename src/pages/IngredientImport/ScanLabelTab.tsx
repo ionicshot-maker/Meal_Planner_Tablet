@@ -148,7 +148,7 @@ export function ScanLabelTab({ onReview }: Props) {
           image: base64,
           mimeType,
           apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-2.5-flash',
+          model: settings.geminiModel || 'gemini-3.1-flash-lite',
         }),
       })
       const json = await res.json() as {

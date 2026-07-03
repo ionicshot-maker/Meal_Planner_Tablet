@@ -38,7 +38,7 @@ const handler: Handler = async (event) => {
   const productName = body.productName?.trim()
   const brand       = body.brand?.trim() ?? ''
   const apiKey      = body.apiKey?.trim()
-  const model       = body.model?.trim() || 'gemini-2.5-flash'
+  const model       = body.model?.trim() || 'gemini-3.1-flash-lite'
 
   if (!productName) {
     return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'Missing productName' }) }
@@ -189,11 +189,10 @@ Return ONLY the JSON object with no explanation, no markdown, no code fences.`
     console.log('[gemini-nutrition] success | model:', model, '| preview:', rawText.slice(0, 120))
 
     // Strip markdown fences and any surrounding whitespace
-    function stripFences(s: string): string {
-      return s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
-    }
+    const stripFences = (s: string): string =>
+      s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
 
-    function tryParse(s: string): GeminiNutrition | null {
+    const tryParse = (s: string): GeminiNutrition | null => {
       try { return JSON.parse(stripFences(s)) as GeminiNutrition } catch { return null }
     }
 

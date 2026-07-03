@@ -29,7 +29,7 @@ Rules:
 - suggestedTags must be chosen from: Chicken, Beef, Pork, Fish, Shrimp, Turkey, Vegetarian, Vegan, Crockpot, Oven, Stovetop, Grill, Instant Pot, Air Fryer, No-Cook, Easy, Quick, Gluten-Free, Dairy-Free, Kid-Friendly, Meal Prep, Beverages, Homemade, Dessert, Snack, Soup, Salad, Sandwich
 - Return ONLY the JSON object, no explanation, no markdown, no code fences.`
 
-const FALLBACK_MODEL = 'gemini-2.5-flash-lite'
+const FALLBACK_MODEL = 'gemini-3-flash'
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -53,7 +53,7 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'Provide either a url or text to import.' }) }
   }
 
-  const primaryModel = model?.trim() || 'gemini-2.5-flash'
+  const primaryModel = model?.trim() || 'gemini-3.1-flash-lite'
   const key = apiKey.trim()
 
   console.log(

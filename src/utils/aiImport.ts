@@ -119,7 +119,7 @@ async function callAI(prompt: string, config: AIConfig, geminiModel?: string): P
     const res = await fetch('/api/gemini-recipe-import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: prompt, apiKey, model: geminiModel || 'gemini-2.5-flash' }),
+      body: JSON.stringify({ text: prompt, apiKey, model: geminiModel || 'gemini-3.1-flash-lite' }),
     })
     const json = await res.json() as { status?: number; recipe?: unknown; error?: string }
     if (!res.ok || !json.recipe) {
@@ -188,7 +188,7 @@ export async function importRecipeFromUrl(url: string, config: AIConfig, geminiM
     const res = await fetch('/api/gemini-recipe-import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, apiKey: config.apiKey, model: geminiModel || 'gemini-2.5-flash' }),
+      body: JSON.stringify({ url, apiKey: config.apiKey, model: geminiModel || 'gemini-3.1-flash-lite' }),
     })
     const json = await res.json() as { status?: number; recipe?: unknown; error?: string }
     if (!res.ok || !json.recipe) {
@@ -248,7 +248,7 @@ export async function importRecipeFromPhoto(
   const res = await fetch('/api/gemini-photo-recipe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64Image, mimeType, apiKey: geminiApiKey, model: geminiModel || 'gemini-2.5-flash' }),
+    body: JSON.stringify({ image: base64Image, mimeType, apiKey: geminiApiKey, model: geminiModel || 'gemini-3.1-flash-lite' }),
   })
   const json = await res.json() as { status?: number; recipe?: PhotoRecipeRaw; lowConfidence?: boolean; reason?: string; error?: string }
 
