@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, Link2, Link2Off } from 'lucide-react'
+import { Link, Link2, Link2Off, Calculator } from 'lucide-react'
 import { useSettings } from '@/context/SettingsContext'
-import { Button, Toggle } from '@/components/ui'
+import { Button, Toggle, Modal } from '@/components/ui'
+import { ConversionCalculator } from '@/components/ConversionCalculator'
+import type { ConversionUnit } from '@/utils/conversions'
 import { IngredientPicker } from './IngredientPicker'
 import type { PickedIngredient } from './IngredientPicker'
 import { IngredientLinkModal } from './IngredientLinkModal'
@@ -1033,6 +1035,10 @@ function IngredientNameInput({ value, rowId, allIngredients, onChange, onLink }:
 
 const QUICK_UNITS: IngredientUnit[] = ['cup', 'tbsp', 'tsp', 'oz', 'lb']
 
+// Ingredient units that also exist in the standalone Conversion Calculator's
+// unit set — count units (each/package/jar/...) have no conversion analog.
+const CALC_COMPATIBLE_UNITS = new Set(['g', 'kg', 'oz', 'lb', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'floz'])
+
 function IngredientRow({
   row, isFirst, isLast, units, ingredient, onUpdate, onRemove, onMoveUp, onMoveDown, onAddAfter, allIngredients, onOpenLinkPicker,
 }: {
@@ -1051,6 +1057,8 @@ function IngredientRow({
 }) {
   const isMissing = !row.ingredientId
   const variant = ingredient?.variants.find(v => v.id === row.variantId) ?? ingredient?.variants[0]
+  const [showCalc, setShowCalc] = useState(false)
+  const calcUnit = CALC_COMPATIBLE_UNITS.has(row.unit) ? (row.unit as ConversionUnit) : undefined
 
   return (
     <div className={`${styles.ingRowWrap} ${isMissing ? styles.ingRowMissing : ''}`}>
@@ -1152,11 +1160,18 @@ function IngredientRow({
 
         {/* Move / remove */}
         <div className={styles.rowBtns}>
+          <button className={styles.rowCalc} onClick={() => setShowCalc(true)} title="Convert units">
+            <Calculator size={13} />
+          </button>
           <button className={styles.rowMover} onClick={onMoveUp}  disabled={isFirst}>▲</button>
           <button className={styles.rowMover} onClick={onMoveDown} disabled={isLast}>▼</button>
           <button className={styles.rowRemove} onClick={onRemove}>×</button>
         </div>
       </div>
+
+      <Modal open={showCalc} onClose={() => setShowCalc(false)} title="Conversion Calculator" size="sm">
+        <ConversionCalculator initialValue={row.quantity || undefined} initialUnit={calcUnit} hideShortcuts />
+      </Modal>
 
       {/* Quick unit pills */}
       <div className={styles.quickUnits}>

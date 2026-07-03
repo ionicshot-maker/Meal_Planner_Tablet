@@ -211,7 +211,7 @@ export default function HelpPage() {
 
             <h3 className={styles.subFeatureTitle}>Household Sync (sync between your own devices)</h3>
             <ul className={styles.featureList}>
-              <li><strong>What syncs:</strong> Everything — ingredients (with prices), recipes, meal plans, grocery lists.</li>
+              <li><strong>What syncs:</strong> Everything — ingredients (with prices), recipes, kitchen reference pages, meal plans, grocery lists.</li>
               <li><strong>What never syncs:</strong> Personal macro logs, weight history, and app preferences like theme and API keys. These stay on each device.</li>
               <li><strong>How to set it up:</strong> See the "Free Codes Setup" section below for step-by-step Supabase instructions.</li>
               <li><strong>How to sync:</strong> Go to Settings → Data → Cloud Sync. Enter or generate a Household Sync Code. Tap "Sync with Cloud" to sync in both directions, "Push to Cloud" to send your changes up, or "Pull from Cloud" to get changes from the cloud.</li>

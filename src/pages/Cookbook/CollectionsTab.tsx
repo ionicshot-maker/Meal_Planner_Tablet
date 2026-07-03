@@ -1,19 +1,20 @@
 import { useState } from 'react'
 import { FolderPlus, Pencil, Trash2 } from 'lucide-react'
-import type { Recipe, RecipeCollection } from '@/types'
+import type { Recipe, RecipeCollection, KitchenReference } from '@/types'
 import { CollectionView } from './CollectionView'
 import styles from './CollectionsTab.module.css'
 
 interface Props {
   collections: RecipeCollection[]
   recipes: Recipe[]
+  references: KitchenReference[]
   onSaveCollection: (c: RecipeCollection) => Promise<void>
   onDeleteCollection: (id: string) => Promise<void>
   onCreateCollection: (name: string) => Promise<void>
   onViewRecipe: (recipe: Recipe) => void
 }
 
-export function CollectionsTab({ collections, recipes, onSaveCollection, onDeleteCollection, onCreateCollection, onViewRecipe }: Props) {
+export function CollectionsTab({ collections, recipes, references, onSaveCollection, onDeleteCollection, onCreateCollection, onViewRecipe }: Props) {
   const [viewingCollection, setViewingCollection] = useState<RecipeCollection | null>(null)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -47,6 +48,7 @@ export function CollectionsTab({ collections, recipes, onSaveCollection, onDelet
       <CollectionView
         collection={current}
         recipes={recipes}
+        references={references}
         onBack={() => setViewingCollection(null)}
         onSave={onSaveCollection}
         onViewRecipe={onViewRecipe}

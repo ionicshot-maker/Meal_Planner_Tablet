@@ -17,6 +17,10 @@
 [functions."gemini-label-scan"]
   timeout = 30
 
+# Increase timeout for kitchen reference page scanning: same Gemini vision call profile
+[functions."gemini-reference-scan"]
+  timeout = 30
+
 # API proxy — must come before the SPA catch-all
 [[redirects]]
   from = "/api/*"

@@ -861,6 +861,19 @@
 .rowMover:disabled { opacity: 0.3; cursor: default; }
 .rowMover:disabled:hover { background: none; }
 
+.rowCalc {
+  display: flex; align-items: center; justify-content: center;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  transition: background var(--transition), color var(--transition);
+}
+.rowCalc:hover { background: var(--color-border); color: var(--color-accent); }
+
 .rowRemove {
   background: none;
   border: none;

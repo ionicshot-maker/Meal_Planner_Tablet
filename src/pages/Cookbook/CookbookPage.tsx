@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Heart, Download, Plus, FolderOpen } from 'lucide-react'
+import { Heart, Download, Plus, FolderOpen, BookMarked } from 'lucide-react'
 import {
   getAllRecipes, saveRecipe, deleteRecipe, cloneRecipeFromTemplate,
 } from '@/db/recipes'
 import { getAllIngredients } from '@/db/ingredients'
 import { getAllCollections, createCollection, addRecipeToCollection, saveCollection, deleteCollection } from '@/db/collections'
+import { getAllReferences, saveReference, deleteReference } from '@/db/references'
 import { attachRecipeMacros, buildIngredientMap } from '@/utils/recipeCalculations'
-import type { Recipe, Ingredient, RecipeCollection } from '@/types'
+import type { Recipe, Ingredient, RecipeCollection, KitchenReference } from '@/types'
 import type { AIRecipeResult, UncertainField } from '@/utils/aiImport'
 import { RecipeCard } from './RecipeCard'
 import { RecipeEditor, type ImportNotice } from './RecipeEditor'
@@ -14,17 +15,23 @@ import { RecipeDetail } from './RecipeDetail'
 import { RecipeImportModal } from './RecipeImportModal'
 import { AddToMealPlanModal } from './AddToMealPlanModal'
 import { CollectionsTab } from './CollectionsTab'
+import { ReferenceTab } from './ReferenceTab'
+import { ReferenceEditor } from './ReferenceEditor'
+import { ReferenceDetail } from './ReferenceDetail'
+import { Modal } from '@/components/ui'
+import { ConversionCalculator } from '@/components/ConversionCalculator'
 import { useHouseholdTitle } from '@/context/SettingsContext'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import styles from './CookbookPage.module.css'
 
-type FilterMode = 'all' | 'favorites' | 'templates' | 'collections'
+type FilterMode = 'all' | 'favorites' | 'templates' | 'collections' | 'reference'
 
 export default function CookbookPage() {
   const pageTitle = useHouseholdTitle('Cookbook')
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [allIngredients, setAllIngredients] = useState<Ingredient[]>([])
   const [collections, setCollections] = useState<RecipeCollection[]>([])
+  const [references, setReferences] = useState<KitchenReference[]>([])
   const [loading, setLoading] = useState(true)
 
   // Filter / search state
@@ -42,15 +49,22 @@ export default function CookbookPage() {
   const [showImport, setShowImport] = useState(false)
   const [addToPlanRecipe, setAddToPlanRecipe] = useState<Recipe | null>(null)
 
+  // Kitchen Reference state
+  const [editingReference, setEditingReference] = useState<KitchenReference | null | 'new'>(null)
+  const [viewingReference, setViewingReference] = useState<KitchenReference | null>(null)
+  const [showCalculator, setShowCalculator] = useState(false)
+
   const load = useCallback(async () => {
-    const [recs, ings, cols] = await Promise.all([
+    const [recs, ings, cols, refs] = await Promise.all([
       getAllRecipes(true),
       getAllIngredients(false),
       getAllCollections(),
+      getAllReferences(),
     ])
     const map = buildIngredientMap(ings)
     const withMacros = recs.map(r => attachRecipeMacros(r, map))
     setRecipes(withMacros)
+    setReferences(refs)
     setAllIngredients(ings)
     setCollections(cols)
     setLoading(false)
@@ -66,7 +80,7 @@ export default function CookbookPage() {
     if (filterMode === 'favorites' && !r.isFavorite) return false
     if (filterMode === 'templates' && !r.isTemplate) return false
     if (filterMode === 'all' && r.isTemplate) return false
-    if (filterMode === 'collections') return false
+    if (filterMode === 'collections' || filterMode === 'reference') return false
     if (activeTag && !r.tags.includes(activeTag)) return false
     if (search.trim()) {
       const q = search.toLowerCase()
@@ -171,22 +185,44 @@ export default function CookbookPage() {
     await load()
   }
 
+  // ── Kitchen Reference actions ────────────────────────────────────────────
+  async function handleSaveReference(ref: KitchenReference) {
+    await saveReference(ref)
+    await load()
+    setEditingReference(null)
+    setViewingReference(null)
+  }
+
+  async function handleDeleteReference(ref: KitchenReference) {
+    if (!confirm(`Delete "${ref.title}"? This cannot be undone.`)) return
+    await deleteReference(ref.id)
+    setViewingReference(null)
+    await load()
+  }
+
+  function openEditReference(ref: KitchenReference) {
+    setViewingReference(null)
+    setEditingReference(ref)
+  }
+
   return (
     <div className={styles.page}>
       <h1 className={styles.pageTitle}>{pageTitle}</h1>
 
       {/* ── Toolbar ── */}
       <div className={styles.toolbar}>
-        <input
-          type="search"
-          className={styles.search}
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search recipes…"
-        />
+        {filterMode !== 'reference' && (
+          <input
+            type="search"
+            className={styles.search}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search recipes…"
+          />
+        )}
 
         <div className={styles.filterBtns}>
-          {(['all', 'favorites', 'templates', 'collections'] as FilterMode[]).map(mode => (
+          {(['all', 'favorites', 'templates', 'collections', 'reference'] as FilterMode[]).map(mode => (
             <button
               key={mode}
               className={`${styles.filterBtn} ${filterMode === mode ? styles.filterBtnActive : ''}`}
@@ -195,24 +231,33 @@ export default function CookbookPage() {
               {mode === 'all' ? 'All Recipes'
                 : mode === 'favorites' ? <><Heart size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />Favorites</>
                 : mode === 'templates' ? 'Templates'
-                : <><FolderOpen size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />Collections</>}
+                : mode === 'collections' ? <><FolderOpen size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />Collections</>
+                : <><BookMarked size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />Reference</>}
             </button>
           ))}
         </div>
 
         <div className={styles.toolbarRight}>
-          <button className={styles.importBtn} onClick={() => setShowImport(true)} title="Import Recipe">
-            <Download size={15} style={{ verticalAlign: 'middle', marginRight: 4 }} /><span className={styles.btnLabel}>Import Recipe</span>
-          </button>
-          <button className={styles.createBtn} onClick={() => { setImportPrefill(null); setEditingRecipe('new') }} title="New Recipe">
-            <Plus size={15} style={{ verticalAlign: 'middle', marginRight: 2 }} /><span className={styles.btnLabel}>New Recipe</span>
-          </button>
+          {filterMode === 'reference' ? (
+            <button className={styles.createBtn} onClick={() => setEditingReference('new')} title="Add Reference">
+              <Plus size={15} style={{ verticalAlign: 'middle', marginRight: 2 }} /><span className={styles.btnLabel}>Add Reference</span>
+            </button>
+          ) : (
+            <>
+              <button className={styles.importBtn} onClick={() => setShowImport(true)} title="Import Recipe">
+                <Download size={15} style={{ verticalAlign: 'middle', marginRight: 4 }} /><span className={styles.btnLabel}>Import Recipe</span>
+              </button>
+              <button className={styles.createBtn} onClick={() => { setImportPrefill(null); setEditingRecipe('new') }} title="New Recipe">
+                <Plus size={15} style={{ verticalAlign: 'middle', marginRight: 2 }} /><span className={styles.btnLabel}>New Recipe</span>
+              </button>
+            </>
+          )}
           <PageHelpButton />
         </div>
       </div>
 
       {/* ── Tag filter bar ── */}
-      {filterMode !== 'collections' && allTags.length > 0 && (
+      {filterMode !== 'collections' && filterMode !== 'reference' && allTags.length > 0 && (
         <div className={styles.tagBar}>
           <button
             className={`${styles.tagPill} ${activeTag === '' ? styles.tagPillActive : ''}`}
@@ -233,10 +278,19 @@ export default function CookbookPage() {
       )}
 
       {/* ── Content ── */}
-      {filterMode === 'collections' ? (
+      {filterMode === 'reference' ? (
+        <ReferenceTab
+          references={references}
+          onView={setViewingReference}
+          onEdit={openEditReference}
+          onDelete={handleDeleteReference}
+          onOpenCalculator={() => setShowCalculator(true)}
+        />
+      ) : filterMode === 'collections' ? (
         <CollectionsTab
           collections={collections}
           recipes={recipes}
+          references={references}
           onSaveCollection={handleSaveCollection}
           onDeleteCollection={handleDeleteCollection}
           onCreateCollection={async (name) => { await createCollection(name); await load() }}
@@ -332,6 +386,28 @@ export default function CookbookPage() {
           onClose={() => setAddToPlanRecipe(null)}
         />
       )}
+
+      {/* ── Kitchen Reference editor / detail / calculator ── */}
+      {editingReference !== null && (
+        <ReferenceEditor
+          reference={editingReference === 'new' ? undefined : editingReference}
+          onSave={handleSaveReference}
+          onClose={() => setEditingReference(null)}
+        />
+      )}
+
+      {viewingReference && (
+        <ReferenceDetail
+          reference={viewingReference}
+          onEdit={() => openEditReference(viewingReference)}
+          onDelete={() => handleDeleteReference(viewingReference)}
+          onClose={() => setViewingReference(null)}
+        />
+      )}
+
+      <Modal open={showCalculator} onClose={() => setShowCalculator(false)} title="Conversion Calculator" size="sm">
+        <ConversionCalculator />
+      </Modal>
     </div>
   )
 }

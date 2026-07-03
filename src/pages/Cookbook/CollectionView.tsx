@@ -2,19 +2,20 @@ import { useState } from 'react'
 import { ArrowLeft, ArrowUp, ArrowDown, X, Printer } from 'lucide-react'
 import { formatMinutes } from '@/utils/units'
 import { formatMacro } from '@/utils/recipeCalculations'
-import type { Recipe, RecipeCollection } from '@/types'
+import type { Recipe, RecipeCollection, KitchenReference } from '@/types'
 import { CollectionPDFExport } from './CollectionPDFExport'
 import styles from './CollectionView.module.css'
 
 interface Props {
   collection: RecipeCollection
   recipes: Recipe[]
+  references: KitchenReference[]
   onBack: () => void
   onSave: (c: RecipeCollection) => Promise<void>
   onViewRecipe: (recipe: Recipe) => void
 }
 
-export function CollectionView({ collection, recipes, onBack, onSave, onViewRecipe }: Props) {
+export function CollectionView({ collection, recipes, references, onBack, onSave, onViewRecipe }: Props) {
   const [showExport, setShowExport] = useState(false)
 
   const recipeMap = new Map(recipes.map(r => [r.id, r]))
@@ -114,6 +115,7 @@ export function CollectionView({ collection, recipes, onBack, onSave, onViewReci
         <CollectionPDFExport
           collection={collection}
           recipes={collectionRecipes}
+          references={references}
           onClose={() => setShowExport(false)}
         />
       )}

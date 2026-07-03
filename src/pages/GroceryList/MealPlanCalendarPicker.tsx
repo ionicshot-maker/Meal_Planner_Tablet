@@ -212,7 +212,7 @@ export function MealPlanCalendarPicker({ startDate, endDate, onChange }: Props) 
 
       <p className={styles.summary}>
         {totalDaysSelected > 0
-          ? `${totalDaysSelected} day${totalDaysSelected !== 1 ? 's' : ''} selected, ${rangeMealCount} with meal${rangeMealCount !== 1 ? 's' : ''} planned`
+          ? `${totalDaysSelected} day${totalDaysSelected !== 1 ? 's' : ''} selected — ${rangeMealCount} day${rangeMealCount !== 1 ? 's' : ''} have meals planned`
           : 'No dates selected yet'}
       </p>
     </div>

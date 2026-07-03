@@ -117,6 +117,7 @@
 }
 
 .dayToday {
+  border-width: 2px;
   border-color: var(--color-border);
   font-weight: 700;
 }

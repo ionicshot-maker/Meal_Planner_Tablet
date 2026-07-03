@@ -277,6 +277,22 @@ export interface RecipeCollection {
   updatedAt: string
 }
 
+// ─── Kitchen Reference ─────────────────────────────────────────────────────────
+export type ReferenceContentType =
+  | 'tips' | 'herbs' | 'pantry' | 'measurements' | 'charts' | 'presentation' | 'terms' | 'notes'
+
+export interface KitchenReference {
+  id: string
+  title: string
+  contentType: ReferenceContentType
+  sourceTags: string[]
+  content: string           // formatted text — supports bullet/numbered lines
+  tableData?: string[][]    // present when contentType is a chart/table
+  photoUrl?: string
+  createdAt: string
+  updatedAt: string
+}
+
 // ─── Grocery List ─────────────────────────────────────────────────────────────
 export interface GroceryItem {
   id: string

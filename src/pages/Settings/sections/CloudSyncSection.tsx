@@ -147,8 +147,9 @@ export function CloudSyncSection() {
       {/* ── Household Sync ─────────────────────────────────────────── */}
       <h3 className={styles.subTitle}>Household Sync</h3>
       <p className={styles.desc}>
-        Sync everything between your devices — ingredients, recipes, recipe collections, meal plans,
-        grocery lists, household items, and settings. Use the same code on every device in your home.
+        Sync everything between your devices — ingredients, recipes, recipe collections, kitchen
+        reference pages, meal plans, grocery lists, household items, and settings. Use the same code
+        on every device in your home.
       </p>
       <p className={styles.desc}>
         Household Sync shares everything except personal API keys and device theme preferences.

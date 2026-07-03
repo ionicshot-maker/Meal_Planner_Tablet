@@ -3,13 +3,14 @@ import { getAllIngredients, saveIngredient } from './ingredients'
 import { getAllRecipes, saveRecipe } from './recipes'
 import { getAllHouseholdItems, saveHouseholdItem } from './householdItems'
 import { getAllCollections, saveCollection } from './collections'
+import { getAllReferences, saveReference } from './references'
 import { saveMealPlanDay } from './mealPlan'
 import { saveGroceryList } from './groceryLists'
 import { loadSettings, saveSettingsWithTimestamp } from './settings'
 import { getDB } from './schema'
 import type {
   Ingredient, Recipe, AppSettings, MealPlanDay, GroceryList,
-  HouseholdItem, RecipeCollection, AIProvider,
+  HouseholdItem, RecipeCollection, KitchenReference, AIProvider,
 } from '@/types'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -101,6 +102,14 @@ create table if not exists collections (
 );
 create index if not exists collections_code_idx on collections (household_code);
 
+create table if not exists kitchen_references (
+  id text primary key,
+  household_code text not null,
+  data jsonb not null,
+  updated_at timestamptz not null
+);
+create index if not exists kitchen_references_code_idx on kitchen_references (household_code);
+
 create table if not exists sync_settings (
   id text primary key,
   household_code text not null,
@@ -116,6 +125,7 @@ alter table meal_plans       enable row level security;
 alter table grocery_lists    enable row level security;
 alter table household_items  enable row level security;
 alter table collections      enable row level security;
+alter table kitchen_references enable row level security;
 alter table sync_settings    enable row level security;
 
 create policy if not exists "Public access" on ingredients      for all using (true) with check (true);
@@ -124,6 +134,7 @@ create policy if not exists "Public access" on meal_plans       for all using (t
 create policy if not exists "Public access" on grocery_lists    for all using (true) with check (true);
 create policy if not exists "Public access" on household_items  for all using (true) with check (true);
 create policy if not exists "Public access" on collections      for all using (true) with check (true);
+create policy if not exists "Public access" on kitchen_references for all using (true) with check (true);
 create policy if not exists "Public access" on sync_settings    for all using (true) with check (true);`
 
 // ─── Generate a memorable sync code ─────────────────────────────────────────
@@ -380,6 +391,20 @@ async function syncCollections(
   )
 }
 
+async function syncReferences(
+  supabase: SupabaseClient,
+  code: string,
+  direction: 'both' | 'push' | 'pull',
+) {
+  const localItems = await getAllReferences()
+  return syncStore<KitchenReference>(
+    supabase, code, direction, 'kitchen_references', localItems,
+    r => r.id,
+    r => r.updatedAt,
+    saveReference,
+  )
+}
+
 // Settings fields that are safe to share across a household — excludes API keys,
 // theme, and other per-device/personal fields (see runSync for the full list).
 const SYNCED_SETTINGS_KEYS = [
@@ -488,6 +513,15 @@ export async function runSync(
     summary.updatedToNewer  += col.updatedToNewer
   } catch (e) {
     summary.errors.push(`Recipe collections: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
+  try {
+    const refs = await syncReferences(supabase, code, direction)
+    summary.addedLocally    += refs.addedLocally
+    summary.uploadedToCloud += refs.uploadedToCloud
+    summary.updatedToNewer  += refs.updatedToNewer
+  } catch (e) {
+    summary.errors.push(`Kitchen reference: ${e instanceof Error ? e.message : String(e)}`)
   }
 
   try {

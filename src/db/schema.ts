@@ -1,8 +1,8 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb'
-import type { AppSettings, Ingredient, Recipe, MealPlanDay, MealPlanWeekTemplate, MacroLogEntry, GroceryList, HouseholdItem, RecipeCollection } from '@/types'
+import type { AppSettings, Ingredient, Recipe, MealPlanDay, MealPlanWeekTemplate, MacroLogEntry, GroceryList, HouseholdItem, RecipeCollection, KitchenReference } from '@/types'
 
 const DB_NAME = 'MealPlannerDB'
-const DB_VERSION = 3
+const DB_VERSION = 4
 
 interface MealPlannerDB extends DBSchema {
   settings: {
@@ -58,6 +58,13 @@ interface MealPlannerDB extends DBSchema {
     value: RecipeCollection
     indexes: {
       'by-name': string
+    }
+  }
+  references: {
+    key: string
+    value: KitchenReference
+    indexes: {
+      'by-title': string
     }
   }
 }
@@ -121,6 +128,12 @@ export async function getDB(): Promise<IDBPDatabase<MealPlannerDB>> {
       if (!db.objectStoreNames.contains('collections')) {
         const store = db.createObjectStore('collections', { keyPath: 'id' })
         store.createIndex('by-name', 'name')
+      }
+
+      // V4: Kitchen reference cards
+      if (!db.objectStoreNames.contains('references')) {
+        const store = db.createObjectStore('references', { keyPath: 'id' })
+        store.createIndex('by-title', 'title')
       }
     },
   })
