@@ -20,7 +20,7 @@ Formatting notes for common cookbook layouts:
 
 If you cannot read the recipe clearly or are not confident about the values return a JSON object with a single field: confidence: "low" and a reason field explaining what was unclear. Do not guess at values you cannot clearly read. Return ONLY the JSON object, no explanation, no markdown, no code fences.`
 
-const FALLBACK_MODEL = 'gemini-2.5-flash'
+const FALLBACK_MODEL = 'gemini-2.5-flash-lite'
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {

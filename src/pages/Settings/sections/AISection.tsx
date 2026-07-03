@@ -13,11 +13,10 @@ const PROVIDER_OPTIONS: { value: AIProvider; label: string }[] = [
 ]
 
 const GEMINI_MODELS: { id: string; name: string; badge: string }[] = [
-  { id: 'gemini-2.5-flash',      name: 'Gemini 2.5 Flash',      badge: 'Recommended' },
-  { id: 'gemini-2.0-flash',      name: 'Gemini 2.0 Flash',      badge: '' },
-  { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', badge: 'Most Free Requests' },
-  { id: 'gemini-flash-latest',   name: 'Latest Flash',           badge: 'May Change' },
-  { id: 'gemini-2.5-pro',        name: 'Gemini 2.5 Pro',         badge: '50/day limit' },
+  { id: 'gemini-2.5-flash',        name: 'Gemini 2.5 Flash',        badge: 'Recommended' },
+  { id: 'gemini-2.5-flash-lite',   name: 'Gemini 2.5 Flash Lite',   badge: 'Most Free Requests' },
+  { id: 'gemini-3-flash-preview',  name: 'Gemini 3 Flash Preview',  badge: 'Preview' },
+  { id: 'gemini-3.5-flash',        name: 'Gemini 3.5 Flash',        badge: 'Newest' },
 ]
 
 const PROVIDER_HINTS: Record<AIProvider, string> = {
@@ -205,7 +204,7 @@ export function AISection() {
               })}
             </div>
             <p className={styles.hint}>
-              Not sure which to use? Start with Gemini 2.5 Flash. If you hit rate limits try Gemini 2.0 Flash Lite.
+              Not sure which to use? Start with Gemini 2.5 Flash. If you hit rate limits try Gemini 2.5 Flash Lite.
             </p>
             <div className={styles.modelCheckRow}>
               <Button

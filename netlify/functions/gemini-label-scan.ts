@@ -13,7 +13,7 @@ const PROMPT = `This is a photo of a nutrition facts label from a food product. 
 
 Return ONLY the JSON object, no explanation, no markdown, no code fences.`
 
-const FALLBACK_MODEL = 'gemini-2.5-flash'
+const FALLBACK_MODEL = 'gemini-2.5-flash-lite'
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {

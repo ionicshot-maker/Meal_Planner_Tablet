@@ -29,7 +29,7 @@ Rules:
 - suggestedTags must be chosen from: Chicken, Beef, Pork, Fish, Shrimp, Turkey, Vegetarian, Vegan, Crockpot, Oven, Stovetop, Grill, Instant Pot, Air Fryer, No-Cook, Easy, Quick, Gluten-Free, Dairy-Free, Kid-Friendly, Meal Prep, Beverages, Homemade, Dessert, Snack, Soup, Salad, Sandwich
 - Return ONLY the JSON object, no explanation, no markdown, no code fences.`
 
-const FALLBACK_MODEL = 'gemini-2.5-flash'
+const FALLBACK_MODEL = 'gemini-2.5-flash-lite'
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
