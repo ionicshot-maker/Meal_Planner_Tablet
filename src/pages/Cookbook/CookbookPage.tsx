@@ -201,11 +201,11 @@ export default function CookbookPage() {
         </div>
 
         <div className={styles.toolbarRight}>
-          <button className={styles.importBtn} onClick={() => setShowImport(true)}>
-            <Download size={15} style={{ verticalAlign: 'middle', marginRight: 4 }} />Import Recipe
+          <button className={styles.importBtn} onClick={() => setShowImport(true)} title="Import Recipe">
+            <Download size={15} style={{ verticalAlign: 'middle', marginRight: 4 }} /><span className={styles.btnLabel}>Import Recipe</span>
           </button>
-          <button className={styles.createBtn} onClick={() => { setImportPrefill(null); setEditingRecipe('new') }}>
-            <Plus size={15} style={{ verticalAlign: 'middle', marginRight: 2 }} />New Recipe
+          <button className={styles.createBtn} onClick={() => { setImportPrefill(null); setEditingRecipe('new') }} title="New Recipe">
+            <Plus size={15} style={{ verticalAlign: 'middle', marginRight: 2 }} /><span className={styles.btnLabel}>New Recipe</span>
           </button>
           <PageHelpButton />
         </div>

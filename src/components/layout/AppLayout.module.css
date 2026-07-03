@@ -62,6 +62,14 @@
   text-decoration: none;
 }
 
+/* Visible press feedback — without it, icon-only mobile nav items (no
+   text label at this width) can read as unresponsive/broken since a tap
+   on the already-active item produces no navigation and no other cue. */
+.navItem:active {
+  background-color: var(--color-selected);
+  transform: scale(0.94);
+}
+
 .navItem.active {
   background-color: var(--color-selected);
   color: var(--color-selected-text);
@@ -127,7 +135,7 @@
   .logoText { display: none; }
   .navList { flex-direction: row; padding: 0; gap: 0; }
   .navLabel { display: none; }
-  .navItem { padding: var(--space-2); }
-  .themeBtn { padding: var(--space-2); margin: 0; }
+  .navItem { padding: var(--space-2); min-width: var(--tap-min); min-height: var(--tap-min); justify-content: center; }
+  .themeBtn { padding: var(--space-2); margin: 0; min-width: var(--tap-min); min-height: var(--tap-min); justify-content: center; }
   .main { height: calc(100dvh - var(--header-h)); }
 }

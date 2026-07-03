@@ -21,14 +21,34 @@ import {
   parseDateLocal,
 } from '@/utils/mealPlanUtils'
 import { CalendarGrid } from './CalendarGrid'
+import { MobileDayStrip } from './MobileDayStrip'
 import { DayDetail } from './DayDetail'
 import { TemplateModal } from './TemplateModal'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import styles from './MealPlannerPage.module.css'
 
+// Matches the app-wide "compact mobile header" breakpoint — below this the
+// full 7-day grid can't fit legibly in portrait, so we switch to a 3-day
+// swipeable strip instead. Landscape / wider screens keep the full grid.
+const MOBILE_BREAKPOINT = '(max-width: 430px)'
+
+function useIsMobilePortrait(): boolean {
+  const [matches, setMatches] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(MOBILE_BREAKPOINT).matches : false
+  )
+  useEffect(() => {
+    const mql = window.matchMedia(MOBILE_BREAKPOINT)
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
+  return matches
+}
+
 export default function MealPlannerPage() {
   const { settings } = useSettings()
   const pageTitle = useHouseholdTitle('Meal Planner')
+  const isMobilePortrait = useIsMobilePortrait()
   const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart(new Date()))
   const [numWeeks, setNumWeeks] = useState(2)
   const [dayMap, setDayMap] = useState<Map<string, MealPlanDay>>(new Map())
@@ -86,11 +106,11 @@ export default function MealPlannerPage() {
   }, [])
 
   function handlePrevPeriod() {
-    setWeekStart(prev => addDays(prev, -7 * numWeeks))
+    setWeekStart(prev => addDays(prev, -7 * (isMobilePortrait ? 1 : numWeeks)))
   }
 
   function handleNextPeriod() {
-    setWeekStart(prev => addDays(prev, 7 * numWeeks))
+    setWeekStart(prev => addDays(prev, 7 * (isMobilePortrait ? 1 : numWeeks)))
   }
 
   function handleToday() {
@@ -158,15 +178,17 @@ export default function MealPlannerPage() {
         </div>
 
         <div className={styles.toolbarRight}>
-          <div className={styles.weekPicker}>
-            {([1, 2, 3, 4] as const).map(n => (
-              <button
-                key={n}
-                className={`${styles.weekBtn} ${numWeeks === n ? styles.weekBtnActive : ''}`}
-                onClick={() => setNumWeeks(n)}
-              >{n}w</button>
-            ))}
-          </div>
+          {!isMobilePortrait && (
+            <div className={styles.weekPicker}>
+              {([1, 2, 3, 4] as const).map(n => (
+                <button
+                  key={n}
+                  className={`${styles.weekBtn} ${numWeeks === n ? styles.weekBtnActive : ''}`}
+                  onClick={() => setNumWeeks(n)}
+                >{n}w</button>
+              ))}
+            </div>
+          )}
           <button className={styles.templateBtn} onClick={() => setShowTemplateModal(true)}>
             Templates
           </button>
@@ -193,14 +215,26 @@ export default function MealPlannerPage() {
       {/* Body: calendar + day detail */}
       <div className={styles.body}>
         <div className={styles.calendarArea}>
-          <CalendarGrid
-            dateRange={dateRange}
-            dayMap={dayMap}
-            recipes={recipes}
-            paydayMap={paydayMap}
-            selectedDate={selectedDate}
-            onSelectDate={date => setSelectedDate(prev => prev === date ? null : date)}
-          />
+          {isMobilePortrait ? (
+            <MobileDayStrip
+              weekStart={weekStart}
+              dayMap={dayMap}
+              recipes={recipes}
+              paydayMap={paydayMap}
+              selectedDate={selectedDate}
+              onSelectDate={date => setSelectedDate(prev => prev === date ? null : date)}
+              onNavigateWeek={delta => setWeekStart(prev => addDays(prev, 7 * delta))}
+            />
+          ) : (
+            <CalendarGrid
+              dateRange={dateRange}
+              dayMap={dayMap}
+              recipes={recipes}
+              paydayMap={paydayMap}
+              selectedDate={selectedDate}
+              onSelectDate={date => setSelectedDate(prev => prev === date ? null : date)}
+            />
+          )}
         </div>
 
         {selectedDate && selectedDay && (

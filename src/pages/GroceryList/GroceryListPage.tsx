@@ -84,13 +84,14 @@ export default function GroceryListPage() {
             onClick={() => setShowHousehold(true)}
             title="Household items"
           >
-            🏠 Household
+            🏠 <span className={styles.btnLabel}>Household</span>
           </button>
           <button
             className={styles.generateBtn}
             onClick={() => setShowGenerator(true)}
+            title={activeList ? 'New List' : 'Generate List'}
           >
-            {activeList ? '↺ New List' : '+ Generate List'}
+            {activeList ? <>↺ <span className={styles.btnLabel}>New List</span></> : <>+ <span className={styles.btnLabel}>Generate List</span></>}
           </button>
           <PageHelpButton />
         </div>

@@ -26,6 +26,13 @@
   .sm { min-height: var(--tap-min); }
 }
 
+/* Phone-width headers are tight on horizontal space — trim side padding
+   while keeping the 44px tap-target floor from above. */
+@media (max-width: 430px) {
+  .md { padding-left: var(--space-3); padding-right: var(--space-3); }
+  .lg { padding-left: var(--space-4); padding-right: var(--space-4); }
+}
+
 /* Variants */
 .primary {
   background-color: var(--color-accent);

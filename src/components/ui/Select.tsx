@@ -6,13 +6,14 @@ interface Props extends SelectHTMLAttributes<HTMLSelectElement> {
   error?: string
   hint?: string
   options: { value: string; label: string }[]
+  wrapperClassName?: string
 }
 
 export const Select = forwardRef<HTMLSelectElement, Props>(
-  ({ label, error, hint, options, className = '', id, ...rest }, ref) => {
+  ({ label, error, hint, options, className = '', wrapperClassName = '', id, ...rest }, ref) => {
     const selectId = id ?? label?.toLowerCase().replace(/\s+/g, '-')
     return (
-      <div className={styles.wrapper}>
+      <div className={`${styles.wrapper} ${wrapperClassName}`}>
         {label && <label className={styles.label} htmlFor={selectId}>{label}</label>}
         <select
           ref={ref}

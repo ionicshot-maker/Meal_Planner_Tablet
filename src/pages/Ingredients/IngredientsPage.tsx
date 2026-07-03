@@ -83,25 +83,27 @@ export default function IngredientsPage() {
       <header className={styles.header}>
         <h1 className={styles.heading}>{pageTitle}</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <Button variant="secondary" onClick={() => navigate('/import-ingredients')}><Download size={16} style={{ marginRight: 4, verticalAlign: 'middle' }} />Import</Button>
-          <Button onClick={createNew}>+ Add Ingredient</Button>
+          <Button variant="secondary" onClick={() => navigate('/import-ingredients')} title="Import"><Download size={16} style={{ marginRight: 4, verticalAlign: 'middle' }} /><span className={styles.btnLabel}>Import</span></Button>
+          <Button onClick={createNew} title="Add Ingredient">+ <span className={styles.btnLabel}>Add Ingredient</span></Button>
           <PageHelpButton />
         </div>
       </header>
 
       <div className={styles.toolbar}>
-        <Input
-          placeholder="Search ingredients…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className={styles.search}
-        />
-        <Select
-          options={categoryOptions}
-          value={filterCategory}
-          onChange={e => setFilterCategory(e.target.value)}
-          className={styles.categoryFilter}
-        />
+        <div className={styles.searchRow}>
+          <Input
+            placeholder="Search ingredients…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            wrapperClassName={styles.search}
+          />
+          <Select
+            options={categoryOptions}
+            value={filterCategory}
+            onChange={e => setFilterCategory(e.target.value)}
+            wrapperClassName={styles.categoryFilter}
+          />
+        </div>
         <Toggle
           label="Show archived"
           checked={showArchived}

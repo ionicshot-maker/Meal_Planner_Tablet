@@ -440,3 +440,9 @@
   .openLinkBtn { margin: var(--space-3) var(--space-4) var(--space-4); }
   .gettingStartedStep { padding: var(--space-4); }
 }
+
+@media (max-width: 430px) {
+  .header { padding: 8px var(--space-3); }
+  .heading { font-size: 18px; }
+  .subheading { font-size: var(--text-sm); }
+}

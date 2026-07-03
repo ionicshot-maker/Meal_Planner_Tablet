@@ -21,6 +21,11 @@
   color: var(--color-text);
 }
 
+@media (max-width: 430px) {
+  .header { padding: 8px var(--space-3); }
+  .heading { font-size: 18px; }
+}
+
 .layout {
   display: flex;
   flex: 1;

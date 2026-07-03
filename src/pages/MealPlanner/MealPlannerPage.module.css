@@ -11,6 +11,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
@@ -18,8 +19,17 @@
   flex-shrink: 0;
 }
 
-.toolbarLeft { display: flex; align-items: center; gap: var(--space-2); }
+.toolbarLeft { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .toolbarRight { display: flex; align-items: center; gap: var(--space-3); }
+
+@media (max-width: 430px) {
+  .toolbar { padding: 8px var(--space-3); gap: var(--space-2); }
+  .pageTitle { font-size: 18px; width: 100%; margin-right: 0; }
+  .toolbarLeft { width: 100%; gap: var(--space-2); }
+  .toolbarRight { width: 100%; justify-content: flex-end; }
+  .monthRange { font-size: var(--text-xs); }
+  .templateBtn { padding: var(--space-2) var(--space-3); min-height: var(--tap-min); }
+}
 
 .pageTitle {
   font-size: var(--text-base); font-weight: 700; color: var(--color-text);
