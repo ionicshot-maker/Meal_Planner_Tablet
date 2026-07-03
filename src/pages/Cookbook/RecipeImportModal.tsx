@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Image as ImageIcon } from 'lucide-react'
+import { Camera, Image as ImageIcon, X } from 'lucide-react'
+import ReactCrop, { centerCrop, makeAspectCrop, convertToPixelCrop, cropToCanvas, type PixelCrop } from 'react-image-crop'
+import 'react-image-crop/dist/ReactCrop.css'
 import { useSettings } from '@/context/SettingsContext'
 import {
   importRecipeFromUrl, importRecipeFromText, importRecipeFromPhoto,
@@ -12,7 +14,22 @@ import type { ImportNotice } from './RecipeEditor'
 import styles from './RecipeImportModal.module.css'
 
 type Tab = 'url' | 'paste' | 'photo'
-type PhotoStage = 'select' | 'preview' | 'lowConfidence'
+type PhotoStage = 'select' | 'webcam' | 'crop' | 'preview' | 'lowConfidence'
+
+type AspectPreset = { label: string; value: number | undefined }
+const CROP_PRESETS: AspectPreset[] = [
+  { label: 'Free', value: undefined },
+  { label: 'Square', value: 1 },
+  { label: '4:3', value: 4 / 3 },
+  { label: '16:9', value: 16 / 9 },
+]
+
+// Standard, reliable way to tell "is this a phone" — far more consistent across
+// browsers than feature/pointer-based heuristics (which failed on real iPhones).
+function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+}
 
 interface Props {
   onImported: (result: AIRecipeResult, notice?: ImportNotice, uncertainFields?: UncertainField[]) => void
@@ -35,8 +52,17 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false)
   const [lowConfidenceReason, setLowConfidenceReason] = useState('')
+  const [webcamError, setWebcamError] = useState('')
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const webcamStreamRef = useRef<MediaStream | null>(null)
+
+  // Crop stage state
+  const [crop, setCrop] = useState<PixelCrop | undefined>(undefined)
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop | undefined>(undefined)
+  const [cropAspect, setCropAspect] = useState<number | undefined>(undefined)
+  const imgRef = useRef<HTMLImageElement>(null)
 
   const aiConfigured = isRecipeImportAvailable(settings)
   const aiLabel = recipeAILabel(settings)
@@ -84,13 +110,20 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
 
   // ── Photo tab ──────────────────────────────────────────────────────────────
 
+  function resetCropState() {
+    setCrop(undefined)
+    setCompletedCrop(undefined)
+    setCropAspect(undefined)
+  }
+
   function loadPhotoFile(file: File | undefined) {
     if (!file || !file.type.startsWith('image/')) return
     setError('')
     const reader = new FileReader()
     reader.onload = () => {
       setPhotoDataUrl(reader.result as string)
-      setPhotoStage('preview')
+      resetCropState()
+      setPhotoStage('crop')
     }
     reader.readAsDataURL(file)
   }
@@ -124,10 +157,112 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
     }
     document.addEventListener('paste', handlePaste)
     return () => document.removeEventListener('paste', handlePaste)
-  }, [tab, photoStage])
+  }, [tab, photoStage])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Webcam capture (desktop) ──────────────────────────────────────────────
+
+  function stopWebcam() {
+    webcamStreamRef.current?.getTracks().forEach(t => t.stop())
+    webcamStreamRef.current = null
+  }
+
+  // Release the camera if the modal is closed while the webcam is still open.
+  useEffect(() => () => stopWebcam(), [])
+
+  useEffect(() => {
+    if (photoStage === 'webcam' && videoRef.current && webcamStreamRef.current) {
+      videoRef.current.srcObject = webcamStreamRef.current
+    }
+  }, [photoStage])
+
+  async function handleTakePhotoClick() {
+    setWebcamError('')
+
+    // Phones/tablets: the native camera app (via capture="environment") gives
+    // a better result than an in-page webcam widget — keep using it there.
+    if (isMobileDevice()) {
+      cameraInputRef.current?.click()
+      return
+    }
+
+    // Desktop: live webcam preview via getUserMedia, falling back to the file
+    // picker (the same hidden input, which desktop browsers treat as a plain
+    // file picker since they ignore capture="environment") if unavailable.
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setWebcamError('Your browser does not support camera access. Use Choose from Library or drag and drop a photo instead.')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
+      webcamStreamRef.current = stream
+      setPhotoStage('webcam')
+    } catch {
+      setWebcamError('Could not access your camera — it may be in use by another app, blocked, or unavailable. Use Choose from Library or drag and drop a photo instead.')
+    }
+  }
+
+  function handleCapturePhoto() {
+    const video = videoRef.current
+    if (!video || video.videoWidth === 0) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    stopWebcam()
+    setPhotoDataUrl(canvas.toDataURL('image/jpeg', 0.92))
+    resetCropState()
+    setPhotoStage('crop')
+  }
+
+  function handleCancelWebcam() {
+    stopWebcam()
+    setPhotoStage('select')
+  }
+
+  // ── Crop stage ─────────────────────────────────────────────────────────────
+
+  function onCropImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const { width, height } = e.currentTarget
+    applyCropAspect(cropAspect, width, height)
+  }
+
+  function applyCropAspect(aspect: number | undefined, widthArg?: number, heightArg?: number) {
+    const width = widthArg ?? imgRef.current?.width
+    const height = heightArg ?? imgRef.current?.height
+    if (!width || !height) return
+    setCropAspect(aspect)
+    const percentCrop = aspect
+      ? centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height), width, height)
+      : { unit: '%' as const, x: 5, y: 5, width: 90, height: 90 }
+    const pixelCrop = convertToPixelCrop(percentCrop, width, height)
+    setCrop(pixelCrop)
+    setCompletedCrop(pixelCrop)
+  }
+
+  function handleUseFullPhoto() {
+    resetCropState()
+    setPhotoStage('preview')
+  }
+
+  async function handleApplyCrop() {
+    const img = imgRef.current
+    if (!img || !completedCrop || completedCrop.width < 1 || completedCrop.height < 1) {
+      setPhotoStage('preview')
+      return
+    }
+    const canvas = document.createElement('canvas')
+    await cropToCanvas(img, canvas, completedCrop)
+    setPhotoDataUrl(canvas.toDataURL('image/jpeg', 0.92))
+    setPhotoStage('preview')
+  }
 
   function resetPhoto() {
+    stopWebcam()
     setPhotoDataUrl(null)
+    resetCropState()
+    setWebcamError('')
     setPhotoStage('select')
     setLowConfidenceReason('')
     setError('')
@@ -167,6 +302,15 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
       setLoading(false)
     }
   }
+
+  // Crop selection shown to the user, scaled from the displayed <img> size up
+  // to the photo's natural resolution (what actually gets cropped/sent).
+  const cropPixelDims = completedCrop && imgRef.current && imgRef.current.width > 0
+    ? {
+        width: Math.round(completedCrop.width * (imgRef.current.naturalWidth / imgRef.current.width)),
+        height: Math.round(completedCrop.height * (imgRef.current.naturalHeight / imgRef.current.height)),
+      }
+    : null
 
   return (
     <div className={styles.backdrop} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -327,17 +471,19 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
 
               {photoStage === 'select' && (
                 <>
-                  {/* Always shown on every device — capture="environment" opens the
-                      rear camera directly on mobile; on desktop it's simply ignored
-                      and this behaves like a normal file picker. No harm either way,
-                      so we don't try to detect touch/mobile to decide whether to show it. */}
+                  {/* Mobile: opens the native camera app via capture="environment"
+                      (handled below). Desktop: opens a live webcam preview via
+                      getUserMedia, falling back to the file picker if that's
+                      unavailable or denied. Either way this is the primary action. */}
                   <button
                     type="button"
                     className={styles.btnTakePhoto}
-                    onClick={() => cameraInputRef.current?.click()}
+                    onClick={handleTakePhotoClick}
                   >
                     <Camera size={20} /> Take Photo or Scan Recipe
                   </button>
+
+                  {webcamError && <div className={styles.error}>{webcamError}</div>}
 
                   <div
                     className={`${styles.dropzone} ${isDraggingPhoto ? styles.dropzoneActive : ''}`}
@@ -383,6 +529,77 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
                     </ul>
                   </div>
                 </>
+              )}
+
+              {photoStage === 'webcam' && (
+                <div className={styles.webcamStage}>
+                  <video ref={videoRef} autoPlay playsInline muted className={styles.webcamVideo} />
+                  <div className={styles.photoActionsRow}>
+                    <button type="button" className={styles.btnCancel} onClick={handleCancelWebcam}>
+                      Cancel
+                    </button>
+                    <button type="button" className={styles.btnImport} onClick={handleCapturePhoto}>
+                      <Camera size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+                      Capture
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {photoStage === 'crop' && photoDataUrl && (
+                <div className={styles.cropStage}>
+                  <div className={styles.cropAspectRow}>
+                    <span className={styles.cropAspectLabel}>Crop to:</span>
+                    {CROP_PRESETS.map(preset => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        className={`${styles.cropAspectBtn} ${cropAspect === preset.value ? styles.cropAspectBtnActive : ''}`}
+                        onClick={() => applyCropAspect(preset.value)}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className={styles.cropImageWrap}>
+                    <ReactCrop
+                      crop={crop}
+                      onChange={pixelCrop => setCrop(pixelCrop)}
+                      onComplete={pixelCrop => setCompletedCrop(pixelCrop)}
+                      aspect={cropAspect}
+                      minWidth={20}
+                      minHeight={20}
+                    >
+                      <img
+                        ref={imgRef}
+                        src={photoDataUrl}
+                        alt="Recipe to crop"
+                        onLoad={onCropImageLoad}
+                        className={styles.cropImage}
+                      />
+                    </ReactCrop>
+                  </div>
+
+                  {cropPixelDims && (
+                    <p className={styles.cropDimensions}>
+                      Selection: {cropPixelDims.width} × {cropPixelDims.height} px
+                    </p>
+                  )}
+
+                  <div className={styles.photoActionsRow}>
+                    <button type="button" className={styles.btnCancel} onClick={resetPhoto}>
+                      <X size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                      Back
+                    </button>
+                    <button type="button" className={styles.btnPhotoActionSecondary} onClick={handleUseFullPhoto}>
+                      Use Full Photo
+                    </button>
+                    <button type="button" className={styles.btnImport} onClick={handleApplyCrop}>
+                      Apply Crop
+                    </button>
+                  </div>
+                </div>
               )}
 
               {photoStage === 'preview' && photoDataUrl && (

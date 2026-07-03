@@ -391,10 +391,10 @@
 }
 .btnPhotoActionSecondary:hover { background: var(--color-border); }
 
-/* Primary action, shown on every device — big, full-width. The hidden input's
-   capture="environment" opens the rear camera directly on mobile; on desktop
-   the attribute is simply ignored and it behaves like a normal file picker,
-   which is a perfectly fine fallback there. */
+/* Primary action, shown on every device — big, full-width. On mobile this
+   opens the native camera app via capture="environment"; on desktop it opens
+   a live webcam preview (getUserMedia), falling back to the file picker if
+   that's unavailable or denied. */
 .btnTakePhoto {
   display: flex;
   align-items: center;
@@ -444,6 +444,89 @@
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: var(--color-bg);
+}
+
+/* ── Webcam capture (desktop) ── */
+.webcamStage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.webcamVideo {
+  width: 100%;
+  max-height: 420px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: #000;
+  /* Mirror the preview so it feels like looking in a mirror, matching most
+     webcam UIs — the captured frame itself is drawn unmirrored. */
+  transform: scaleX(-1);
+}
+
+/* ── Crop editor ── */
+.cropStage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cropAspectRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cropAspectLabel {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin-right: var(--space-1);
+}
+
+.cropAspectBtn {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.cropAspectBtn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+.cropAspectBtnActive {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+}
+.cropAspectBtnActive:hover { background: var(--color-accent-hover); color: #fff; }
+
+.cropImageWrap {
+  display: flex;
+  justify-content: center;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  /* Comfortably tappable crop handles on every device, not just under a
+     pointer:coarse media query — bumped up from the library's 12px default. */
+  --rc-drag-handle-size: 22px;
+  --rc-drag-handle-mobile-size: 24px;
+}
+
+.cropImage {
+  max-height: 60vh;
+  max-width: 100%;
+  display: block;
+}
+
+.cropDimensions {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 .qualityChecklist {
