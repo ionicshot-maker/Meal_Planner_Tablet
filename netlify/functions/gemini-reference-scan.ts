@@ -11,6 +11,8 @@ interface RequestBody {
 
 const PROMPT = `This is a photo of a page from a cookbook or kitchen reference book. Please extract all the text content and return ONLY a valid JSON object with these fields: title (string — the main heading of the page), contentType (one of: tips, herbs, pantry, measurements, charts, terms, presentation, notes), content (string — the full text content formatted with newlines), tableData (array of arrays if the content is primarily a table or chart, null otherwise), confidence (high or low). If the page contains diagrams or illustrations that cannot be described in text, note them briefly in the content field. If you cannot read the page clearly return confidence: low with a reason field.
 
+For tables and charts, extract ALL columns completely. For example a proportions table with columns Item, Amount, and Measurement should include all three columns with their full values. Never truncate or omit column values. If a table header row exists include it as the first row of the tableData array. Each row should be a complete array with one entry per column — never use null as a column value unless the cell is genuinely empty in the source.
+
 Return ONLY the JSON object, no explanation, no markdown, no code fences.`
 
 const FALLBACK_MODEL = 'gemini-3-flash'

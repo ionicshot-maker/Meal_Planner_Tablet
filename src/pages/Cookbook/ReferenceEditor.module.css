@@ -147,12 +147,16 @@
 }
 .contentArea:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 
-/* ── Table mode ── */
-.tableWrap { display: flex; flex-direction: column; gap: var(--space-2); }
-.table { border-collapse: collapse; width: 100%; }
+/* ── Table mode ──
+   Inputs are single-line by nature and can't wrap, so instead of truncating
+   we give each column a comfortable minimum width and let the whole table
+   scroll horizontally when there are more/wider columns than fit. */
+.tableWrap { display: flex; flex-direction: column; gap: var(--space-2); overflow-x: auto; }
+.table { border-collapse: collapse; width: auto; }
 .table td { padding: 2px; }
 .tableCell {
-  width: 100%;
+  width: 160px;
+  min-width: 160px;
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-border); border-radius: var(--radius-sm);
   background: var(--color-bg); color: var(--color-text); font-size: var(--text-sm); font-family: inherit;
