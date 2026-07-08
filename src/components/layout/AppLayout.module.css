@@ -1,6 +1,12 @@
 .shell {
   display: flex;
-  min-height: 100dvh;
+  /* Must be a definite height (not min-height) — .main below relies on
+     flex-grow to fill exactly the remaining space after the mobile top nav,
+     which only works when this ancestor has a definite size. With only
+     min-height, .main's flex-basis:0 collapses to content size instead of
+     the viewport, and any nested "sticky footer" (e.g. ReviewScreen's Save
+     button) gets pushed far below the fold instead of staying pinned. */
+  height: 100dvh;
 }
 
 /* ── Side nav ─────────────────────────────────────────────────────────────── */

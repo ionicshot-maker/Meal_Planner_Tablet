@@ -12,6 +12,7 @@
   box-shadow: var(--shadow-lg);
   width: min(600px, 95vw);
   max-height: 90vh;
+  max-height: 90dvh;
   display: flex; flex-direction: column;
   overflow: hidden;
 }

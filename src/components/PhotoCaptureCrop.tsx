@@ -50,6 +50,17 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete }: 
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | undefined>(undefined)
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined)
   const imgRef = useRef<HTMLImageElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+
+  // The webcam/crop stages can appear far down an already-scrolled-past
+  // capture form (title, tags, content fields, etc. above them) — bring the
+  // stage (and its action buttons) into view instead of leaving the user to
+  // discover they need to scroll further.
+  useEffect(() => {
+    if (stage === 'crop' || stage === 'webcam') {
+      stageRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }
+  }, [stage])
 
   function resetCropState() {
     setCrop(undefined)
@@ -263,7 +274,7 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete }: 
       )}
 
       {stage === 'webcam' && (
-        <div className={styles.webcamStage}>
+        <div className={styles.webcamStage} ref={stageRef}>
           <video ref={videoRef} autoPlay playsInline muted className={styles.webcamVideo} />
           <div className={styles.photoActionsRow}>
             <button type="button" className={styles.btnCancel} onClick={handleCancelWebcam}>
@@ -278,7 +289,7 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete }: 
       )}
 
       {stage === 'crop' && photoDataUrl && (
-        <div className={styles.cropStage}>
+        <div className={styles.cropStage} ref={stageRef}>
           <div className={styles.cropAspectRow}>
             <span className={styles.cropAspectLabel}>Crop to:</span>
             {CROP_PRESETS.map(preset => (

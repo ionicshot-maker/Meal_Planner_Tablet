@@ -15,6 +15,7 @@
 .editor {
   width: min(760px, 100vw);
   height: 100vh;
+  height: 100dvh;
   background: var(--color-surface);
   display: flex;
   flex-direction: column;
@@ -1032,4 +1033,21 @@
   gap: var(--space-2);
   flex-shrink: 0;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Narrow phones (e.g. iPhone SE): three footer buttons don't fit on one row —
+   stack them full-width instead of letting them overflow past the screen edge. */
+@media (max-width: 420px) {
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .footerBtns {
+    justify-content: stretch;
+  }
+  .footerBtns > button {
+    flex: 1;
+  }
 }

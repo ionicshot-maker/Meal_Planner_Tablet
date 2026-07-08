@@ -100,10 +100,21 @@
   line-height: 1.7;
 }
 
+/* Sticky within whichever scrollable ancestor hosts this component (modal
+   body, tab panel, etc.) so Capture/Apply Crop stays reachable without
+   hunting for it below a tall crop image or webcam preview on small screens. */
 .photoActionsRow {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-3) 0;
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  background: var(--color-bg);
+  border-top: 1px solid var(--color-border);
 }
 
 .btnCancel {
@@ -206,6 +217,12 @@
   max-height: 60vh;
   max-width: 100%;
   display: block;
+}
+
+/* Smaller cap on narrow phones — keeps more of the crop controls and the
+   sticky action row on screen together instead of forcing a long scroll. */
+@media (max-width: 480px) {
+  .cropImage { max-height: 38vh; }
 }
 
 .cropDimensions {

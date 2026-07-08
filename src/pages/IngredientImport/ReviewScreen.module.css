@@ -1,7 +1,12 @@
 .container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* flex:1 (not height:100%) — this panel shares its flex parent with a
+     sibling header bar (IngredientImportPage's .reviewHeader). height:100%
+     ignores that sibling and overflows by its height, pushing the sticky
+     footer below the fold; flex:1 correctly fills only the remaining space. */
+  flex: 1;
+  min-height: 0;
 }
 
 .scrollArea {
@@ -114,7 +119,9 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  flex-wrap: wrap;
   padding: var(--space-4) var(--space-6);
+  padding-bottom: var(--safe-bottom);
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
   background: var(--color-surface);
