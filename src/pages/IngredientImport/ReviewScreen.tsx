@@ -8,6 +8,7 @@ import { getAllIngredients, saveIngredient, calcCostPerServing } from '@/db/ingr
 import { newId, now } from '@/utils/ids'
 import { availableUnits } from '@/utils/units'
 import { findSmartMatches } from '@/utils/smartDuplicate'
+import { ScrollHint } from '@/components/ScrollHint'
 import { Toast } from './Toast'
 import type { Ingredient, IngredientVariant, IngredientUnit, Macros, NutritionSource } from '@/types'
 import styles from './ReviewScreen.module.css'
@@ -59,6 +60,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
   const [smartMatches, setSmartMatches] = useState<SmartMatchState | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [draftSaved, setDraftSaved] = useState(false)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   const handleSaveDraft = useCallback(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({
@@ -181,7 +183,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
 
   return (
     <div className={styles.container}>
-      <div className={styles.scrollArea}>
+      <div className={styles.scrollArea} ref={scrollAreaRef}>
         {notice ? (
           <div className={notice.level === 'success' ? styles.successNotice : styles.accuracyWarning}>
             <strong>{notice.level === 'success' ? '✅ ' : '⚠️ '}{notice.message}</strong>
@@ -322,6 +324,8 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
           </div>
         </Card>
       </div>
+
+      <ScrollHint targetRef={scrollAreaRef} className={styles.scrollHint} />
 
       <div className={styles.footer}>
         <Button variant="secondary" onClick={onCancel}>Back</Button>

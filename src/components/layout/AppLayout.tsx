@@ -2,6 +2,7 @@ import { ReactNode, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useTheme } from '@/context/ThemeContext'
 import { useSettings } from '@/context/SettingsContext'
+import { useVisualViewportHeight } from '@/hooks/useVisualViewportHeight'
 import {
   Carrot, Download, BookOpen, Calendar, BarChart2, ShoppingCart,
   Settings, HelpCircle, UtensilsCrossed, Sun, Moon, Monitor,
@@ -22,6 +23,11 @@ const NAV_ITEMS: { to: string; label: string; icon: ReactNode }[] = [
 export function AppLayout({ children }: { children: ReactNode }) {
   const { resolved, preference, setPreference } = useTheme()
   const { settings } = useSettings()
+  // 100dvh (the CSS fallback) only accounts for the browser's own toolbar —
+  // it doesn't shrink for the on-screen keyboard, which can otherwise cover
+  // a page's sticky footer (e.g. the ingredient-import review screen) while
+  // a field inside it has focus.
+  const vvh = useVisualViewportHeight()
 
   const appTitle = settings.householdName.trim()
     ? `${settings.householdName.trim()} Meal Planner`
@@ -40,7 +46,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const themeIcon = resolved === 'dark' ? <Sun size={18} /> : preference === 'system' ? <Monitor size={18} /> : <Moon size={18} />
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} style={vvh ? { height: vvh } : undefined}>
       <nav className={styles.nav} aria-label="Main navigation">
         <div className={styles.navTop}>
           <div className={styles.logo}>

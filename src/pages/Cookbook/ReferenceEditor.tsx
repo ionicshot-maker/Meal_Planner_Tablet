@@ -3,6 +3,9 @@ import { createPortal } from 'react-dom'
 import { Bold, Italic, List, ListOrdered, Camera, Sparkles, X } from 'lucide-react'
 import { useSettings } from '@/context/SettingsContext'
 import { PhotoCaptureCrop } from '@/components/PhotoCaptureCrop'
+import { ScrollHint } from '@/components/ScrollHint'
+import { useVisualViewportHeight } from '@/hooks/useVisualViewportHeight'
+import { isTouchDevice } from '@/utils/device'
 import { newId, now } from '@/utils/ids'
 import type { KitchenReference, ReferenceContentType } from '@/types'
 import { CONTENT_TYPES, CONTENT_TYPE_VALUES } from './referenceContentTypes'
@@ -49,6 +52,11 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
   const [photoDecisionPending, setPhotoDecisionPending] = useState(false)
 
   const contentRef = useRef<HTMLTextAreaElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  // Shrinks the centered modal (and where it's centered within) to the true
+  // visible area once the on-screen keyboard is up — 90dvh alone doesn't
+  // account for the keyboard and can leave the footer hidden behind it.
+  const vvh = useVisualViewportHeight()
   const hasGeminiKey = Boolean(settings.geminiApiKey)
   const sourceGroup = settings.recipeTags.find(g => g.group === 'Source')
   const availableSourceTags = (sourceGroup?.tags ?? []).filter(t => !sourceTags.includes(t))
@@ -209,14 +217,14 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
   }
 
   return createPortal(
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.panel} onClick={e => e.stopPropagation()}>
+    <div className={styles.overlay} style={vvh ? { height: vvh } : undefined} onClick={onClose}>
+      <div className={styles.panel} style={vvh ? { maxHeight: vvh - 32 } : undefined} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
           <span className={styles.title}>{reference ? 'Edit Reference' : 'Add Reference'}</span>
           <button className={styles.closeBtn} onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        <div className={styles.body}>
+        <div className={styles.body} ref={bodyRef}>
           <label className={styles.field}>
             <span className={styles.fieldLabel}>Title</span>
             <input
@@ -225,7 +233,7 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="e.g. Herb Substitution Guide"
-              autoFocus
+              autoFocus={!isTouchDevice()}
             />
           </label>
 
@@ -404,6 +412,8 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
             </div>
           )}
         </div>
+
+        <ScrollHint targetRef={bodyRef} className={styles.scrollHint} />
 
         <div className={styles.footer}>
           <button className={styles.btnSecondary} onClick={onClose}>Cancel</button>

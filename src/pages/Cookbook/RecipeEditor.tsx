@@ -13,6 +13,9 @@ import { buildIngredientMap, calcRecipeMacros, calcRecipeCost, normalizeUnit, fo
 import { availableUnits, parseTimeToMinutes, formatMinutes } from '@/utils/units'
 import { newId, now } from '@/utils/ids'
 import { scoreIngredientMatch } from '@/utils/ingredientMatch'
+import { isTouchDevice } from '@/utils/device'
+import { useVisualViewportHeight } from '@/hooks/useVisualViewportHeight'
+import { ScrollHint } from '@/components/ScrollHint'
 import type { Recipe, RecipeIngredient, RecipeStep, Ingredient, IngredientVariant, IngredientUnit } from '@/types'
 import type { AIRecipeResult, UncertainField } from '@/utils/aiImport'
 import styles from './RecipeEditor.module.css'
@@ -107,6 +110,12 @@ function rowsToIngredients(rows: DraftIngRow[]): RecipeIngredient[] {
 export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncertainFields: uncertainFieldsProp, referenceText, onSave, onClose }: Props) {
   const { settings } = useSettings()
   const isNew = !recipe?.id
+
+  // Actual visible height once the on-screen keyboard is factored in — a
+  // fixed/portaled panel sized purely off 100dvh doesn't shrink for the
+  // keyboard, which can otherwise cover the sticky footer while typing.
+  const vvh = useVisualViewportHeight()
+  const bodyRef = useRef<HTMLDivElement>(null)
 
   // Fields the AI couldn't read confidently — highlighted in amber until fixed
   const uncertainFields = useMemo(() => new Set(uncertainFieldsProp ?? []), [uncertainFieldsProp])
@@ -466,7 +475,10 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
   const units = availableUnits(settings.unitSystem).map(u => ({ value: u, label: u }))
 
   return createPortal(
-    <div className={`${styles.overlay} ${referenceText ? styles.overlaySplit : ''}`} role="dialog" aria-modal="true" aria-label={isNew ? 'New Recipe' : `Edit ${recipe?.name}`}>
+    <div
+      className={`${styles.overlay} ${referenceText ? styles.overlaySplit : ''}`}
+      role="dialog" aria-modal="true" aria-label={isNew ? 'New Recipe' : `Edit ${recipe?.name}`}
+    >
       {referenceText && (
         <div className={styles.referencePanel}>
           <div className={styles.referencePanelHeader}>
@@ -476,7 +488,10 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
           <pre className={styles.referenceText}>{referenceText}</pre>
         </div>
       )}
-      <div className={`${styles.editor} ${referenceText ? styles.editorFlexFill : ''}`}>
+      <div
+        className={`${styles.editor} ${referenceText ? styles.editorFlexFill : ''}`}
+        style={vvh ? { height: vvh } : undefined}
+      >
         {/* ── Header ── */}
         <header className={styles.header}>
           <div className={styles.headerLeft}>
@@ -488,7 +503,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="e.g. Creamy Garlic Pasta"
-                autoFocus={isNew}
+                autoFocus={isNew && !isTouchDevice()}
               />
             </div>
             <div className={styles.headerToggles}>
@@ -540,7 +555,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
         )}
 
         {/* ── Body ── */}
-        <div className={styles.body}>
+        <div className={styles.body} ref={bodyRef}>
           {/* ─ Details ─ */}
           <section className={styles.section}>
             <h3 className={styles.sectionTitle}>Details</h3>
@@ -834,6 +849,8 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
             />
           </section>
         </div>
+
+        <ScrollHint targetRef={bodyRef} className={styles.scrollHint} />
 
         {/* ── Footer ── */}
         <footer className={styles.footer}>
