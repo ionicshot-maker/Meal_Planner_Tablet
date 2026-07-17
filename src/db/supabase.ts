@@ -50,6 +50,28 @@ export function isSupabaseConfigured(settings: AppSettings): boolean {
   return Boolean(settings.supabaseUrl?.trim() && settings.supabaseAnonKey?.trim())
 }
 
+// ─── Keep-alive ping ──────────────────────────────────────────────────────
+// Free Supabase projects pause after 7 days with no activity. Pinging the DB
+// with a trivial query once a day (while the app is open) keeps it active.
+
+const KEEP_ALIVE_STORAGE_KEY = 'supabaseLastPingAt'
+const KEEP_ALIVE_MIN_INTERVAL_MS = 23 * 60 * 60 * 1000 // 23 hours
+
+export async function pingSupabaseKeepAlive(settings: AppSettings): Promise<void> {
+  const supabase = getSupabaseClient(settings.supabaseUrl, settings.supabaseAnonKey)
+  if (!supabase) return
+
+  const lastPing = Number(localStorage.getItem(KEEP_ALIVE_STORAGE_KEY) || 0)
+  if (Date.now() - lastPing < KEEP_ALIVE_MIN_INTERVAL_MS) return
+
+  try {
+    await supabase.from('ingredients').select('id', { count: 'exact', head: true }).limit(1)
+    localStorage.setItem(KEEP_ALIVE_STORAGE_KEY, String(Date.now()))
+  } catch {
+    // Ignore failures — will retry next time the app opens
+  }
+}
+
 // ─── SQL Setup Script (shown to user in the Cloud Sync UI) ──────────────────
 
 export const SUPABASE_SETUP_SQL = `-- Run this in your Supabase SQL editor (Database → SQL Editor → New Query)

@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/context/ThemeContext'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { SetupWizard } from '@/pages/Setup/SetupWizard'
 import { StarterLibraryPrompt } from '@/components/StarterLibraryPrompt'
+import { isSupabaseConfigured, pingSupabaseKeepAlive } from '@/db/supabase'
 
 const SettingsPage          = lazy(() => import('@/pages/Settings/SettingsPage'))
 const IngredientsPage       = lazy(() => import('@/pages/Ingredients/IngredientsPage'))
@@ -23,6 +24,13 @@ function AppRoutes() {
   useEffect(() => {
     document.documentElement.style.setProperty('--font-size-base', `${settings.fontSizePt ?? 14}pt`)
   }, [settings.fontSizePt])
+
+  // Keep the free-tier Supabase project from pausing due to inactivity.
+  useEffect(() => {
+    if (!isLoading && isSupabaseConfigured(settings)) {
+      void pingSupabaseKeepAlive(settings)
+    }
+  }, [isLoading, settings])
 
   return (
     <ThemeProvider
