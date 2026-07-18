@@ -30,10 +30,8 @@ export function convertVolume(value: number, from: VolumeUnit, to: VolumeUnit): 
   return ml / VOLUME_TO_ML[to]
 }
 
-const WEIGHT_UNITS_IMPERIAL: WeightUnit[] = ['oz', 'lb']
-const WEIGHT_UNITS_METRIC: WeightUnit[]   = ['g', 'kg']
-const VOLUME_UNITS_IMPERIAL: VolumeUnit[] = ['tsp', 'tbsp', 'cup', 'floz']
-const VOLUME_UNITS_METRIC: VolumeUnit[]   = ['ml', 'l', 'tsp', 'tbsp']
+const WEIGHT_UNITS_ALL: WeightUnit[] = ['g', 'kg', 'oz', 'lb']
+const VOLUME_UNITS_ALL: VolumeUnit[] = ['ml', 'l', 'tsp', 'tbsp', 'cup', 'floz']
 
 export function preferredWeightUnit(system: UnitSystem): WeightUnit {
   return system === 'imperial' ? 'oz' : 'g'
@@ -43,11 +41,12 @@ export function preferredVolumeUnit(system: UnitSystem): VolumeUnit {
   return system === 'imperial' ? 'cup' : 'ml'
 }
 
-export function availableUnits(system: UnitSystem): IngredientUnit[] {
-  const weight = system === 'imperial' ? WEIGHT_UNITS_IMPERIAL : WEIGHT_UNITS_METRIC
-  const volume = system === 'imperial' ? VOLUME_UNITS_IMPERIAL : VOLUME_UNITS_METRIC
+// Always exposes every weight/volume unit regardless of unitSystem — USDA
+// imports and other sources store data in units the user's system wouldn't
+// otherwise surface, so filtering here silently corrupted saved data.
+export function availableUnits(_system: UnitSystem): IngredientUnit[] {
   const count: IngredientUnit[] = ['each', 'package', 'jar', 'can', 'bag', 'box', 'slice', 'piece']
-  return [...weight, ...volume, ...count]
+  return [...WEIGHT_UNITS_ALL, ...VOLUME_UNITS_ALL, ...count]
 }
 
 export function formatQuantity(value: number, unit: IngredientUnit): string {
