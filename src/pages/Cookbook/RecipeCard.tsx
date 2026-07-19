@@ -1,12 +1,15 @@
 import { Heart, Clock, FolderPlus } from 'lucide-react'
-import type { Recipe, RecipeCollection } from '@/types'
-import { formatMacro } from '@/utils/recipeCalculations'
+import type { Recipe, RecipeCollection, Ingredient } from '@/types'
+import { formatMacro, buildIngredientMap } from '@/utils/recipeCalculations'
+import { getRecipeAllergens } from '@/utils/ingredientQuality'
+import { AllergenBadgeList } from '@/components/AllergenChips'
 import { formatMinutes } from '@/utils/units'
 import styles from './RecipeCard.module.css'
 
 interface Props {
   recipe: Recipe
   collections: RecipeCollection[]
+  allIngredients: Ingredient[]
   onView: () => void
   onEdit: () => void
   onToggleFavorite: () => void
@@ -18,10 +21,11 @@ interface Props {
   onCreateCollection: (name: string) => void
 }
 
-export function RecipeCard({ recipe, collections, onView, onEdit, onToggleFavorite, onSaveAsTemplate, onDelete, onUseTemplate, onAddToMealPlan, onAddToCollection, onCreateCollection }: Props) {
+export function RecipeCard({ recipe, collections, allIngredients, onView, onEdit, onToggleFavorite, onSaveAsTemplate, onDelete, onUseTemplate, onAddToMealPlan, onAddToCollection, onCreateCollection }: Props) {
   const totalTime = recipe.prepTimeMinutes + recipe.cookTimeMinutes
   const m = recipe.macrosPerServing
   const hasUnlinked = recipe.ingredients.some(ri => !ri.ingredientId)
+  const allergens = getRecipeAllergens(recipe.ingredients, buildIngredientMap(allIngredients))
 
   function handleCollectionClick() {
     if (collections.length === 0) {
@@ -114,6 +118,13 @@ export function RecipeCard({ recipe, collections, onView, onEdit, onToggleFavori
             {hasUnlinked && (
               <span className={styles.incompleteLabel}>Incomplete — missing ingredients</span>
             )}
+          </div>
+        )}
+
+        {/* Allergens */}
+        {allergens.length > 0 && (
+          <div className={styles.allergenRow}>
+            <AllergenBadgeList allergens={allergens} />
           </div>
         )}
 

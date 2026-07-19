@@ -158,6 +158,17 @@ const handler: Handler = async (event) => {
 
     console.log('[barcode-lookup] macros:', macros)
 
+    // Nutriscore ('a'..'e' lowercase in OFF) and Nova group (1-4) pass straight through;
+    // allergens_tags looks like ["en:milk","en:soy"] — strip the locale prefix and title-case.
+    const nutriscoreRaw = (p.nutriscore_grade as string | undefined)?.toUpperCase()
+    const nutriscore = nutriscoreRaw && ['A', 'B', 'C', 'D', 'E'].includes(nutriscoreRaw) ? nutriscoreRaw : undefined
+    const novaGroupRaw = p.nova_group
+    const novaGroup = typeof novaGroupRaw === 'number' && novaGroupRaw >= 1 && novaGroupRaw <= 4 ? novaGroupRaw : undefined
+    const allergensTags = (p.allergens_tags ?? []) as string[]
+    const allergens = allergensTags.map(t =>
+      t.replace(/^[a-z]{2}:/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    )
+
     const normalized = {
       product_name:         (p.product_name || p.product_name_en || '') as string,
       brands:               (p.brands || '') as string,
@@ -166,6 +177,10 @@ const handler: Handler = async (event) => {
       serving_display_unit: servingDisplayUnit,
       serving_quantity_g:   servingG,
       macros,
+      barcode:              barcode,
+      nutriscore,
+      novaGroup,
+      allergens,
     }
 
     return {

@@ -4,10 +4,12 @@ import { useSettings } from '@/context/SettingsContext'
 import { saveIngredient, getAllIngredients } from '@/db/ingredients'
 import { parseFraction } from '@/utils/fractionInput'
 import { newId, now } from '@/utils/ids'
-import type { Ingredient, IngredientUnit } from '@/types'
+import type { Ingredient, IngredientUnit, NutriscoreGrade, NovaGroupNum } from '@/types'
 import styles from './BulkEntryTab.module.css'
 
 const UNITS: IngredientUnit[] = ['g', 'oz', 'ml', 'cup', 'tbsp', 'tsp', 'each', 'slice', 'piece']
+const NUTRISCORE_OPTIONS = ['', 'A', 'B', 'C', 'D', 'E']
+const NOVA_OPTIONS = ['', '1', '2', '3', '4']
 
 function pf(s: string, fallback = 0): number {
   if (!s.trim()) return fallback
@@ -32,6 +34,10 @@ interface BulkRow {
   packageCost: string
   totalServings: string
   store: string
+  barcode: string
+  nutriscore: string
+  nova: string
+  allergens: string
   // ui state
   error: string
   saved: boolean
@@ -54,9 +60,18 @@ function blankRow(defaultCategory: string): BulkRow {
     packageCost: '',
     totalServings: '',
     store: '',
+    barcode: '',
+    nutriscore: '',
+    nova: '',
+    allergens: '',
     error: '',
     saved: false,
   }
+}
+
+function parseAllergens(raw: string): string[] | undefined {
+  const list = raw.split(',').map(a => a.trim()).filter(Boolean)
+  return list.length > 0 ? list : undefined
 }
 
 function validateRow(row: BulkRow): string {
@@ -144,6 +159,10 @@ export function BulkEntryTab({ onSaved }: Props) {
           totalServingsInPackage: totalServings,
           costPerServing,
           store: row.store || undefined,
+          barcode: row.barcode.trim() || undefined,
+          nutriscore: (row.nutriscore || undefined) as NutriscoreGrade | undefined,
+          novaGroup: (row.nova ? Number(row.nova) : undefined) as NovaGroupNum | undefined,
+          allergens: parseAllergens(row.allergens),
         })
         existing.updatedAt = now()
         await saveIngredient(existing)
@@ -172,6 +191,10 @@ export function BulkEntryTab({ onSaved }: Props) {
           totalServingsInPackage: totalServings,
           costPerServing: packageCost && totalServings ? packageCost / totalServings : undefined,
           store: row.store || undefined,
+          barcode: row.barcode.trim() || undefined,
+          nutriscore: (row.nutriscore || undefined) as NutriscoreGrade | undefined,
+          novaGroup: (row.nova ? Number(row.nova) : undefined) as NovaGroupNum | undefined,
+          allergens: parseAllergens(row.allergens),
         }
 
         const ingredient: Ingredient = {
@@ -226,6 +249,10 @@ export function BulkEntryTab({ onSaved }: Props) {
               <th className={styles.thNum}>Pkg $</th>
               <th className={styles.thNum}>Svgs</th>
               <th className={styles.thStore}>Store</th>
+              <th className={styles.thStore}>Barcode</th>
+              <th className={styles.thUnit}>Nutriscore</th>
+              <th className={styles.thUnit}>Nova</th>
+              <th className={styles.thStore}>Allergens</th>
               <th className={styles.thDel}></th>
             </tr>
           </thead>
@@ -273,6 +300,18 @@ export function BulkEntryTab({ onSaved }: Props) {
                 <td><input className={styles.cellNum} type="text" inputMode="decimal" value={row.packageCost} onChange={e => updateRow(row.id, { packageCost: e.target.value })} disabled={row.saved} /></td>
                 <td><input className={styles.cellNum} type="text" inputMode="decimal" value={row.totalServings} onChange={e => updateRow(row.id, { totalServings: e.target.value })} disabled={row.saved} /></td>
                 <td><input className={styles.cellInput} value={row.store} onChange={e => updateRow(row.id, { store: e.target.value })} placeholder="Walmart" disabled={row.saved} /></td>
+                <td><input className={styles.cellInput} value={row.barcode} onChange={e => updateRow(row.id, { barcode: e.target.value })} placeholder="UPC/EAN" disabled={row.saved} /></td>
+                <td>
+                  <select className={styles.cellSelect} value={row.nutriscore} onChange={e => updateRow(row.id, { nutriscore: e.target.value })} disabled={row.saved}>
+                    {NUTRISCORE_OPTIONS.map(o => <option key={o} value={o}>{o || '—'}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <select className={styles.cellSelect} value={row.nova} onChange={e => updateRow(row.id, { nova: e.target.value })} disabled={row.saved}>
+                    {NOVA_OPTIONS.map(o => <option key={o} value={o}>{o || '—'}</option>)}
+                  </select>
+                </td>
+                <td><input className={styles.cellInput} value={row.allergens} onChange={e => updateRow(row.id, { allergens: e.target.value })} placeholder="Gluten, Dairy" disabled={row.saved} /></td>
                 <td>
                   {row.saved ? (
                     <span className={styles.savedMark} title="Saved">✓</span>

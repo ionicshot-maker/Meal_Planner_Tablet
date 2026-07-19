@@ -1,4 +1,4 @@
-import type { MealPlanDay, Person, Recipe } from '@/types'
+import type { MealPlanDay, Person, Recipe, Ingredient } from '@/types'
 import { DayTile } from './DayTile'
 import styles from './CalendarGrid.module.css'
 
@@ -9,11 +9,13 @@ interface Props {
   dayMap: Map<string, MealPlanDay>
   recipes: Map<string, Recipe>
   paydayMap: Map<string, Person[]>
+  ingredientMap: Map<string, Ingredient>
+  watchedAllergens: string[]
   selectedDate: string | null
   onSelectDate: (date: string) => void
 }
 
-export function CalendarGrid({ dateRange, dayMap, recipes, paydayMap, selectedDate, onSelectDate }: Props) {
+export function CalendarGrid({ dateRange, dayMap, recipes, paydayMap, ingredientMap, watchedAllergens, selectedDate, onSelectDate }: Props) {
   const numWeeks = dateRange.length / 7
 
   return (
@@ -35,6 +37,8 @@ export function CalendarGrid({ dateRange, dayMap, recipes, paydayMap, selectedDa
               day={dayMap.get(date)}
               recipes={recipes}
               paydays={paydayMap.get(date)}
+              ingredientMap={ingredientMap}
+              watchedAllergens={watchedAllergens}
               isSelected={selectedDate === date}
               onSelect={() => onSelectDate(date)}
             />

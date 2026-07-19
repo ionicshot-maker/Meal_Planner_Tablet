@@ -59,6 +59,13 @@
   line-height: 1;
 }
 
+.allergenIcon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-warning);
+  line-height: 1;
+}
+
 /* Body area */
 .mealList {
   flex: 1;

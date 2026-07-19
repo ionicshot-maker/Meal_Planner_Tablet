@@ -821,7 +821,12 @@
   font-size: var(--text-xs);
   color: var(--color-text-muted);
   margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
+
+.ingQualityBadges { display: inline-flex; align-items: center; gap: 4px; }
 
 .qtyInput {
   width: 100%;

@@ -183,6 +183,24 @@
 .macroDot { color: var(--color-border); }
 .macroMeta { font-size: var(--text-xs); color: var(--color-text-muted); margin-left: var(--space-1); }
 
+.qualityBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.qualityItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
 /* ── Body ── */
 .body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
 

@@ -1,24 +1,27 @@
 import { useState, ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { useSettings } from '@/context/SettingsContext'
 import { useTheme } from '@/context/ThemeContext'
 import { Toggle, Card } from '@/components/ui'
+import { AllergenPicker } from '@/components/AllergenChips'
 import { HouseholdSection } from './sections/HouseholdSection'
 import { AISection } from './sections/AISection'
 import { ListsSection } from './sections/ListsSection'
 import { DataSection } from './sections/DataSection'
 import { SetupChecklist } from './sections/SetupChecklist'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
-import { Users, Palette, Plug, Salad, List, HardDrive } from 'lucide-react'
+import { Users, Palette, Plug, Salad, List, HardDrive, ScanBarcode } from 'lucide-react'
 import styles from './SettingsPage.module.css'
 import type { ThemePreference, UnitSystem, KitchenReferencePhotoPolicy } from '@/types'
 
-type Section = 'household' | 'preferences' | 'integrations' | 'nutrients' | 'lists' | 'data'
+type Section = 'household' | 'preferences' | 'integrations' | 'nutrients' | 'ingredients' | 'lists' | 'data'
 
 const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'household',    label: 'Household',    icon: <Users size={18} /> },
   { id: 'preferences',  label: 'Preferences',  icon: <Palette size={18} /> },
   { id: 'integrations', label: 'Integrations', icon: <Plug size={18} /> },
   { id: 'nutrients',    label: 'Nutrients',    icon: <Salad size={18} /> },
+  { id: 'ingredients',  label: 'Ingredients',  icon: <ScanBarcode size={18} /> },
   { id: 'lists',        label: 'Lists',        icon: <List size={18} /> },
   { id: 'data',         label: 'Data',         icon: <HardDrive size={18} /> },
 ]
@@ -77,6 +80,8 @@ export default function SettingsPage() {
           {active === 'nutrients' && (
             <NutrientsSection />
           )}
+
+          {active === 'ingredients' && <IngredientsSection />}
 
           {active === 'lists' && <ListsSection />}
 
@@ -326,6 +331,83 @@ function NutrientsSection() {
               className={styles.historyInput}
             />
             <span className={styles.fieldHint}>days (30–365, default 90)</span>
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Ingredients section ──────────────────────────────────────────────────────
+function IngredientsSection() {
+  const { settings, updateSettings } = useSettings()
+  const { ingredientDisplay, allergenWatchList } = settings
+
+  function toggleDisplay(key: keyof typeof ingredientDisplay) {
+    updateSettings({
+      ingredientDisplay: { ...ingredientDisplay, [key]: !ingredientDisplay[key] },
+    })
+  }
+
+  return (
+    <div className={styles.section}>
+      <h2 className={styles.sectionTitle}>Ingredients</h2>
+      <p className={styles.sectionDesc}>
+        Control how Nutriscore, Nova processing group, and allergen info show up across the app.
+      </p>
+
+      <Card>
+        <div className={styles.fieldGroup}>
+          <div className={styles.toggleRow}>
+            <div>
+              <div className={styles.fieldLabel}>Show Nutriscore grades on ingredient cards</div>
+              <div className={styles.fieldHint}>
+                A–E nutritional quality badge. <Link to="/help#ingredient-info-nutriscore">Learn more →</Link>
+              </div>
+            </div>
+            <Toggle checked={ingredientDisplay.showNutriscore} onChange={() => toggleDisplay('showNutriscore')} />
+          </div>
+
+          <div className={styles.divider} />
+
+          <div className={styles.toggleRow}>
+            <div>
+              <div className={styles.fieldLabel}>Show Nova Group on ingredient cards</div>
+              <div className={styles.fieldHint}>
+                1–4 food processing level badge. <Link to="/help#ingredient-info-nova">Learn more →</Link>
+              </div>
+            </div>
+            <Toggle checked={ingredientDisplay.showNovaGroup} onChange={() => toggleDisplay('showNovaGroup')} />
+          </div>
+
+          <div className={styles.divider} />
+
+          <div className={styles.toggleRow}>
+            <div>
+              <div className={styles.fieldLabel}>Show allergen badges on ingredient cards</div>
+              <div className={styles.fieldHint}>
+                Small chips for any flagged allergens. <Link to="/help#ingredient-info-allergens">Learn more →</Link>
+              </div>
+            </div>
+            <Toggle checked={ingredientDisplay.showAllergens} onChange={() => toggleDisplay('showAllergens')} />
+          </div>
+        </div>
+      </Card>
+
+      <h2 className={styles.sectionTitle} style={{ marginTop: 'var(--space-6)' }}>Allergen Alerts</h2>
+      <Card>
+        <div className={styles.field}>
+          <div className={styles.fieldLabel}>Watch for these allergens in the meal planner</div>
+          <div className={styles.fieldHint}>
+            The meal planner shows a warning icon on any meal that contains one of the allergens
+            you select here. None are selected by default — pick the ones that matter to your
+            household. <Link to="/help#ingredient-info-allergens">Learn more →</Link>
+          </div>
+          <div style={{ marginTop: 'var(--space-3)' }}>
+            <AllergenPicker
+              selected={allergenWatchList}
+              onChange={list => updateSettings({ allergenWatchList: list })}
+            />
           </div>
         </div>
       </Card>

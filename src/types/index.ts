@@ -74,6 +74,24 @@ export interface NutrientToggles {
   weight: boolean
 }
 
+// ─── Ingredient Quality (Nutriscore / Nova / Allergens) ──────────────────────
+export type NutriscoreGrade = 'A' | 'B' | 'C' | 'D' | 'E'
+export type NovaGroupNum = 1 | 2 | 3 | 4
+
+// The 12 allergens tracked app-wide (Settings → Ingredients lets a household
+// pick which of these to watch for in the meal planner).
+export const ALLERGENS = [
+  'Gluten', 'Dairy', 'Eggs', 'Nuts', 'Peanuts', 'Soy',
+  'Fish', 'Shellfish', 'Sesame', 'Celery', 'Mustard', 'Sulfites',
+] as const
+export type Allergen = typeof ALLERGENS[number]
+
+export interface IngredientDisplayToggles {
+  showNutriscore: boolean
+  showNovaGroup: boolean
+  showAllergens: boolean
+}
+
 // ─── Nutrition Source ────────────────────────────────────────────────────────
 export type NutritionSource = 'openfoodfacts' | 'gemini' | 'usda' | 'manual'
 
@@ -105,6 +123,8 @@ export interface AppSettings {
   starterLibrarySeeded: boolean
   starterLibraryVersion: number
   kitchenReferencePhotoPolicy: KitchenReferencePhotoPolicy
+  ingredientDisplay: IngredientDisplayToggles
+  allergenWatchList: string[]   // subset of ALLERGENS — meal planner warns when a planned meal contains one
   // Cloud sync
   supabaseUrl: string
   supabaseAnonKey: string
@@ -149,6 +169,10 @@ export interface IngredientVariant {
   usdaFdcId?: number
   store?: string
   notes?: string
+  barcode?: string
+  nutriscore?: NutriscoreGrade
+  novaGroup?: NovaGroupNum
+  allergens?: string[]
 }
 
 export interface Ingredient {

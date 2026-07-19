@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { MealPlanDay, MealSlotItem, MealItemRole, Recipe } from '@/types'
+import type { MealPlanDay, MealSlotItem, MealItemRole, Recipe, Ingredient } from '@/types'
 import { parseDateLocal, blankDayMeals } from '@/utils/mealPlanUtils'
 import { formatMinutes } from '@/utils/units'
 import { MealSlotSection } from './MealSlotSection'
@@ -10,6 +10,8 @@ interface Props {
   day: MealPlanDay
   recipes: Map<string, Recipe>
   allRecipes: Recipe[]
+  ingredientMap: Map<string, Ingredient>
+  watchedAllergens: string[]
   onUpdate: (day: MealPlanDay) => void
   onClose: () => void
 }
@@ -21,7 +23,7 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December']
 
-export function DayDetail({ date, day, recipes, allRecipes, onUpdate, onClose }: Props) {
+export function DayDetail({ date, day, recipes, allRecipes, ingredientMap, watchedAllergens, onUpdate, onClose }: Props) {
   const [showSnacks, setShowSnacks] = useState(day.meals.snacks.length > 0)
   const [draggingRecipeId, setDraggingRecipeId] = useState<string | null>(null)
 
@@ -129,6 +131,8 @@ export function DayDetail({ date, day, recipes, allRecipes, onUpdate, onClose }:
             items={meals[slotKey]}
             recipes={recipes}
             allRecipes={allRecipes}
+            ingredientMap={ingredientMap}
+            watchedAllergens={watchedAllergens}
             onUpdateItems={items => updateSlot(slotKey, items)}
             onDragOver={e => e.preventDefault()}
             onDrop={(e, role) => handleSlotDrop(e, slotKey, role)}
@@ -141,6 +145,8 @@ export function DayDetail({ date, day, recipes, allRecipes, onUpdate, onClose }:
             items={meals.snacks}
             recipes={recipes}
             allRecipes={allRecipes}
+            ingredientMap={ingredientMap}
+            watchedAllergens={watchedAllergens}
             onUpdateItems={items => updateSlot('snacks', items)}
             onDragOver={e => e.preventDefault()}
             onDrop={(e, role) => handleSlotDrop(e, 'snacks', role)}

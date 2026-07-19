@@ -46,6 +46,16 @@ export async function addVariantToIngredient(ingredientId: string, variant: Ingr
   await db.put('ingredients', ingredient)
 }
 
+// In-memory scan — barcode lives on the nested variant, not a top-level indexed
+// field, and the ingredient count in this app is small enough that a full scan
+// is simpler than denormalizing a separate barcode index.
+export async function findIngredientByBarcode(barcode: string): Promise<Ingredient | undefined> {
+  const code = barcode.trim()
+  if (!code) return undefined
+  const all = await getAllIngredients(true)
+  return all.find(i => i.variants.some(v => v.barcode === code))
+}
+
 export async function searchIngredients(query: string, includeArchived = false): Promise<Ingredient[]> {
   const all = await getAllIngredients(includeArchived)
   const q = query.toLowerCase().trim()

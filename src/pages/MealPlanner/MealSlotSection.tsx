@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import type { MealSlotItem, MealItemRole, Recipe } from '@/types'
+import { AlertTriangle } from 'lucide-react'
+import type { MealSlotItem, MealItemRole, Recipe, Ingredient } from '@/types'
+import { itemAllergenMatches } from '@/utils/mealPlanUtils'
 import { RecipePicker } from './RecipePicker'
 import styles from './MealSlotSection.module.css'
 
@@ -21,6 +23,8 @@ interface Props {
   items: MealSlotItem[]
   recipes: Map<string, Recipe>
   allRecipes: Recipe[]
+  ingredientMap: Map<string, Ingredient>
+  watchedAllergens: string[]
   onUpdateItems: (items: MealSlotItem[]) => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent, role: MealItemRole) => void
@@ -31,6 +35,8 @@ export function MealSlotSection({
   items,
   recipes,
   allRecipes,
+  ingredientMap,
+  watchedAllergens,
   onUpdateItems,
   onDragOver,
   onDrop,
@@ -119,6 +125,7 @@ export function MealSlotSection({
               ? (item.manualLabel ?? 'Leftover')
               : (recipe?.name ?? item.manualLabel ?? '—')
             const role = item.role ?? 'primary'
+            const allergenMatches = itemAllergenMatches(item, recipes, ingredientMap, watchedAllergens)
 
             return (
               <li key={item.id} className={styles.itemRow}>
@@ -129,6 +136,11 @@ export function MealSlotSection({
                   {label}
                   {item.isLeftover && <span className={styles.leftoverTag}> (leftover)</span>}
                 </span>
+                {allergenMatches.length > 0 && (
+                  <span className={styles.allergenIcon} title={`Contains: ${allergenMatches.join(', ')}`}>
+                    <AlertTriangle size={13} />
+                  </span>
+                )}
                 <button
                   className={`${styles.sharedBtn} ${item.shared ? styles.sharedActive : styles.individualActive}`}
                   onClick={() => toggleShared(item.id)}

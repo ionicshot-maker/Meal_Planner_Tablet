@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { MealPlanDay, Person, Recipe } from '@/types'
+import type { MealPlanDay, Person, Recipe, Ingredient } from '@/types'
 import { DayTile } from './DayTile'
 import { addDays, getWeekStart, parseDateLocal, toISODate, isToday } from '@/utils/mealPlanUtils'
 import styles from './MobileDayStrip.module.css'
@@ -11,6 +11,8 @@ interface Props {
   dayMap: Map<string, MealPlanDay>
   recipes: Map<string, Recipe>
   paydayMap: Map<string, Person[]>
+  ingredientMap: Map<string, Ingredient>
+  watchedAllergens: string[]
   selectedDate: string | null
   onSelectDate: (date: string) => void
   onNavigateWeek: (deltaWeeks: number) => void
@@ -25,7 +27,7 @@ interface Props {
  * ~430px; the full grid remains available in landscape / wider layouts.
  */
 export function MobileDayStrip({
-  weekStart, dayMap, recipes, paydayMap, selectedDate, onSelectDate, onNavigateWeek,
+  weekStart, dayMap, recipes, paydayMap, ingredientMap, watchedAllergens, selectedDate, onSelectDate, onNavigateWeek,
 }: Props) {
   const weekStartISO = toISODate(weekStart)
 
@@ -109,6 +111,8 @@ export function MobileDayStrip({
             day={dayMap.get(date)}
             recipes={recipes}
             paydays={paydayMap.get(date)}
+            ingredientMap={ingredientMap}
+            watchedAllergens={watchedAllergens}
             isSelected={selectedDate === date}
             onSelect={() => onSelectDate(date)}
           />

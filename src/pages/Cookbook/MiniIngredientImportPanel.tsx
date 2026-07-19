@@ -63,7 +63,10 @@ export function MiniIngredientImportPanel({ initialQuery, onSaved, onBack }: Pro
       </div>
       <div className={styles.tabBody}>
         {activeTab === 'barcode' && (
-          <BarcodeTab onReview={(draft, source) => { setReviewDraft(draft); setNutritionSource(source) }} />
+          <BarcodeTab
+            onReview={(draft, source) => { setReviewDraft(draft); setNutritionSource(source) }}
+            onExistingFound={onSaved}
+          />
         )}
         {activeTab === 'usda' && (
           <USDATab

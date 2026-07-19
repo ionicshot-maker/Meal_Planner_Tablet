@@ -3,7 +3,8 @@ import Quagga from '@ericblade/quagga2'
 import { Button, Input } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { newId, now } from '@/utils/ids'
-import type { Ingredient, IngredientUnit, Macros, NutritionSource } from '@/types'
+import { findIngredientByBarcode } from '@/db/ingredients'
+import type { Ingredient, IngredientUnit, Macros, NutritionSource, NutriscoreGrade, NovaGroupNum } from '@/types'
 import styles from './BarcodeTab.module.css'
 
 const DEFAULT_CATEGORIES = [
@@ -48,6 +49,10 @@ interface NormalizedProduct {
   serving_display_unit: string
   serving_quantity_g: number
   macros: Macros
+  barcode?: string
+  nutriscore?: NutriscoreGrade
+  novaGroup?: NovaGroupNum
+  allergens?: string[]
 }
 
 interface GeminiNutrition {
@@ -95,6 +100,10 @@ function normalizedToIngredient(product: NormalizedProduct, categories: string[]
       servingSize: product.serving_display_size,
       servingUnit: unit,
       macros: product.macros,
+      ...(product.barcode ? { barcode: product.barcode } : {}),
+      ...(product.nutriscore ? { nutriscore: product.nutriscore } : {}),
+      ...(product.novaGroup ? { novaGroup: product.novaGroup } : {}),
+      ...(product.allergens && product.allergens.length > 0 ? { allergens: product.allergens } : {}),
     }],
   }
 }
@@ -126,9 +135,12 @@ type QuaggaDetected = { codeResult: { code: string | null } }
 
 interface Props {
   onReview: (draft: Ingredient, source: NutritionSource) => void
+  /** Fires instead of onReview when the barcode already matches an ingredient
+   *  in the local database — skips the API call entirely. */
+  onExistingFound: (ingredient: Ingredient) => void
 }
 
-export function BarcodeTab({ onReview }: Props) {
+export function BarcodeTab({ onReview, onExistingFound }: Props) {
   const { settings } = useSettings()
   const [scanState, setScanState] = useState<ScanState>('idle')
   const [scanError, setScanError]   = useState('')
@@ -332,6 +344,14 @@ export function BarcodeTab({ onReview }: Props) {
     setLoading(true)
     setError('')
     try {
+      // Check the local database first — if this barcode is already saved, link to
+      // it directly instead of burning an API call (and works offline too).
+      const existing = await findIngredientByBarcode(code)
+      if (existing) {
+        onExistingFound(existing)
+        return
+      }
+
       const res = await fetch(`/api/barcode-lookup?barcode=${encodeURIComponent(code)}`)
       const json = await res.json() as { status: number; product?: NormalizedProduct; error?: string }
       if (!res.ok || json.status !== 1 || !json.product) {

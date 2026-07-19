@@ -1,16 +1,27 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import styles from './HelpPage.module.css'
 
 export default function HelpPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
+
+  // Deep-link support (e.g. a "Learn more" link from Settings): scroll to the
+  // hashed section on load. Only native full-page loads honor #hash natively —
+  // client-side route changes need this explicit scroll.
+  useEffect(() => {
+    if (!location.hash) return
+    const el = document.getElementById(location.hash.slice(1))
+    el?.scrollIntoView({ block: 'start' })
+  }, [location.hash])
 
   const TOC_ITEMS = [
     ['#welcome',         'Welcome'],
     ['#getting-started', 'Getting Started'],
     ['#ingredients',     'Ingredients'],
+    ['#ingredient-info', 'Understanding Your Ingredients'],
     ['#cookbook',        'Cookbook'],
     ['#planner',         'Meal Plan'],
     ['#grocery',         'Grocery List'],
@@ -98,6 +109,57 @@ export default function HelpPage() {
               <li><strong>Bulk Entry:</strong> In Import Ingredients, use the Bulk Entry tab to add many simple ingredients at once by typing them in a list.</li>
               <li><strong>Always On Hand:</strong> Mark things like salt, pepper, and olive oil as "Always On Hand." The grocery list will never add these items even when recipes use them — because you always have them in the kitchen.</li>
               <li><strong>Beverages filter:</strong> On the Ingredients page, tap the Beverages quick-filter button to see only your drink ingredients.</li>
+            </ul>
+          </div>
+        </section>
+
+        {/* ── Understanding Your Ingredients ──────────────────────────────── */}
+        <section id="ingredient-info" className={styles.section}>
+          <h2 className={styles.sectionTitle}>Understanding Your Ingredients</h2>
+          <div className={styles.featureCard}>
+            <p>
+              Every ingredient in your database can carry four extra pieces of information beyond
+              basic nutrition — a barcode, a Nutriscore grade, a Nova processing group, and allergen
+              flags. All four are completely optional.
+            </p>
+
+            <h3 id="ingredient-info-barcode" className={styles.subFeatureTitle}>Barcode</h3>
+            <ul className={styles.featureList}>
+              <li><strong>What it is:</strong> The UPC or EAN barcode number from the product packaging.</li>
+              <li><strong>How it helps:</strong> When you scan a barcode the app checks your local database first — if the product is already saved it links instantly without needing an internet connection or using up your Gemini quota.</li>
+              <li><strong>How to add it:</strong> Scan with your camera in the ingredient editor, or it fills in automatically when you import from a barcode scan.</li>
+            </ul>
+
+            <h3 id="ingredient-info-nutriscore" className={styles.subFeatureTitle}>Nutriscore Grade (A through E)</h3>
+            <ul className={styles.featureList}>
+              <li><strong>What it is:</strong> A European nutritional quality score calculated from the overall nutritional profile of a food.</li>
+              <li><strong>A (dark green):</strong> Best nutritional quality — fruits, vegetables, whole grains, lean proteins.</li>
+              <li><strong>B (light green):</strong> Good nutritional quality.</li>
+              <li><strong>C (yellow):</strong> Average nutritional quality.</li>
+              <li><strong>D (orange):</strong> Poor nutritional quality.</li>
+              <li><strong>E (red):</strong> Worst nutritional quality — heavily processed foods high in sugar, salt, or saturated fat.</li>
+              <li><strong>Important note:</strong> Nutriscore grades foods per 100g, so a food used in small amounts like butter or oil may score low but still be fine in moderation.</li>
+              <li><strong>How to use it:</strong> Use it as a quick guide when choosing between similar products — a lower Nutriscore does not mean you can never eat it, just that it is less nutritionally dense.</li>
+            </ul>
+
+            <h3 id="ingredient-info-nova" className={styles.subFeatureTitle}>Nova Group (1 through 4 — food processing level)</h3>
+            <ul className={styles.featureList}>
+              <li><strong>What it is:</strong> A food classification system developed by researchers at the University of São Paulo that groups foods by how much they have been processed.</li>
+              <li><strong>Group 1 (green — Unprocessed):</strong> Foods in their natural state — fresh fruits, vegetables, meat, eggs, milk, plain grains.</li>
+              <li><strong>Group 2 (light green — Minimally Processed):</strong> Simple processed foods — canned vegetables, dried fruits, plain yogurt, fresh bread, oils, flour, salt, sugar.</li>
+              <li><strong>Group 3 (yellow — Processed):</strong> Foods made by adding salt, sugar, or oil to Group 1 or 2 foods — cheese, cured meats, canned fish, fruits in syrup, salted nuts.</li>
+              <li><strong>Group 4 (red — Ultra Processed):</strong> Industrial formulations with many additives — soft drinks, packaged snacks, instant noodles, chicken nuggets, breakfast cereals, flavored yogurts.</li>
+              <li><strong>Why it matters:</strong> Research suggests that diets high in Group 4 ultra processed foods are associated with higher rates of obesity, diabetes, and heart disease — regardless of individual nutrient content.</li>
+              <li><strong>How to use it:</strong> Use it as awareness, not as a strict rule. Knowing that something is ultra processed helps you make informed choices about how often to include it in your meal planning.</li>
+            </ul>
+
+            <h3 id="ingredient-info-allergens" className={styles.subFeatureTitle}>Allergens</h3>
+            <ul className={styles.featureList}>
+              <li><strong>What it is:</strong> Common food allergens that have been flagged as present in an ingredient.</li>
+              <li><strong>The 12 tracked allergens are:</strong> Gluten, Dairy, Eggs, Nuts, Peanuts, Soy, Fish, Shellfish, Sesame, Celery, Mustard, Sulfites.</li>
+              <li><strong>How it helps:</strong> The app will warn you in the meal planner if a planned meal contains an ingredient with a flagged allergen, and recipe cards show all allergens present at a glance.</li>
+              <li><strong>Important:</strong> Allergen data comes from product labels or community databases and may not be 100% complete. Always check the actual product label for allergen information, especially for severe allergies.</li>
+              <li><strong>How to add:</strong> Toggle allergens on or off in the ingredient editor. When importing from Open Food Facts or a barcode scan, allergens fill in automatically when available.</li>
             </ul>
           </div>
         </section>

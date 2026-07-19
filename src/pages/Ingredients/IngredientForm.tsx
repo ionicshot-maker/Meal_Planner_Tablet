@@ -1,13 +1,34 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button, Input, NumericInput, Select, Toggle, Modal, Card } from '@/components/ui'
 import { BrandCombobox } from '@/components/BrandCombobox'
+import { InfoDot } from '@/components/QualityBadges'
+import { AllergenPicker } from '@/components/AllergenChips'
+import { BarcodeScanModal } from '@/components/BarcodeScanModal'
 import { useSettings } from '@/context/SettingsContext'
 import { newId, now } from '@/utils/ids'
 import { availableUnits } from '@/utils/units'
 import { calcCostPerServing } from '@/db/ingredients'
 import { parseFraction, formatNumeric } from '@/utils/fractionInput'
-import type { Ingredient, IngredientVariant, IngredientUnit, Macros } from '@/types'
+import { NUTRISCORE_DESCRIPTIONS, NOVA_DESCRIPTIONS } from '@/utils/ingredientQuality'
+import type { Ingredient, IngredientVariant, IngredientUnit, Macros, NutriscoreGrade, NovaGroupNum } from '@/types'
 import styles from './IngredientForm.module.css'
+
+const NUTRISCORE_OPTIONS = [
+  { value: '', label: 'Unknown' },
+  { value: 'A', label: 'A' },
+  { value: 'B', label: 'B' },
+  { value: 'C', label: 'C' },
+  { value: 'D', label: 'D' },
+  { value: 'E', label: 'E' },
+]
+
+const NOVA_OPTIONS = [
+  { value: '', label: 'Unknown' },
+  { value: '1', label: '1 — Unprocessed' },
+  { value: '2', label: '2 — Minimally Processed' },
+  { value: '3', label: '3 — Processed' },
+  { value: '4', label: '4 — Ultra Processed' },
+]
 
 const BLANK_MACROS: Macros = {
   calories: 0, protein: 0, carbs: 0, fiber: 0, sugar: 0, fat: 0, sodium: 0,
@@ -41,6 +62,7 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
   const [usdaQuery, setUsdaQuery] = useState('')
   const [usdaResults, setUsdaResults] = useState<USDAFoodItem[]>([])
   const [usdaSearching, setUsdaSearching] = useState(false)
+  const [scanningBarcode, setScanningBarcode] = useState(false)
 
   const units = availableUnits(settings.unitSystem).map(u => ({ value: u, label: u }))
   const categoryOptions = settings.ingredientCategories.map(c => ({ value: c, label: c }))
@@ -293,6 +315,65 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
                 </div>
               </div>
 
+              {/* Product Info: barcode, Nutriscore, Nova, allergens */}
+              <div className={styles.productInfo}>
+                <div className={styles.barcodeRow}>
+                  <Input
+                    label="Barcode (UPC/EAN)"
+                    value={activeVariant.barcode ?? ''}
+                    onChange={e => updateVariant({ barcode: e.target.value || undefined })}
+                    placeholder="e.g. 038000845017"
+                    wrapperClassName={styles.barcodeInput}
+                  />
+                  <Button type="button" variant="secondary" onClick={() => setScanningBarcode(true)}>
+                    📷 Scan
+                  </Button>
+                </div>
+
+                <div className={styles.row2}>
+                  <div>
+                    <div className={styles.miniLabelRow}>
+                      <span className={styles.miniLabel}>Nutriscore Grade</span>
+                      <InfoDot text={
+                        activeVariant.nutriscore
+                          ? `Nutriscore ${activeVariant.nutriscore} — ${NUTRISCORE_DESCRIPTIONS[activeVariant.nutriscore]}`
+                          : 'A nutrition quality score from A (best) to E (worst), calculated per 100g.'
+                      } />
+                    </div>
+                    <Select
+                      options={NUTRISCORE_OPTIONS}
+                      value={activeVariant.nutriscore ?? ''}
+                      onChange={e => updateVariant({ nutriscore: (e.target.value || undefined) as NutriscoreGrade | undefined })}
+                    />
+                  </div>
+                  <div>
+                    <div className={styles.miniLabelRow}>
+                      <span className={styles.miniLabel}>Nova Group</span>
+                      <InfoDot text={
+                        activeVariant.novaGroup
+                          ? `Nova ${activeVariant.novaGroup} — ${NOVA_DESCRIPTIONS[activeVariant.novaGroup]}`
+                          : 'A food processing classification from 1 (unprocessed) to 4 (ultra processed).'
+                      } />
+                    </div>
+                    <Select
+                      options={NOVA_OPTIONS}
+                      value={activeVariant.novaGroup != null ? String(activeVariant.novaGroup) : ''}
+                      onChange={e => updateVariant({ novaGroup: (e.target.value ? Number(e.target.value) : undefined) as NovaGroupNum | undefined })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className={styles.miniLabelRow}>
+                    <span className={styles.miniLabel}>Allergens</span>
+                  </div>
+                  <AllergenPicker
+                    selected={activeVariant.allergens ?? []}
+                    onChange={allergens => updateVariant({ allergens: allergens.length ? allergens : undefined })}
+                  />
+                </div>
+              </div>
+
               {/* USDA search */}
               <div className={styles.usdaSection}>
                 <span className={styles.usdaLabel}>Auto-fill macros from USDA FoodData Central</span>
@@ -363,6 +444,13 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
           )}
         </section>
       </div>
+
+      {scanningBarcode && (
+        <BarcodeScanModal
+          onDetected={code => { updateVariant({ barcode: code }); setScanningBarcode(false) }}
+          onClose={() => setScanningBarcode(false)}
+        />
+      )}
     </Modal>
   )
 }

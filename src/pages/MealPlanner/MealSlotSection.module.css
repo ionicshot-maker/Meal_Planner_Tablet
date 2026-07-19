@@ -80,6 +80,8 @@
   white-space: nowrap;
 }
 .leftoverName { font-style: italic; }
+
+.allergenIcon { display: inline-flex; align-items: center; color: var(--color-warning); flex-shrink: 0; }
 .leftoverTag { color: var(--color-text-muted); font-style: normal; }
 
 .sharedBtn {

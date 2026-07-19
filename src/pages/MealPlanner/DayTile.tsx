@@ -1,5 +1,6 @@
-import type { MealPlanDay, Person, Recipe } from '@/types'
-import { formatDayLabel, isToday, calcDayCost, calcDayTime, hasMissingMeals, getItemLabel } from '@/utils/mealPlanUtils'
+import { AlertTriangle } from 'lucide-react'
+import type { MealPlanDay, Person, Recipe, Ingredient } from '@/types'
+import { formatDayLabel, isToday, calcDayCost, calcDayTime, hasMissingMeals, getItemLabel, dayHasAllergenMatch } from '@/utils/mealPlanUtils'
 import { formatMinutes } from '@/utils/units'
 import styles from './DayTile.module.css'
 
@@ -8,16 +9,19 @@ interface Props {
   day?: MealPlanDay
   recipes: Map<string, Recipe>
   paydays?: Person[]
+  ingredientMap: Map<string, Ingredient>
+  watchedAllergens: string[]
   isSelected: boolean
   onSelect: () => void
 }
 
-export function DayTile({ date, day, recipes, paydays, isSelected, onSelect }: Props) {
+export function DayTile({ date, day, recipes, paydays, ingredientMap, watchedAllergens, isSelected, onSelect }: Props) {
   const today = isToday(date)
   const label = formatDayLabel(date)
   const missing = day ? hasMissingMeals(day) : true
   const cost = day ? calcDayCost(day, recipes) : null
   const totalTime = day ? calcDayTime(day, recipes) : 0
+  const hasAllergenWarning = day ? dayHasAllergenMatch(day, recipes, ingredientMap, watchedAllergens) : false
   const hasContent = day &&
     (day.meals.breakfast.length + day.meals.lunch.length + day.meals.dinner.length + day.meals.snacks.length) > 0
 
@@ -42,6 +46,11 @@ export function DayTile({ date, day, recipes, paydays, isSelected, onSelect }: P
       <div className={`${styles.tileHeader} ${showAmberHeader ? styles.tileHeaderAmber : ''}`}>
         <span className={styles.label}>{label}</span>
         <div className={styles.icons}>
+          {hasAllergenWarning && (
+            <span className={styles.allergenIcon} title="Contains a watched allergen">
+              <AlertTriangle size={12} />
+            </span>
+          )}
           {paydays && paydays.length > 0 && paydays.map(p => (
             <span
               key={p.id}

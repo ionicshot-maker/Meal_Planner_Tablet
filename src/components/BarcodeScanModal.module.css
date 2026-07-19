@@ -1,0 +1,50 @@
+.scannerArea {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #000;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.scannerContainer { width: 100%; height: 100%; }
+.scannerContainer :global(video),
+.scannerContainer :global(canvas) {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.35);
+  text-align: center;
+  padding: var(--space-4);
+}
+
+.scanBox {
+  width: 70%;
+  aspect-ratio: 2 / 1;
+  border: 2px solid #fff;
+  border-radius: var(--radius-sm);
+}
+.scanBoxFlash { border-color: var(--color-success); }
+
+.statusText { font-size: var(--text-sm); }
+
+.errorBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+}

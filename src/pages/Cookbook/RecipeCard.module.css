@@ -114,6 +114,8 @@
 }
 [data-theme="dark"] .incompleteLabel { color: #e6a817; }
 
+.allergenRow { display: flex; flex-wrap: wrap; }
+
 .actions {
   display: flex;
   gap: var(--space-2);

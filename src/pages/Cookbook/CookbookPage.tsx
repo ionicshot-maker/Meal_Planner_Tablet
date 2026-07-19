@@ -321,6 +321,7 @@ export default function CookbookPage() {
               key={recipe.id}
               recipe={recipe}
               collections={collections}
+              allIngredients={allIngredients}
               onView={() => openView(recipe)}
               onEdit={() => openEdit(recipe)}
               onToggleFavorite={() => handleToggleFavorite(recipe)}

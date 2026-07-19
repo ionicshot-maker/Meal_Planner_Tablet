@@ -127,6 +127,11 @@ export default function IngredientImportPage() {
     setReviewNotice(null)
   }
 
+  function handleExistingBarcodeFound(ingredient: Ingredient) {
+    addToast(`${ingredient.name} — already in your database`)
+    navigate(`/ingredients?edit=${ingredient.id}`)
+  }
+
   function handleUsdaReview(draft: Ingredient) {
     setReviewDraft(draft)
     setReviewNutritionSource('usda')
@@ -259,7 +264,7 @@ export default function IngredientImportPage() {
 
           <div className={styles.tabContent} role="tabpanel">
             {activeTab === 'barcode' && (
-              <BarcodeTab onReview={handleBarcodeReview} />
+              <BarcodeTab onReview={handleBarcodeReview} onExistingFound={handleExistingBarcodeFound} />
             )}
             {activeTab === 'usda' && (
               <USDATab onReview={handleUsdaReview} initialQuery={usdaInitialQuery} />

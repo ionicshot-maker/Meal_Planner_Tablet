@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button, Input, NumericInput, Select, Toggle, Card, Modal } from '@/components/ui'
 import { BrandCombobox } from '@/components/BrandCombobox'
+import { InfoDot } from '@/components/QualityBadges'
+import { AllergenPicker } from '@/components/AllergenChips'
 import { parseFraction, formatNumeric } from '@/utils/fractionInput'
 // useRef / parseFraction / formatNumeric used by MacroField below
 import { useSettings } from '@/context/SettingsContext'
@@ -8,10 +10,28 @@ import { getAllIngredients, saveIngredient, calcCostPerServing } from '@/db/ingr
 import { newId, now } from '@/utils/ids'
 import { availableUnits } from '@/utils/units'
 import { findSmartMatches } from '@/utils/smartDuplicate'
+import { NUTRISCORE_DESCRIPTIONS, NOVA_DESCRIPTIONS } from '@/utils/ingredientQuality'
 import { ScrollHint } from '@/components/ScrollHint'
 import { Toast } from './Toast'
-import type { Ingredient, IngredientVariant, IngredientUnit, Macros, NutritionSource } from '@/types'
+import type { Ingredient, IngredientVariant, IngredientUnit, Macros, NutritionSource, NutriscoreGrade, NovaGroupNum } from '@/types'
 import styles from './ReviewScreen.module.css'
+
+const NUTRISCORE_OPTIONS = [
+  { value: '', label: 'Unknown' },
+  { value: 'A', label: 'A' },
+  { value: 'B', label: 'B' },
+  { value: 'C', label: 'C' },
+  { value: 'D', label: 'D' },
+  { value: 'E', label: 'E' },
+]
+
+const NOVA_OPTIONS = [
+  { value: '', label: 'Unknown' },
+  { value: '1', label: '1 — Unprocessed' },
+  { value: '2', label: '2 — Minimally Processed' },
+  { value: '3', label: '3 — Processed' },
+  { value: '4', label: '4 — Ultra Processed' },
+]
 
 const BLANK_MACROS: Macros = { calories: 0, protein: 0, carbs: 0, fiber: 0, sugar: 0, fat: 0, sodium: 0 }
 
@@ -291,6 +311,56 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
           {v.usdaFdcId && (
             <p className={styles.fdcNote}>USDA FDC ID: {v.usdaFdcId}</p>
           )}
+
+          <div className={styles.row2} style={{ marginTop: 'var(--space-3)' }}>
+            <Input
+              label="Barcode (UPC/EAN)"
+              value={v.barcode ?? ''}
+              onChange={e => setVariantField({ barcode: e.target.value || undefined })}
+              placeholder="e.g. 038000845017"
+            />
+            <div>
+              <div className={styles.qualityLabelRow}>
+                <span className={styles.qualityLabel}>Nutriscore Grade</span>
+                <InfoDot text={
+                  v.nutriscore
+                    ? `Nutriscore ${v.nutriscore} — ${NUTRISCORE_DESCRIPTIONS[v.nutriscore]}`
+                    : 'A nutrition quality score from A (best) to E (worst), calculated per 100g.'
+                } />
+              </div>
+              <Select
+                options={NUTRISCORE_OPTIONS}
+                value={v.nutriscore ?? ''}
+                onChange={e => setVariantField({ nutriscore: (e.target.value || undefined) as NutriscoreGrade | undefined })}
+              />
+            </div>
+          </div>
+          <div className={styles.row2} style={{ marginTop: 'var(--space-3)' }}>
+            <div>
+              <div className={styles.qualityLabelRow}>
+                <span className={styles.qualityLabel}>Nova Group</span>
+                <InfoDot text={
+                  v.novaGroup
+                    ? `Nova ${v.novaGroup} — ${NOVA_DESCRIPTIONS[v.novaGroup]}`
+                    : 'A food processing classification from 1 (unprocessed) to 4 (ultra processed).'
+                } />
+              </div>
+              <Select
+                options={NOVA_OPTIONS}
+                value={v.novaGroup != null ? String(v.novaGroup) : ''}
+                onChange={e => setVariantField({ novaGroup: (e.target.value ? Number(e.target.value) : undefined) as NovaGroupNum | undefined })}
+              />
+            </div>
+            <div>
+              <div className={styles.qualityLabelRow}>
+                <span className={styles.qualityLabel}>Allergens</span>
+              </div>
+              <AllergenPicker
+                selected={v.allergens ?? []}
+                onChange={allergens => setVariantField({ allergens: allergens.length ? allergens : undefined })}
+              />
+            </div>
+          </div>
         </Card>
 
         <Card padding="md">

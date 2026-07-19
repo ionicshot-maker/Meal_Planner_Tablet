@@ -9,6 +9,7 @@ import { IngredientPicker } from './IngredientPicker'
 import type { PickedIngredient } from './IngredientPicker'
 import { IngredientLinkModal } from './IngredientLinkModal'
 import { getAllIngredients } from '@/db/ingredients'
+import { NutriscoreBadge, NovaBadge } from '@/components/QualityBadges'
 import { buildIngredientMap, calcRecipeMacros, calcRecipeCost, normalizeUnit, formatMacro } from '@/utils/recipeCalculations'
 import { availableUnits, parseTimeToMinutes, formatMinutes } from '@/utils/units'
 import { newId, now } from '@/utils/ids'
@@ -1140,6 +1141,12 @@ function IngredientRow({
           {variant && (
             <span className={styles.ingMacroHint}>
               {Math.round(variant.macros.calories)} cal · {variant.macros.protein}g P per serving
+              {(variant.nutriscore || variant.novaGroup) && (
+                <span className={styles.ingQualityBadges}>
+                  <NutriscoreBadge grade={variant.nutriscore} />
+                  <NovaBadge group={variant.novaGroup} />
+                </span>
+              )}
             </span>
           )}
         </div>

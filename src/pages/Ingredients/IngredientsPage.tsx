@@ -1,22 +1,44 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSettings, useHouseholdTitle } from '@/context/SettingsContext'
 import { Button, Input, Select, Card, Modal, Toggle } from '@/components/ui'
-import { Download, Info, X } from 'lucide-react'
-import { getAllIngredients, saveIngredient, archiveIngredient, deleteIngredient, searchIngredients } from '@/db/ingredients'
+import { Download, Info, X, SlidersHorizontal } from 'lucide-react'
+import { getAllIngredients, getIngredient, saveIngredient, archiveIngredient, deleteIngredient, searchIngredients } from '@/db/ingredients'
 import { newId, now } from '@/utils/ids'
 import { IngredientForm } from './IngredientForm'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
-import type { Ingredient } from '@/types'
+import { NutriscoreBadge, NovaBadge } from '@/components/QualityBadges'
+import { AllergenBadgeList, AllergenPicker } from '@/components/AllergenChips'
+import type { Ingredient, IngredientDisplayToggles } from '@/types'
 import styles from './IngredientsPage.module.css'
+
+const NUTRISCORE_FILTER_OPTIONS = [
+  { value: '', label: 'Any grade' },
+  { value: 'A', label: 'A' }, { value: 'B', label: 'B' }, { value: 'C', label: 'C' },
+  { value: 'D', label: 'D' }, { value: 'E', label: 'E' },
+]
+
+const NOVA_FILTER_OPTIONS = [
+  { value: '', label: 'Any group' },
+  { value: '1', label: '1 — Unprocessed' },
+  { value: '2', label: '2 — Minimally Processed' },
+  { value: '3', label: '3 — Processed' },
+  { value: '4', label: '4 — Ultra Processed' },
+]
 
 export default function IngredientsPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { settings } = useSettings()
   const pageTitle = useHouseholdTitle('Ingredient Database')
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [filterNutriscore, setFilterNutriscore] = useState('')
+  const [filterNova, setFilterNova] = useState('')
+  const [filterAllergenContains, setFilterAllergenContains] = useState<string[]>([])
+  const [filterAllergenExcludes, setFilterAllergenExcludes] = useState<string[]>([])
+  const [showMoreFilters, setShowMoreFilters] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [editing, setEditing] = useState<Ingredient | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Ingredient | null>(null)
@@ -35,9 +57,33 @@ export default function IngredientsPage() {
 
   useEffect(() => { load() }, [load])
 
-  const filtered = filterCategory
-    ? ingredients.filter(i => i.category === filterCategory)
-    : ingredients
+  // Deep-link support: /ingredients?edit=<id> opens that ingredient's editor directly —
+  // used when a barcode scan matches an ingredient already in the local database.
+  useEffect(() => {
+    const editId = searchParams.get('edit')
+    if (!editId) return
+    getIngredient(editId).then(ing => { if (ing) setEditing(ing) })
+    setSearchParams(prev => { prev.delete('edit'); return prev }, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const hasQualityFilters = filterNutriscore || filterNova || filterAllergenContains.length > 0 || filterAllergenExcludes.length > 0
+
+  const filtered = ingredients.filter(i => {
+    if (filterCategory && i.category !== filterCategory) return false
+    if (!hasQualityFilters) return true
+    if (filterNutriscore && !i.variants.some(v => v.nutriscore === filterNutriscore)) return false
+    if (filterNova && !i.variants.some(v => String(v.novaGroup) === filterNova)) return false
+    if (filterAllergenContains.length > 0 || filterAllergenExcludes.length > 0) {
+      const allAllergens = new Set(i.variants.flatMap(v => v.allergens ?? []))
+      if (filterAllergenContains.length > 0 && !filterAllergenContains.some(a => allAllergens.has(a))) return false
+      if (filterAllergenExcludes.length > 0 && filterAllergenExcludes.some(a => allAllergens.has(a))) return false
+    }
+    return true
+  })
+
+  const activeFilterCount =
+    (filterNutriscore ? 1 : 0) + (filterNova ? 1 : 0) + filterAllergenContains.length + filterAllergenExcludes.length
 
   function createNew() {
     const blank: Ingredient = {
@@ -103,6 +149,13 @@ export default function IngredientsPage() {
             onChange={e => setFilterCategory(e.target.value)}
             wrapperClassName={styles.categoryFilter}
           />
+          <Button
+            variant={activeFilterCount > 0 ? 'primary' : 'secondary'}
+            onClick={() => setShowMoreFilters(v => !v)}
+          >
+            <SlidersHorizontal size={16} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+          </Button>
         </div>
         <Toggle
           label="Show archived"
@@ -110,6 +163,45 @@ export default function IngredientsPage() {
           onChange={setShowArchived}
         />
       </div>
+
+      {showMoreFilters && (
+        <div className={styles.moreFiltersPanel}>
+          <div className={styles.moreFiltersRow}>
+            <div className={styles.moreFilterField}>
+              <span className={styles.moreFilterLabel}>Nutriscore</span>
+              <Select
+                options={NUTRISCORE_FILTER_OPTIONS}
+                value={filterNutriscore}
+                onChange={e => setFilterNutriscore(e.target.value)}
+              />
+            </div>
+            <div className={styles.moreFilterField}>
+              <span className={styles.moreFilterLabel}>Nova Group</span>
+              <Select
+                options={NOVA_FILTER_OPTIONS}
+                value={filterNova}
+                onChange={e => setFilterNova(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className={styles.moreFilterField}>
+            <span className={styles.moreFilterLabel}>Contains allergen</span>
+            <AllergenPicker selected={filterAllergenContains} onChange={setFilterAllergenContains} />
+          </div>
+          <div className={styles.moreFilterField}>
+            <span className={styles.moreFilterLabel}>Excludes allergen</span>
+            <AllergenPicker selected={filterAllergenExcludes} onChange={setFilterAllergenExcludes} />
+          </div>
+          {activeFilterCount > 0 && (
+            <button
+              className={styles.clearFiltersBtn}
+              onClick={() => { setFilterNutriscore(''); setFilterNova(''); setFilterAllergenContains([]); setFilterAllergenExcludes([]) }}
+            >
+              Clear quality filters
+            </button>
+          )}
+        </div>
+      )}
       <div className={styles.quickFilters}>
         {['Beverages', 'Meat', 'Produce', 'Dairy', 'Pantry', 'Frozen', 'Snacks'].map(cat => (
           settings.ingredientCategories.includes(cat) ? (
@@ -143,7 +235,7 @@ export default function IngredientsPage() {
         <div className={styles.empty}>Loading…</div>
       ) : filtered.length === 0 ? (
         <div className={styles.empty}>
-          {search || filterCategory
+          {search || filterCategory || hasQualityFilters
             ? 'No ingredients match your filters.'
             : 'No ingredients yet. Add your first ingredient to get started.'}
         </div>
@@ -153,6 +245,7 @@ export default function IngredientsPage() {
             <IngredientCard
               key={ingredient.id}
               ingredient={ingredient}
+              display={settings.ingredientDisplay}
               onEdit={() => setEditing(ingredient)}
               onArchive={() => handleArchive(ingredient)}
               onDelete={() => setConfirmDelete(ingredient)}
@@ -193,8 +286,9 @@ export default function IngredientsPage() {
 }
 
 // ─── Ingredient card ──────────────────────────────────────────────────────────
-function IngredientCard({ ingredient, onEdit, onArchive, onDelete }: {
+function IngredientCard({ ingredient, display, onEdit, onArchive, onDelete }: {
   ingredient: Ingredient
+  display: IngredientDisplayToggles
   onEdit: () => void
   onArchive: () => void
   onDelete: () => void
@@ -210,6 +304,8 @@ function IngredientCard({ ingredient, onEdit, onArchive, onDelete }: {
             {ingredient.name}
             {ingredient.archived && <span className={styles.archivedBadge}>Archived</span>}
             {ingredient.alwaysOnHand && <span className={styles.badge} title="Always on hand">✓</span>}
+            {display.showNutriscore && <NutriscoreBadge grade={defaultVariant?.nutriscore} showInfo />}
+            {display.showNovaGroup && <NovaBadge group={defaultVariant?.novaGroup} showInfo />}
           </div>
           <div className={styles.cardMeta}>
             <span>{ingredient.category}</span>
@@ -222,7 +318,13 @@ function IngredientCard({ ingredient, onEdit, onArchive, onDelete }: {
             {ingredient.perishable && (
               <span>{ingredient.frozen ? '❄️ Frozen' : '🥬 Perishable'}</span>
             )}
+            {defaultVariant?.barcode && (
+              <span className={styles.barcodeText}>#{defaultVariant.barcode}</span>
+            )}
           </div>
+          {display.showAllergens && defaultVariant?.allergens && defaultVariant.allergens.length > 0 && (
+            <AllergenBadgeList allergens={defaultVariant.allergens} />
+          )}
         </div>
 
         <div className={styles.cardActions}>

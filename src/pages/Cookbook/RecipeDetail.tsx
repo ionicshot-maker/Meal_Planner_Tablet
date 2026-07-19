@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Heart, Pencil, Trash2, X, Printer, Clock } from 'lucide-react'
 import { buildIngredientMap, calcRecipeMacros, calcRecipeCost, scaleIngredients, formatMacro } from '@/utils/recipeCalculations'
+import { getRecipeAllergens, getRecipeNovaAverage } from '@/utils/ingredientQuality'
 import { formatMinutes, formatQuantity } from '@/utils/units'
+import { NutriscoreBadge, NovaBadge } from '@/components/QualityBadges'
+import { AllergenBadgeList } from '@/components/AllergenChips'
 import type { Recipe, Ingredient } from '@/types'
 import styles from './RecipeDetail.module.css'
 
@@ -24,6 +27,8 @@ export function RecipeDetail({ recipe, allIngredients, onEdit, onClose, onToggle
   const hasUnlinked = recipe.ingredients.some(ri => !ri.ingredientId)
   const macros = calcRecipeMacros(scaledIngredients, ingredientMap, recipe.servings)
   const cost   = calcRecipeCost(scaledIngredients, ingredientMap, recipe.servings)
+  const allergens = getRecipeAllergens(recipe.ingredients, ingredientMap)
+  const novaAverage = getRecipeNovaAverage(recipe.ingredients, ingredientMap)
 
   const totalTime = recipe.prepTimeMinutes + recipe.cookTimeMinutes
   const scaledServings = Math.round(recipe.servings * scale)
@@ -177,6 +182,22 @@ ${recipe.notes ? `<h2>Notes</h2><div class="notes">${recipe.notes}</div>` : ''}
           </div>
         )}
 
+        {/* Quality: average Nova level + consolidated allergens */}
+        {(novaAverage || allergens.length > 0) && (
+          <div className={styles.qualityBar}>
+            {novaAverage && (
+              <span className={styles.qualityItem}>
+                Avg. processing: <NovaBadge group={novaAverage} showInfo />
+              </span>
+            )}
+            {allergens.length > 0 && (
+              <span className={styles.qualityItem}>
+                Allergens: <AllergenBadgeList allergens={allergens} />
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Body */}
         <div className={styles.body}>
 
@@ -206,6 +227,7 @@ ${recipe.notes ? `<h2>Notes</h2><div class="notes">${recipe.notes}</div>` : ''}
                         }
                       </span>
                       <span className={styles.ingName}>{displayName}{brandLabel}</span>
+                      {variant?.nutriscore && <NutriscoreBadge grade={variant.nutriscore} />}
                     </li>
                   )
                 })}

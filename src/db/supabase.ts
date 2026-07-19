@@ -433,6 +433,7 @@ const SYNCED_SETTINGS_KEYS = [
   'householdName', 'unitSystem', 'geminiModel', 'nutrientToggles', 'macroHistoryDays',
   'storePreferenceEnabled', 'householdSize', 'people', 'setupComplete',
   'ingredientCategories', 'recipeTags', 'brands', 'stores',
+  'ingredientDisplay', 'allergenWatchList',
 ] as const
 
 function pickSyncableSettings(settings: AppSettings): Record<string, unknown> {

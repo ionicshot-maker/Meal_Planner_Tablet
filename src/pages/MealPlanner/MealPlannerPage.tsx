@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { getAllRecipes } from '@/db/recipes'
+import { getAllIngredients } from '@/db/ingredients'
+import { buildIngredientMap } from '@/utils/recipeCalculations'
 import {
   getMealPlanDays,
   saveMealPlanDay,
@@ -9,7 +11,7 @@ import {
   getActiveGroceryListsInRange,
 } from '@/db/mealPlan'
 import { useSettings, useHouseholdTitle } from '@/context/SettingsContext'
-import type { Recipe, MealPlanDay, MealPlanWeekTemplate } from '@/types'
+import type { Recipe, MealPlanDay, MealPlanWeekTemplate, Ingredient } from '@/types'
 import {
   getWeekStart,
   addDays,
@@ -54,6 +56,7 @@ export default function MealPlannerPage() {
   const [dayMap, setDayMap] = useState<Map<string, MealPlanDay>>(new Map())
   const [recipes, setRecipes] = useState<Map<string, Recipe>>(new Map())
   const [allRecipes, setAllRecipes] = useState<Recipe[]>([])
+  const [allIngredients, setAllIngredients] = useState<Ingredient[]>([])
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [templates, setTemplates] = useState<MealPlanWeekTemplate[]>([])
   const [showTemplateModal, setShowTemplateModal] = useState(false)
@@ -80,7 +83,11 @@ export default function MealPlannerPage() {
       setAllRecipes(list)
     })
     getAllMealPlanTemplates().then(setTemplates)
+    getAllIngredients(false).then(setAllIngredients)
   }, [])
+
+  const ingredientMap = useMemo(() => buildIngredientMap(allIngredients), [allIngredients])
+  const watchedAllergens = settings.allergenWatchList ?? []
 
   // Load day plans when range changes
   useEffect(() => {
@@ -221,6 +228,8 @@ export default function MealPlannerPage() {
               dayMap={dayMap}
               recipes={recipes}
               paydayMap={paydayMap}
+              ingredientMap={ingredientMap}
+              watchedAllergens={watchedAllergens}
               selectedDate={selectedDate}
               onSelectDate={date => setSelectedDate(prev => prev === date ? null : date)}
               onNavigateWeek={delta => setWeekStart(prev => addDays(prev, 7 * delta))}
@@ -231,6 +240,8 @@ export default function MealPlannerPage() {
               dayMap={dayMap}
               recipes={recipes}
               paydayMap={paydayMap}
+              ingredientMap={ingredientMap}
+              watchedAllergens={watchedAllergens}
               selectedDate={selectedDate}
               onSelectDate={date => setSelectedDate(prev => prev === date ? null : date)}
             />
@@ -245,6 +256,8 @@ export default function MealPlannerPage() {
               day={selectedDay}
               recipes={recipes}
               allRecipes={allRecipes}
+              ingredientMap={ingredientMap}
+              watchedAllergens={watchedAllergens}
               onUpdate={handleDayUpdate}
               onClose={() => setSelectedDate(null)}
             />

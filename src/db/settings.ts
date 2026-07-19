@@ -83,6 +83,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   starterLibrarySeeded: false,
   starterLibraryVersion: 0,
   kitchenReferencePhotoPolicy: 'ask',
+  ingredientDisplay: {
+    showNutriscore: true,
+    showNovaGroup: true,
+    showAllergens: true,
+  },
+  allergenWatchList: [],
   supabaseUrl: '',
   supabaseAnonKey: '',
   householdSyncCode: '',

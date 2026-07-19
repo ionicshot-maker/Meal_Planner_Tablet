@@ -1,4 +1,5 @@
-import type { DayMeals, MealPlanDay, MealSlotItem, Person, Recipe, PayFrequency } from '@/types'
+import type { DayMeals, MealPlanDay, MealSlotItem, Person, Recipe, PayFrequency, Ingredient } from '@/types'
+import { getRecipeAllergens } from './ingredientQuality'
 
 export function getWeekStart(date: Date): Date {
   const d = new Date(date)
@@ -183,6 +184,35 @@ export function dayHasAnyMeals(day: MealPlanDay): boolean {
     day.meals.snacks.length > 0 ||
     (day.meals.drinks?.length ?? 0) > 0
   )
+}
+
+// Watched allergens (from Settings → Ingredients) that a meal-slot item's recipe contains.
+export function itemAllergenMatches(
+  item: MealSlotItem,
+  recipes: Map<string, Recipe>,
+  ingredientMap: Map<string, Ingredient>,
+  watched: string[]
+): string[] {
+  if (watched.length === 0 || !item.recipeId) return []
+  const r = recipes.get(item.recipeId)
+  if (!r) return []
+  const allergens = getRecipeAllergens(r.ingredients, ingredientMap)
+  return allergens.filter(a => watched.includes(a))
+}
+
+export function dayHasAllergenMatch(
+  day: MealPlanDay,
+  recipes: Map<string, Recipe>,
+  ingredientMap: Map<string, Ingredient>,
+  watched: string[]
+): boolean {
+  if (watched.length === 0) return false
+  for (const slot of [day.meals.breakfast, day.meals.lunch, day.meals.dinner, day.meals.snacks]) {
+    for (const item of slot) {
+      if (itemAllergenMatches(item, recipes, ingredientMap, watched).length > 0) return true
+    }
+  }
+  return false
 }
 
 export function getItemLabel(item: MealSlotItem, recipes: Map<string, Recipe>): string {
