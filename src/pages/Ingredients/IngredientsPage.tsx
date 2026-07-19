@@ -90,7 +90,7 @@ export default function IngredientsPage() {
     const blank: Ingredient = {
       id: newId(),
       name: '',
-      category: settings.ingredientCategories[0] ?? 'Pantry',
+      category: settings.ingredientCategories[0] ?? 'Baking & Pantry',
       perishable: false,
       frozen: false,
       alwaysOnHand: false,
@@ -121,7 +121,7 @@ export default function IngredientsPage() {
   }
 
   const categoryOptions = [
-    { value: '', label: 'All categories' },
+    { value: '', label: 'All Categories' },
     ...settings.ingredientCategories.map(c => ({ value: c, label: c })),
   ]
 
@@ -204,20 +204,6 @@ export default function IngredientsPage() {
           )}
         </div>
       )}
-      <div className={styles.quickFilters}>
-        {['Beverages', 'Meat', 'Produce', 'Dairy', 'Pantry', 'Frozen', 'Snacks'].map(cat => (
-          settings.ingredientCategories.includes(cat) ? (
-            <button
-              key={cat}
-              className={`${styles.quickFilter} ${filterCategory === cat ? styles.quickFilterActive : ''}`}
-              onClick={() => setFilterCategory(filterCategory === cat ? '' : cat)}
-            >
-              {cat}
-            </button>
-          ) : null
-        ))}
-      </div>
-
       {settings.starterLibrarySeeded && !bannerDismissed && (
         <div className={styles.infoBanner}>
           <span className={styles.infoBannerText}>

@@ -110,7 +110,7 @@ export function normalizeIngredient(raw: RawIngredient): Ingredient | null {
   return {
     id,
     name,
-    category: raw.category || 'Pantry',
+    category: raw.category || 'Baking & Pantry',
     perishable: raw.perishable ?? first.perishable ?? false,
     frozen: raw.frozen ?? first.frozen ?? false,
     alwaysOnHand: raw.alwaysOnHand ?? first.alwaysOnHand ?? false,

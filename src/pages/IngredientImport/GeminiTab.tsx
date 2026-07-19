@@ -85,7 +85,7 @@ export function GeminiTab({ onReview, initialQuery }: Props) {
   const didAutoLookup = useRef(false)
 
   const userCategories = settings.ingredientCategories
-  const defaultCategory = userCategories[0] ?? 'Pantry'
+  const defaultCategory = userCategories[0] ?? 'Baking & Pantry'
   const hasKey = Boolean(settings.geminiApiKey)
 
   // Auto-trigger lookup when the tab is opened with a pre-filled name from the recipe editor

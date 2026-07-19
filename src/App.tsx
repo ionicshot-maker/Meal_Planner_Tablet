@@ -7,6 +7,7 @@ import { SetupWizard } from '@/pages/Setup/SetupWizard'
 import { StarterLibraryPrompt } from '@/components/StarterLibraryPrompt'
 import { isSupabaseConfigured, pingSupabaseKeepAlive } from '@/db/supabase'
 import { repairLegacyIngredientData } from '@/db/ingredients'
+import { migrateIngredientCategories } from '@/db/settings'
 
 const SettingsPage          = lazy(() => import('@/pages/Settings/SettingsPage'))
 const IngredientsPage       = lazy(() => import('@/pages/Ingredients/IngredientsPage'))
@@ -18,7 +19,7 @@ const IngredientImportPage  = lazy(() => import('@/pages/IngredientImport/Ingred
 const HelpPage              = lazy(() => import('@/pages/Help/HelpPage'))
 
 function AppRoutes() {
-  const { settings, updateSettings, isLoading } = useSettings()
+  const { settings, updateSettings, reloadSettings, isLoading } = useSettings()
 
   // Text Size setting — device-local, applied as a CSS custom property on the
   // root element so every rem-based --text-* token scales proportionally.
@@ -42,6 +43,22 @@ function AppRoutes() {
     repairLegacyIngredientData().then(count => {
       if (count > 0) console.log(`[data repair] Fixed ${count} ingredient(s) with legacy/raw data.`)
     })
+  }, [isLoading])
+
+  // One-time migration from the old 15-category ingredient list to the expanded
+  // 21-category list — remaps existing ingredients' category field and the
+  // household's stored category list. Cheap no-op once already migrated.
+  useEffect(() => {
+    if (isLoading) return
+    migrateIngredientCategories().then(async ({ categoriesUpdated, ingredientsRemapped }) => {
+      if (categoriesUpdated || ingredientsRemapped > 0) {
+        console.log(`[category migration] Updated category list: ${categoriesUpdated}, remapped ${ingredientsRemapped} ingredient(s).`)
+      }
+      // The migration writes settings straight to IndexedDB, bypassing this context's
+      // local state — reload so the category list updates without a page refresh.
+      if (categoriesUpdated) await reloadSettings()
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading])
 
   return (

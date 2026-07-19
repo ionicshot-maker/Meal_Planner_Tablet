@@ -87,7 +87,7 @@ interface Props {
 
 export function BulkEntryTab({ onSaved }: Props) {
   const { settings } = useSettings()
-  const defaultCategory = settings.ingredientCategories[0] ?? 'Pantry'
+  const defaultCategory = settings.ingredientCategories[0] ?? 'Baking & Pantry'
   const [rows, setRows] = useState<BulkRow[]>(() => Array.from({ length: 5 }, () => blankRow(defaultCategory)))
   const [saving, setSaving] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)

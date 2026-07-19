@@ -8,37 +8,49 @@ import type { Ingredient, IngredientUnit, Macros, NutritionSource, NutriscoreGra
 import styles from './BarcodeTab.module.css'
 
 const DEFAULT_CATEGORIES = [
-  'Meat', 'Seafood', 'Dairy', 'Eggs', 'Produce', 'Frozen',
-  'Pantry', 'Bakery', 'Condiments', 'Seasonings', 'Beverages',
-  'Snacks', 'Canned Goods', 'Deli', 'Household',
+  'Meat & Poultry', 'Seafood', 'Dairy', 'Eggs', 'Produce', 'Canned Goods',
+  'Dry Beans & Legumes', 'Pasta & Noodles', 'Rice & Grains', 'Bread & Bakery',
+  'Breakfast & Cereal', 'Snacks', 'Frozen', 'Beverages', 'Condiments & Sauces',
+  'Seasonings & Spices', 'Baking & Pantry', 'Soups & Broths', 'Packaged Meals',
+  'Deli & Prepared', 'Household Items',
 ]
 
-// Seasonings is checked before Condiments — many spice products carry a "condiment" tag in OFF
+// Order matters: more specific categories are checked before broader ones that
+// share keywords (e.g. "soup"/"bean" would otherwise be caught by Canned Goods
+// before Soups & Broths / Dry Beans & Legumes get a chance; Seasonings before
+// Condiments since many spice products carry a "condiment" tag in OFF).
 function mapOFFCategoryToApp(offCategories: string[], appCategories: string[]): string {
   const tags = offCategories.map(t => t.toLowerCase())
   const checks: [string[], string][] = [
-    [['meat', 'beef', 'pork', 'poultry', 'chicken', 'turkey'], 'Meat'],
+    [['meat', 'beef', 'pork', 'poultry', 'chicken', 'turkey'], 'Meat & Poultry'],
     [['seafood', 'fish', 'shrimp', 'salmon', 'tuna'], 'Seafood'],
     [['dairy', 'milk', 'cheese', 'yogurt', 'butter', 'cream'], 'Dairy'],
     [['egg'], 'Eggs'],
     [['produce', 'vegetable', 'fruit', 'fresh'], 'Produce'],
     [['frozen'], 'Frozen'],
-    [['bread', 'bakery', 'bagel', 'muffin', 'pastry', 'baked'], 'Bakery'],
+    [['soup', 'broth', 'stock'], 'Soups & Broths'],
+    [['bean', 'legume', 'lentil', 'chickpea'], 'Dry Beans & Legumes'],
+    [['pasta', 'noodle', 'macaroni', 'spaghetti'], 'Pasta & Noodles'],
+    [['rice', 'grain', 'quinoa', 'oat', 'barley', 'couscous'], 'Rice & Grains'],
+    [['bread', 'bakery', 'bagel', 'muffin', 'pastry', 'baked'], 'Bread & Bakery'],
+    [['cereal', 'breakfast', 'granola', 'pancake', 'waffle'], 'Breakfast & Cereal'],
     [['spice', 'seasoning', 'herb', 'cinnamon', 'garlic', 'paprika', 'cumin', 'turmeric',
       'oregano', 'basil', 'thyme', 'ginger', 'nutmeg', 'cloves', 'chili', 'cayenne',
-      'salt', 'pepper', 'ground-spice'], 'Seasonings'],
-    [['sauce', 'condiment', 'dressing', 'ketchup', 'mustard', 'mayo', 'salsa', 'vinegar', 'marinade'], 'Condiments'],
+      'salt', 'pepper', 'ground-spice'], 'Seasonings & Spices'],
+    [['sauce', 'condiment', 'dressing', 'ketchup', 'mustard', 'mayo', 'salsa', 'vinegar', 'marinade'], 'Condiments & Sauces'],
     [['beverage', 'drink', 'juice', 'soda', 'water', 'coffee', 'tea'], 'Beverages'],
     [['snack', 'chip', 'cracker', 'cookie', 'candy', 'chocolate'], 'Snacks'],
-    [['canned', 'bean', 'soup', 'tomato'], 'Canned Goods'],
-    [['deli', 'cold cut', 'lunch meat'], 'Deli'],
+    [['ready meal', 'frozen dinner', 'meal kit', 'packaged meal'], 'Packaged Meals'],
+    [['canned', 'tomato'], 'Canned Goods'],
+    [['deli', 'cold cut', 'lunch meat', 'prepared'], 'Deli & Prepared'],
+    [['household', 'cleaning', 'paper towel', 'foil', 'trash bag'], 'Household Items'],
   ]
   for (const [keywords, cat] of checks) {
     if (keywords.some(k => tags.some(t => t.includes(k)))) {
       if (appCategories.includes(cat)) return cat
     }
   }
-  return appCategories[0] ?? 'Pantry'
+  return appCategories[0] ?? 'Baking & Pantry'
 }
 
 interface NormalizedProduct {

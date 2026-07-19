@@ -15,7 +15,7 @@ interface Props {
   onClose: () => void
 }
 
-const BLANK = { name: '', category: 'Household', brand: '', store: '', price: '', notes: '', alwaysOnHand: false }
+const BLANK = { name: '', category: 'Household Items', brand: '', store: '', price: '', notes: '', alwaysOnHand: false }
 
 function makeGroceryItem(h: HouseholdItem): GroceryItem {
   return {
@@ -23,7 +23,7 @@ function makeGroceryItem(h: HouseholdItem): GroceryItem {
     name: h.name,
     quantity: 1,
     unit: 'each' as IngredientUnit,
-    category: h.category || 'Household',
+    category: h.category || 'Household Items',
     brand: h.brand || undefined,
     store: h.store || undefined,
     unitPrice: h.price,
@@ -51,7 +51,7 @@ export function HouseholdModal({ items, hasActiveList, onItemsChange, onAddToLis
     const item: HouseholdItem = {
       id: crypto.randomUUID(),
       name,
-      category: form.category.trim() || 'Household',
+      category: form.category.trim() || 'Household Items',
       brand: form.brand.trim() || undefined,
       store: form.store || undefined,
       price: form.price ? parseFloat(form.price) : undefined,
@@ -95,7 +95,7 @@ export function HouseholdModal({ items, hasActiveList, onItemsChange, onAddToLis
 
   const grouped = new Map<string, HouseholdItem[]>()
   for (const item of items) {
-    const cat = item.category || 'Household'
+    const cat = item.category || 'Household Items'
     if (!grouped.has(cat)) grouped.set(cat, [])
     grouped.get(cat)!.push(item)
   }

@@ -25,7 +25,7 @@ function householdToGroceryItem(h: HouseholdItem): GroceryItem {
     name: h.name,
     quantity: 1,
     unit: 'each' as IngredientUnit,
-    category: h.category || 'Household',
+    category: h.category || 'Household Items',
     brand: h.brand || undefined,
     store: h.store || undefined,
     unitPrice: h.price,

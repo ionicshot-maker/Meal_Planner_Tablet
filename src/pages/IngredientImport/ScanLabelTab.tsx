@@ -130,7 +130,7 @@ export function ScanLabelTab({ onReview }: Props) {
 
   const hasKey = Boolean(settings.geminiApiKey)
   const userCategories = settings.ingredientCategories
-  const defaultCategory = userCategories[0] ?? 'Pantry'
+  const defaultCategory = userCategories[0] ?? 'Baking & Pantry'
 
   async function handlePhotoCaptured(dataUrl: string) {
     setError('')

@@ -93,7 +93,7 @@ export function StarterLibraryPrompt() {
               data — meats, produce, dairy, grains, seasonings, and more — ready to add to your database.
             </p>
             <div className={styles.categories}>
-              {['Meat', 'Seafood', 'Eggs', 'Dairy', 'Produce', 'Pantry', 'Seasonings', 'Bakery', 'Condiments', 'Beverages'].map(c => (
+              {['Meat & Poultry', 'Seafood', 'Eggs', 'Dairy', 'Produce', 'Baking & Pantry', 'Seasonings & Spices', 'Bread & Bakery', 'Condiments & Sauces', 'Beverages'].map(c => (
                 <span key={c} className={styles.chip}>{c}</span>
               ))}
             </div>

@@ -92,7 +92,7 @@ export function USDATab({ onReview, initialQuery }: Props) {
   const [error, setError] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const defaultCategory = settings.ingredientCategories[0] ?? 'Pantry'
+  const defaultCategory = settings.ingredientCategories[0] ?? 'Baking & Pantry'
 
   async function handleSearch() {
     const names = namesInput.split('\n').map(n => n.trim()).filter(Boolean)

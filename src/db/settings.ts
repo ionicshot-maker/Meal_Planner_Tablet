@@ -24,9 +24,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   people: [],
   setupComplete: false,
   ingredientCategories: [
-    'Meat', 'Seafood', 'Dairy', 'Eggs', 'Produce', 'Frozen',
-    'Pantry', 'Bakery', 'Condiments', 'Seasonings', 'Beverages',
-    'Snacks', 'Canned Goods', 'Deli', 'Household',
+    'Meat & Poultry', 'Seafood', 'Dairy', 'Eggs', 'Produce', 'Canned Goods',
+    'Dry Beans & Legumes', 'Pasta & Noodles', 'Rice & Grains', 'Bread & Bakery',
+    'Breakfast & Cereal', 'Snacks', 'Frozen', 'Beverages', 'Condiments & Sauces',
+    'Seasonings & Spices', 'Baking & Pantry', 'Soups & Broths', 'Packaged Meals',
+    'Deli & Prepared', 'Household Items',
   ],
   recipeTags: [
     { group: 'Protein',     tags: ['Chicken', 'Beef', 'Pork', 'Fish', 'Shrimp', 'Turkey', 'Lamb', 'Vegetarian', 'Vegan', 'Seafood', 'Eggs', 'Tofu', 'Beans', 'Peanut Butter', 'Beverages'] },
@@ -95,6 +97,61 @@ export const DEFAULT_SETTINGS: AppSettings = {
   familyShareCode: '',
   familyShareRole: 'owner',
   updatedAt: new Date(0).toISOString(),
+}
+
+// Maps every category name from the old 15-category set to its new expanded-category
+// counterpart. Entries that already match a new category name (Seafood, Eggs, etc.) map
+// to themselves so the migration below can treat "known old name" and "already current"
+// uniformly.
+export const CATEGORY_MIGRATION_MAP: Record<string, string> = {
+  'Meat': 'Meat & Poultry',
+  'Seafood': 'Seafood',
+  'Dairy': 'Dairy',
+  'Eggs': 'Eggs',
+  'Produce': 'Produce',
+  'Frozen': 'Frozen',
+  'Pantry': 'Baking & Pantry',
+  'Bakery': 'Bread & Bakery',
+  'Condiments': 'Condiments & Sauces',
+  'Seasonings': 'Seasonings & Spices',
+  'Beverages': 'Beverages',
+  'Snacks': 'Snacks',
+  'Canned Goods': 'Canned Goods',
+  'Deli': 'Deli & Prepared',
+  'Household': 'Household Items',
+}
+
+// One-time migration for the ingredient-category expansion (old 15 → new 21 names).
+// Updates the household's stored category list in place (new defaults plus any custom
+// categories they'd added that aren't part of the built-in set) and remaps every
+// ingredient's `category` field via CATEGORY_MIGRATION_MAP. Cheap no-op once everything
+// already uses the new names — safe to call on every app load.
+export async function migrateIngredientCategories(): Promise<{ categoriesUpdated: boolean; ingredientsRemapped: number }> {
+  const settings = await loadSettings()
+  const custom = settings.ingredientCategories.filter(
+    c => !(c in CATEGORY_MIGRATION_MAP) && !DEFAULT_SETTINGS.ingredientCategories.includes(c)
+  )
+  const mergedCategories = [...DEFAULT_SETTINGS.ingredientCategories, ...custom]
+  const categoriesUpdated = mergedCategories.length !== settings.ingredientCategories.length
+    || mergedCategories.some((c, i) => c !== settings.ingredientCategories[i])
+  if (categoriesUpdated) {
+    await saveSettings({ ...settings, ingredientCategories: mergedCategories })
+  }
+
+  const db = await getDB()
+  const allIngredients = await db.getAll('ingredients')
+  let ingredientsRemapped = 0
+  for (const ingredient of allIngredients) {
+    const mapped = CATEGORY_MIGRATION_MAP[ingredient.category]
+    if (mapped && mapped !== ingredient.category) {
+      ingredient.category = mapped
+      ingredient.updatedAt = new Date().toISOString()
+      await db.put('ingredients', ingredient)
+      ingredientsRemapped++
+    }
+  }
+
+  return { categoriesUpdated, ingredientsRemapped }
 }
 
 function mergeDefaultTags(current: RecipeTagGroup[]): RecipeTagGroup[] {
