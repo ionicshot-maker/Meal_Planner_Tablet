@@ -173,6 +173,7 @@ export interface IngredientVariant {
   nutriscore?: NutriscoreGrade
   novaGroup?: NovaGroupNum
   allergens?: string[]
+  priceLastUpdated?: string   // ISO date — stamped whenever packageCost is changed and saved
 }
 
 export interface Ingredient {
@@ -220,6 +221,7 @@ export interface Recipe {
   sourceName?: string
   isFavorite: boolean
   isTemplate: boolean
+  verifiedServingCount: boolean   // has the user actually made & portioned this recipe to confirm the serving count?
   macrosPerServing?: Macros
   estimatedCostPerServing?: number
   createdAt: string

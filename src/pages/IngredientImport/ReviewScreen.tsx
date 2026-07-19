@@ -9,7 +9,8 @@ import { useSettings } from '@/context/SettingsContext'
 import { getAllIngredients, saveIngredient, calcCostPerServing } from '@/db/ingredients'
 import { newId, now } from '@/utils/ids'
 import { availableUnits } from '@/utils/units'
-import { findSmartMatches } from '@/utils/smartDuplicate'
+import { findSmartMatches, findBarcodeMatch } from '@/utils/smartDuplicate'
+import { normalizeBrandName } from '@/utils/brandNormalization'
 import { NUTRISCORE_DESCRIPTIONS, NOVA_DESCRIPTIONS } from '@/utils/ingredientQuality'
 import { ScrollHint } from '@/components/ScrollHint'
 import { Toast } from './Toast'
@@ -78,6 +79,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
   const [draft, setDraft] = useState<Ingredient>(() => ensureVariant(initialDraft))
   const [saving, setSaving] = useState(false)
   const [smartMatches, setSmartMatches] = useState<SmartMatchState | null>(null)
+  const [barcodeMatch, setBarcodeMatch] = useState<Ingredient | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [draftSaved, setDraftSaved] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
@@ -105,10 +107,13 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
   }
 
   function setVariantField(patch: Partial<IngredientVariant>) {
-    setDraft(d => ({
-      ...d,
-      variants: [{ ...d.variants[0], ...patch }],
-    }))
+    setDraft(d => {
+      const current = d.variants[0]
+      const priceStamp = patch.packageCost != null && patch.packageCost !== current.packageCost
+        ? { priceLastUpdated: now() }
+        : {}
+      return { ...d, variants: [{ ...current, ...patch, ...priceStamp }] }
+    })
   }
 
   function setMacro(key: keyof Macros, value: number) {
@@ -124,6 +129,17 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
     setSaving(true)
     try {
       const all = await getAllIngredients(true)
+
+      // Barcode is the primary identifier — if it matches an existing product,
+      // that takes priority over any name/brand comparison.
+      const draftBarcode = draft.variants[0]?.barcode
+      const byBarcode = findBarcodeMatch(draftBarcode, all)
+      if (byBarcode) {
+        setBarcodeMatch(byBarcode)
+        setSaving(false)
+        return
+      }
+
       const matches = findSmartMatches(draft.name.trim(), all)
       if (matches.length === 0) {
         await commitSave(draft)
@@ -131,7 +147,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
       }
       if (matches.length === 1) {
         const parent = matches[0]
-        const draftBrand = (draft.variants[0]?.brand ?? '').trim().toLowerCase()
+        const draftBrand = normalizeBrandName(draft.variants[0]?.brand).toLowerCase()
         const brandConflict = parent.variants.some(
           v => (v.brand ?? '').trim().toLowerCase() === draftBrand
         )
@@ -155,12 +171,46 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
       defaultVariantId: ingredient.variants[0].id,
       variants: ingredient.variants.map(variant => ({
         ...variant,
+        brand: normalizeBrandName(variant.brand) || 'Generic',
         costPerServing: calcCostPerServing(variant),
       })),
     }
     await saveIngredient(toSave)
     await autoAddBrand(toSave.variants[0]?.brand)
     onSaved(toSave)
+  }
+
+  // Barcode already exists on another ingredient — offer to fold the new data
+  // into that existing variant, or skip saving this one entirely.
+  async function handleUpdateBarcodeMatch() {
+    if (!barcodeMatch) return
+    setSaving(true)
+    const draftVariant = draft.variants[0]
+    const matchedVariant = barcodeMatch.variants.find(v => v.barcode === draftVariant.barcode)
+    const updated: Ingredient = {
+      ...barcodeMatch,
+      variants: barcodeMatch.variants.map(v => v.id === matchedVariant?.id
+        ? {
+            ...draftVariant,
+            id: v.id,
+            parentId: barcodeMatch.id,
+            brand: normalizeBrandName(draftVariant.brand) || 'Generic',
+            costPerServing: calcCostPerServing(draftVariant),
+          }
+        : v
+      ),
+      updatedAt: now(),
+    }
+    await saveIngredient(updated)
+    await autoAddBrand(draftVariant.brand)
+    setBarcodeMatch(null)
+    setSaving(false)
+    setToast({ message: `Updated ${updated.name}`, onDone: () => onSaved(updated) })
+  }
+
+  function handleSkipBarcodeMatch() {
+    setBarcodeMatch(null)
+    onCancel()
   }
 
   async function autoAddBrand(brand: string | undefined) {
@@ -178,6 +228,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
       ...d.variants[0],
       id: newId(),
       parentId: parent.id,
+      brand: normalizeBrandName(d.variants[0].brand) || 'Generic',
     }
     const updated: Ingredient = {
       ...parent,
@@ -407,6 +458,27 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
         </Button>
       </div>
 
+      {barcodeMatch && (
+        <Modal
+          open
+          onClose={() => setBarcodeMatch(null)}
+          title="Barcode Already Exists"
+          size="sm"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setBarcodeMatch(null)}>Cancel</Button>
+              <Button variant="secondary" onClick={handleSkipBarcodeMatch}>Skip</Button>
+              <Button onClick={handleUpdateBarcodeMatch} disabled={saving}>Update Existing</Button>
+            </>
+          }
+        >
+          <p className={styles.dupDesc}>
+            This barcode already exists in your database as <strong>{barcodeMatch.name}</strong>.
+            Would you like to update it with this new data, or skip saving this one?
+          </p>
+        </Modal>
+      )}
+
       {smartMatches && (
         <Modal
           open
@@ -426,7 +498,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
               : 'These existing ingredients have similar names. Add this as a variant of one, or save it as a new ingredient.'}
           </p>
           {smartMatches.matches.map(m => {
-            const draftBrand = (smartMatches.draft.variants[0]?.brand ?? '').trim().toLowerCase()
+            const draftBrand = normalizeBrandName(smartMatches.draft.variants[0]?.brand).toLowerCase()
             const brandExists = m.variants.some(v => (v.brand ?? '').trim().toLowerCase() === draftBrand)
             return (
               <div key={m.id} className={styles.dupMatch}>

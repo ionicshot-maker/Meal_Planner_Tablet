@@ -332,6 +332,13 @@
   color: var(--color-text-muted);
 }
 
+.fieldHint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.toggleRow { display: flex; align-items: center; gap: var(--space-3); }
+
 .numInput,
 .textInput {
   padding: var(--space-2) var(--space-3);

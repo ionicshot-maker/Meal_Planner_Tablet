@@ -50,6 +50,7 @@ export function cloneRecipeFromTemplate(template: Recipe): Recipe {
     name: template.name,
     isTemplate: false,
     isFavorite: false,
+    verifiedServingCount: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }

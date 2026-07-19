@@ -3,6 +3,7 @@ import { FileJson, Upload } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { getAllIngredients, saveIngredient } from '@/db/ingredients'
 import { findSmartMatches } from '@/utils/smartDuplicate'
+import { normalizeBrandName } from '@/utils/brandNormalization'
 import { newId, now } from '@/utils/ids'
 import type { Ingredient, IngredientVariant, IngredientUnit, Macros, NutriscoreGrade, NovaGroupNum } from '@/types'
 import styles from './JsonImportTab.module.css'
@@ -34,6 +35,7 @@ interface RawVariant {
   totalServingsInPackage?: number | null
   packageServings?: number | null
   costPerServing?: number | null
+  priceLastUpdated?: string | null
   store?: string | null
   storePreference?: string | null
   usdaFdcId?: number | null
@@ -79,11 +81,12 @@ function normalizeVariant(rv: RawVariant, parentId: string): IngredientVariant {
   const nutriscoreRaw = rv.nutriscore?.toUpperCase()
   const nutriscore = nutriscoreRaw && NUTRISCORE_GRADES.has(nutriscoreRaw) ? (nutriscoreRaw as NutriscoreGrade) : undefined
   const novaGroup = rv.novaGroup != null && rv.novaGroup >= 1 && rv.novaGroup <= 4 ? (rv.novaGroup as NovaGroupNum) : undefined
+  const priceLastUpdated = rv.priceLastUpdated ?? (rv.packageCost != null ? now() : undefined)
 
   return {
     id: rv.id || newId(),
     parentId,
-    brand: rv.brand?.trim() || 'Generic',
+    brand: normalizeBrandName(rv.brand) || 'Generic',
     defaultUnit: (rv.defaultUnit || rv.servingUnit || 'g') as IngredientUnit,
     servingSize: rv.servingSize ?? 100,
     servingUnit: (rv.servingUnit || rv.defaultUnit || 'g') as IngredientUnit,
@@ -91,6 +94,7 @@ function normalizeVariant(rv: RawVariant, parentId: string): IngredientVariant {
     ...(rv.packageCost != null ? { packageCost: rv.packageCost } : {}),
     ...(totalServingsInPackage != null ? { totalServingsInPackage } : {}),
     ...(rv.costPerServing != null ? { costPerServing: rv.costPerServing } : {}),
+    ...(priceLastUpdated ? { priceLastUpdated } : {}),
     ...(rv.usdaFdcId != null ? { usdaFdcId: rv.usdaFdcId } : {}),
     ...(store ? { store } : {}),
     ...(rv.notes ? { notes: rv.notes } : {}),
@@ -149,7 +153,30 @@ function computeBrandCounts(ingredients: Ingredient[]): BrandCount[] {
 
 interface ImportResult { added: number; updated: number; skipped: number }
 
+type ImportMode = 'addNew' | 'addUpdate' | 'replace'
+
+const IMPORT_MODES: { id: ImportMode; label: string; hint: string }[] = [
+  { id: 'addNew',    label: 'Add New Only',         hint: 'Only add ingredients that don’t exist yet — skip everything else.' },
+  { id: 'addUpdate', label: 'Add + Update Existing', hint: 'Add new ingredients, and update existing ones only if the imported data is newer.' },
+  { id: 'replace',   label: 'Replace Existing',      hint: 'Add new ingredients, and overwrite matching existing ones unconditionally.' },
+]
+
 const BRAND_DISPLAY_LIMIT = 40
+const PREVIEW_ITEM_LIMIT = 10
+
+// Find the existing ingredient (if any) this imported item matches, using the
+// same priority order as everywhere else in the app: barcode first (strongest
+// signal — skips name comparison entirely when it hits), then exact name,
+// then fuzzy name match.
+function findMatch(item: Ingredient, workingList: Ingredient[], barcodeIndex: Map<string, Ingredient>): Ingredient | undefined {
+  for (const v of item.variants) {
+    if (v.barcode && barcodeIndex.has(v.barcode)) return barcodeIndex.get(v.barcode)
+  }
+  const norm = item.name.trim().toLowerCase()
+  const exact = workingList.find(i => i.name.trim().toLowerCase() === norm)
+  if (exact) return exact
+  return findSmartMatches(item.name, workingList)[0]
+}
 
 export function JsonImportTab() {
   const [dragActive, setDragActive] = useState(false)
@@ -158,6 +185,7 @@ export function JsonImportTab() {
   const [ingredients, setIngredients] = useState<Ingredient[] | null>(null)
   const [brandCounts, setBrandCounts] = useState<BrandCount[]>([])
   const [selectedBrands, setSelectedBrands] = useState<Set<string>>(new Set())
+  const [mode, setMode] = useState<ImportMode>('addNew')
   const [importing, setImporting] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [result, setResult] = useState<ImportResult | null>(null)
@@ -170,6 +198,7 @@ export function JsonImportTab() {
     setIngredients(null)
     setBrandCounts([])
     setSelectedBrands(new Set())
+    setMode('addNew')
     setResult(null)
     setProgress({ done: 0, total: 0 })
   }
@@ -245,34 +274,48 @@ export function JsonImportTab() {
 
     for (let i = 0; i < toImport.length; i++) {
       const item = toImport[i]
-      const itemBarcodes = item.variants.map(v => v.barcode).filter((b): b is string => !!b)
-      const barcodeDup = itemBarcodes.some(b => barcodeIndex.has(b))
+      const target = findMatch(item, workingList, barcodeIndex)
 
-      if (barcodeDup) {
+      if (!target) {
+        await saveIngredient(item)
+        added++
+        workingList.push(item)
+        for (const v of item.variants) if (v.barcode) barcodeIndex.set(v.barcode, item)
+      } else if (mode === 'addNew') {
         skipped++
       } else {
-        const matches = findSmartMatches(item.name, workingList)
-        if (matches.length > 0) {
-          const target = matches[0]
-          const existingBrands = new Set(target.variants.map(v => v.brand.trim().toLowerCase()))
-          const newVariants = item.variants
-            .filter(v => !existingBrands.has(v.brand.trim().toLowerCase()))
-            .map(v => ({ ...v, parentId: target.id }))
+        const importedIsNewer = mode === 'replace' || !item.updatedAt || !target.updatedAt || item.updatedAt > target.updatedAt
+        if (!importedIsNewer) {
+          skipped++
+        } else {
+          const existingByBrand = new Map(target.variants.map(v => [v.brand.trim().toLowerCase(), v]))
+          const existingByBarcode = new Map(
+            target.variants.filter((v): v is IngredientVariant & { barcode: string } => !!v.barcode)
+              .map(v => [v.barcode, v])
+          )
+          const nextVariants = [...target.variants]
+          let changed = false
 
-          if (newVariants.length === 0) {
+          for (const nv of item.variants) {
+            const matchVariant = (nv.barcode && existingByBarcode.get(nv.barcode)) ?? existingByBrand.get(nv.brand.trim().toLowerCase())
+            if (matchVariant) {
+              const idx = nextVariants.findIndex(v => v.id === matchVariant.id)
+              nextVariants[idx] = { ...nv, id: matchVariant.id, parentId: target.id }
+            } else {
+              nextVariants.push({ ...nv, parentId: target.id })
+            }
+            changed = true
+          }
+
+          if (!changed) {
             skipped++
           } else {
-            target.variants = [...target.variants, ...newVariants]
+            target.variants = nextVariants
             target.updatedAt = now()
             await saveIngredient(target)
             updated++
-            for (const v of newVariants) if (v.barcode) barcodeIndex.set(v.barcode, target)
+            for (const v of nextVariants) if (v.barcode) barcodeIndex.set(v.barcode, target)
           }
-        } else {
-          await saveIngredient(item)
-          added++
-          workingList.push(item)
-          for (const v of item.variants) if (v.barcode) barcodeIndex.set(v.barcode, item)
         }
       }
 
@@ -289,6 +332,8 @@ export function JsonImportTab() {
 
   const displayedBrands = brandCounts.slice(0, BRAND_DISPLAY_LIMIT)
   const hiddenBrandCount = brandCounts.length - displayedBrands.length
+  const previewItems = ingredients?.slice(0, PREVIEW_ITEM_LIMIT) ?? []
+  const hiddenPreviewCount = ingredients ? ingredients.length - previewItems.length : 0
 
   return (
     <div className={styles.tab}>
@@ -370,6 +415,47 @@ export function JsonImportTab() {
               </div>
             )}
 
+            {!result && (
+              <div className={styles.previewList}>
+                <span className={styles.brandLabel}>Preview</span>
+                <ul className={styles.previewItems}>
+                  {previewItems.map((item, idx) => (
+                    <li key={idx} className={styles.previewItem}>
+                      <span className={styles.previewName}>{item.name}</span>
+                      <span className={styles.previewMeta}>
+                        {item.variants[0]?.brand ?? 'Generic'} · {Math.round(item.variants[0]?.macros.calories ?? 0)} cal
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {hiddenPreviewCount > 0 && (
+                  <span className={styles.brandMore}>+{hiddenPreviewCount} more ingredient{hiddenPreviewCount !== 1 ? 's' : ''} not shown</span>
+                )}
+              </div>
+            )}
+
+            {!importing && !result && (
+              <div className={styles.modeSection}>
+                <span className={styles.brandLabel}>Import mode</span>
+                <div className={styles.modeOptions}>
+                  {IMPORT_MODES.map(m => (
+                    <label key={m.id} className={styles.modeOption}>
+                      <input
+                        type="radio"
+                        name="jsonImportMode"
+                        checked={mode === m.id}
+                        onChange={() => setMode(m.id)}
+                      />
+                      <span>
+                        <span className={styles.modeOptionLabel}>{m.label}</span>
+                        <span className={styles.modeOptionHint}>{m.hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {importing && (
               <div className={styles.progressWrap}>
                 <span className={styles.progressLabel}>
@@ -389,7 +475,7 @@ export function JsonImportTab() {
                 <span className={styles.resultTitle}>Import complete</span>
                 <span className={styles.resultStats}>
                   {result.added} ingredient{result.added !== 1 ? 's' : ''} added,{' '}
-                  {result.updated} updated with new variants,{' '}
+                  {result.updated} updated,{' '}
                   {result.skipped} skipped as duplicates
                 </span>
               </div>

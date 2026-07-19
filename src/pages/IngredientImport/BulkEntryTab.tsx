@@ -4,6 +4,7 @@ import { useSettings } from '@/context/SettingsContext'
 import { saveIngredient, getAllIngredients } from '@/db/ingredients'
 import { parseFraction } from '@/utils/fractionInput'
 import { newId, now } from '@/utils/ids'
+import { normalizeBrandName } from '@/utils/brandNormalization'
 import type { Ingredient, IngredientUnit, NutriscoreGrade, NovaGroupNum } from '@/types'
 import styles from './BulkEntryTab.module.css'
 
@@ -142,7 +143,7 @@ export function BulkEntryTab({ onSaved }: Props) {
         existing.variants.push({
           id: variantId,
           parentId: existing.id,
-          brand: row.store || 'Generic',
+          brand: normalizeBrandName(row.store) || 'Generic',
           defaultUnit: row.unit,
           servingSize: pf(row.servingSize, 100),
           servingUnit: row.unit,
@@ -158,6 +159,7 @@ export function BulkEntryTab({ onSaved }: Props) {
           packageCost,
           totalServingsInPackage: totalServings,
           costPerServing,
+          priceLastUpdated: packageCost != null ? now() : undefined,
           store: row.store || undefined,
           barcode: row.barcode.trim() || undefined,
           nutriscore: (row.nutriscore || undefined) as NutriscoreGrade | undefined,
@@ -190,6 +192,7 @@ export function BulkEntryTab({ onSaved }: Props) {
           packageCost,
           totalServingsInPackage: totalServings,
           costPerServing: packageCost && totalServings ? packageCost / totalServings : undefined,
+          priceLastUpdated: packageCost != null ? now() : undefined,
           store: row.store || undefined,
           barcode: row.barcode.trim() || undefined,
           nutriscore: (row.nutriscore || undefined) as NutriscoreGrade | undefined,

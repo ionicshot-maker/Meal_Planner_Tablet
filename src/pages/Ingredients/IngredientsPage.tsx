@@ -9,6 +9,7 @@ import { IngredientForm } from './IngredientForm'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import { NutriscoreBadge, NovaBadge } from '@/components/QualityBadges'
 import { AllergenBadgeList, AllergenPicker } from '@/components/AllergenChips'
+import { formatPriceDate } from '@/utils/recipeStatus'
 import type { Ingredient, IngredientDisplayToggles } from '@/types'
 import styles from './IngredientsPage.module.css'
 
@@ -321,6 +322,9 @@ function IngredientCard({ ingredient, display, onEdit, onArchive, onDelete }: {
             )}
             {defaultVariant?.barcode && (
               <span className={styles.barcodeText}>#{defaultVariant.barcode}</span>
+            )}
+            {defaultVariant?.priceLastUpdated && (
+              <span className={styles.barcodeText}>Price Last Updated: {formatPriceDate(defaultVariant.priceLastUpdated)}</span>
             )}
           </div>
           {display.showAllergens && defaultVariant?.allergens && defaultVariant.allergens.length > 0 && (

@@ -37,3 +37,12 @@ export function findSmartMatches(name: string, existing: Ingredient[]): Ingredie
     return allKeywordsMatch(norm, t)
   })
 }
+
+// Barcode is the strongest possible identity signal — if two products share a
+// barcode they are definitely the same item, so this check always runs first
+// and, when it hits, skips name/brand comparison entirely.
+export function findBarcodeMatch(barcode: string | undefined | null, existing: Ingredient[]): Ingredient | undefined {
+  const code = barcode?.trim()
+  if (!code) return undefined
+  return existing.find(ing => ing.variants.some(v => v.barcode === code))
+}

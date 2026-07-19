@@ -131,6 +131,14 @@
 .sourceLink { color: var(--color-accent); text-decoration: none; }
 .sourceLink:hover { text-decoration: underline; }
 
+/* ── Recipe Status row ── */
+.statusRow {
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+  flex-shrink: 0;
+}
+
 /* ── Scale bar ── */
 .scaleBar {
   display: flex;
@@ -200,6 +208,23 @@
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
+
+/* ── Pricing + serving-count trust indicators ── */
+.trustBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.trustBar:empty { display: none; }
+.trustItem { font-size: var(--text-sm); color: var(--color-text-muted); }
+.trustOk { color: var(--color-success-text); }
+.trustWarning { color: #7c4d00; }
+[data-theme="dark"] .trustWarning { color: #fde68a; }
 
 /* ── Body ── */
 .body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }

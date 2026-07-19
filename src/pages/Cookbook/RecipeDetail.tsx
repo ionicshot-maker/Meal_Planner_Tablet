@@ -3,9 +3,11 @@ import { createPortal } from 'react-dom'
 import { Heart, Pencil, Trash2, X, Printer, Clock } from 'lucide-react'
 import { buildIngredientMap, calcRecipeMacros, calcRecipeCost, scaleIngredients, formatMacro } from '@/utils/recipeCalculations'
 import { getRecipeAllergens, getRecipeNovaAverage } from '@/utils/ingredientQuality'
+import { getRecipeStatus, formatPriceDate } from '@/utils/recipeStatus'
 import { formatMinutes, formatQuantity } from '@/utils/units'
 import { NutriscoreBadge, NovaBadge } from '@/components/QualityBadges'
 import { AllergenBadgeList } from '@/components/AllergenChips'
+import { RecipeStatusRow } from '@/components/RecipeStatusRow'
 import type { Recipe, Ingredient } from '@/types'
 import styles from './RecipeDetail.module.css'
 
@@ -29,6 +31,8 @@ export function RecipeDetail({ recipe, allIngredients, onEdit, onClose, onToggle
   const cost   = calcRecipeCost(scaledIngredients, ingredientMap, recipe.servings)
   const allergens = getRecipeAllergens(recipe.ingredients, ingredientMap)
   const novaAverage = getRecipeNovaAverage(recipe.ingredients, ingredientMap)
+  const status = getRecipeStatus(recipe.ingredients, ingredientMap)
+  const displayCost = status.pricingComplete ? cost : null
 
   const totalTime = recipe.prepTimeMinutes + recipe.cookTimeMinutes
   const scaledServings = Math.round(recipe.servings * scale)
@@ -143,6 +147,16 @@ ${recipe.notes ? `<h2>Notes</h2><div class="notes">${recipe.notes}</div>` : ''}
           )}
         </div>
 
+        {/* Recipe Status */}
+        <div className={styles.statusRow}>
+          <RecipeStatusRow
+            status={status}
+            verifiedServingCount={recipe.verifiedServingCount}
+            onJumpToIngredients={() => document.getElementById('recipe-detail-ingredients')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            onJumpToPricing={() => document.getElementById('recipe-detail-ingredients')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          />
+        </div>
+
         {/* Scale controls */}
         <div className={styles.scaleBar}>
           <span className={styles.scaleLabel}>Scale:</span>
@@ -174,13 +188,34 @@ ${recipe.notes ? `<h2>Notes</h2><div class="notes">${recipe.notes}</div>` : ''}
               <span className={styles.macroDot}>·</span>
               <span className={styles.macroItem}><strong>{formatMacro(macros.fiber)}</strong>g fiber</span>
             </>}
-            {cost != null && <>
+            {displayCost != null && <>
               <span className={styles.macroDot}>·</span>
-              <span className={styles.macroItem}><strong>${cost.toFixed(2)}</strong>/sv</span>
+              <span className={styles.macroItem}><strong>${displayCost.toFixed(2)}</strong>/sv</span>
             </>}
             <span className={styles.macroMeta}>per serving</span>
           </div>
         )}
+
+        {/* Pricing + serving-count trust indicators */}
+        <div className={styles.trustBar}>
+          {status.pricingComplete ? (
+            status.latestPriceUpdate && (
+              <span className={styles.trustItem}>Prices Last Updated: {formatPriceDate(status.latestPriceUpdate)}</span>
+            )
+          ) : status.linkedCount > 0 && status.missingPricingCount > 0 ? (
+            <span className={`${styles.trustItem} ${styles.trustWarning}`}>
+              ⚠️ Missing pricing for {status.missingPricingCount} ingredient{status.missingPricingCount !== 1 ? 's' : ''}
+            </span>
+          ) : null}
+
+          {recipe.verifiedServingCount ? (
+            <span className={`${styles.trustItem} ${styles.trustOk}`}>✓ Serving count verified</span>
+          ) : (
+            <span className={`${styles.trustItem} ${styles.trustWarning}`}>
+              ⚠️ Serving count not verified — per-serving nutrition may be inaccurate
+            </span>
+          )}
+        </div>
 
         {/* Quality: average Nova level + consolidated allergens */}
         {(novaAverage || allergens.length > 0) && (
@@ -203,7 +238,7 @@ ${recipe.notes ? `<h2>Notes</h2><div class="notes">${recipe.notes}</div>` : ''}
 
           {/* Ingredients */}
           {scaledIngredients.length > 0 && (
-            <section className={styles.section}>
+            <section className={styles.section} id="recipe-detail-ingredients">
               <h2 className={styles.sectionTitle}>Ingredients</h2>
               {hasUnlinked && (
                 <div className={styles.unlinkedNotice}>

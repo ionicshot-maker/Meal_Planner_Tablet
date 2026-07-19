@@ -10,6 +10,8 @@ import type { PickedIngredient } from './IngredientPicker'
 import { IngredientLinkModal } from './IngredientLinkModal'
 import { getAllIngredients } from '@/db/ingredients'
 import { NutriscoreBadge, NovaBadge } from '@/components/QualityBadges'
+import { RecipeStatusRow } from '@/components/RecipeStatusRow'
+import { getRecipeStatus } from '@/utils/recipeStatus'
 import { buildIngredientMap, calcRecipeMacros, calcRecipeCost, normalizeUnit, formatMacro } from '@/utils/recipeCalculations'
 import { availableUnits, parseTimeToMinutes, formatMinutes } from '@/utils/units'
 import { newId, now } from '@/utils/ids'
@@ -137,6 +139,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
   const [sourceName, setSourceName] = useState(recipe?.sourceName ?? prefill?.sourceName ?? '')
   const [isFavorite, setIsFavorite] = useState(recipe?.isFavorite ?? false)
   const [isTemplate, setIsTemplate] = useState(recipe?.isTemplate ?? false)
+  const [verifiedServingCount, setVerifiedServingCount] = useState(recipe?.verifiedServingCount ?? false)
   const [photoUrl, setPhotoUrl]   = useState(recipe?.photoUrl ?? '')
   const [isDragging, setIsDragging] = useState(false)
   const [photoUrlInput, setPhotoUrlInput] = useState('')
@@ -161,6 +164,15 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
 
   // Photo input ref
   const photoInputRef = useRef<HTMLInputElement>(null)
+  const ingredientsSectionRef = useRef<HTMLElement>(null)
+  const verifiedToggleRef = useRef<HTMLDivElement>(null)
+
+  function scrollToIngredients() {
+    ingredientsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  function scrollToVerifiedToggle() {
+    verifiedToggleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 
   // Keyboard-nav focus tracking
   const [autoFocusRowId, setAutoFocusRowId] = useState<string | null>(null)
@@ -223,6 +235,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
     setSourceName('')
     setIsFavorite(false)
     setIsTemplate(false)
+    setVerifiedServingCount(false)
     setPhotoUrl('')
     setSelectedTags([])
     setSteps([{ id: newId(), order: 1, text: '' }])
@@ -260,6 +273,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
   const linkedIngredients = rowsToIngredients(rows)
   const macrosPerServing  = calcRecipeMacros(linkedIngredients, ingredientMap, servings)
   const costPerServing    = calcRecipeCost(linkedIngredients, ingredientMap, servings)
+  const recipeStatus      = getRecipeStatus(linkedIngredients, ingredientMap)
 
   // Time parsing on blur
   function handleTimePrepBlur() {
@@ -438,6 +452,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
       sourceName: sourceName.trim() || undefined,
       isFavorite,
       isTemplate: asTemplate || isTemplate,
+      verifiedServingCount,
       photoUrl: photoUrl || undefined,
       macrosPerServing,
       estimatedCostPerServing: costPerServing,
@@ -595,6 +610,28 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
               </div>
             </div>
 
+            {/* Recipe Status */}
+            <RecipeStatusRow
+              status={recipeStatus}
+              verifiedServingCount={verifiedServingCount}
+              onJumpToIngredients={scrollToIngredients}
+              onJumpToServings={scrollToVerifiedToggle}
+            />
+
+            {/* Verified Serving Count */}
+            <div className={styles.fieldGroup} ref={verifiedToggleRef}>
+              <div className={styles.toggleRow}>
+                <Toggle
+                  label="Verified Serving Count"
+                  checked={verifiedServingCount}
+                  onChange={setVerifiedServingCount}
+                />
+              </div>
+              <span className={styles.fieldHint}>
+                Check this after you have actually made and portioned this recipe.
+              </span>
+            </div>
+
             {/* Tags */}
             <div className={styles.fieldGroup}>
               <label className={styles.fieldLabel}>Tags</label>
@@ -737,7 +774,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
           </section>
 
           {/* ─ Ingredients ─ */}
-          <section className={styles.section}>
+          <section className={styles.section} ref={ingredientsSectionRef}>
             <h3 className={uncertainFields.has('ingredients') ? `${styles.sectionTitle} ${styles.sectionTitleWarning}` : styles.sectionTitle}>
               Ingredients
             </h3>

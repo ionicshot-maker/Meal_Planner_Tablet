@@ -22,6 +22,7 @@ export default function HelpPage() {
     ['#getting-started', 'Getting Started'],
     ['#ingredients',     'Ingredients'],
     ['#ingredient-info', 'Understanding Your Ingredients'],
+    ['#json-import',     'JSON Import'],
     ['#cookbook',        'Cookbook'],
     ['#planner',         'Meal Plan'],
     ['#grocery',         'Grocery List'],
@@ -165,6 +166,27 @@ export default function HelpPage() {
           </div>
         </section>
 
+        {/* ── JSON Import ──────────────────────────────────────────────────── */}
+        <section id="json-import" className={styles.section}>
+          <h2 className={styles.sectionTitle}>JSON Import</h2>
+          <div className={styles.featureCard}>
+            <p>
+              If you already have a JSON file full of ingredients — a backup you exported from this
+              app, or a file produced by an Open Food Facts bulk-converter tool — you can bring them
+              all in at once instead of adding them one by one.
+            </p>
+            <ul className={styles.featureList}>
+              <li><strong>Where to find it:</strong> Import Ingredients → JSON Import tab, or tap the "Import from JSON" link on the Ingredients page header.</li>
+              <li><strong>Two accepted formats:</strong> This app's own Settings → Data → Export file, or the raw output of an Open Food Facts bulk-converter tool (a common workflow for pulling many products for one brand at once). Both are read automatically — you don't need to pick which one it is.</li>
+              <li><strong>Preview before importing:</strong> After choosing a file, you'll see how many ingredients were found, a brand breakdown, and a preview of the first several items with their name, brand, and calories.</li>
+              <li><strong>Filter by brand:</strong> Tap brand chips in the breakdown to import only specific brands from the file — handy when a file has products you don't want.</li>
+              <li><strong>Import mode:</strong> Choose <em>Add New Only</em> to skip anything that already exists, <em>Add + Update Existing</em> to also refresh existing ingredients when the imported data is newer, or <em>Replace Existing</em> to overwrite matches unconditionally. This is especially useful when re-importing an updated Open Food Facts file for a brand you've already added.</li>
+              <li><strong>Duplicate detection:</strong> Uses the same smart matching as the rest of the app — barcode match first, then exact name and brand, then fuzzy name matching — so re-imports and near-duplicate names merge in instead of creating copies.</li>
+              <li><strong>Progress and summary:</strong> A progress bar shows import status on large files, and a final summary reports how many were added, updated, and skipped as duplicates.</li>
+            </ul>
+          </div>
+        </section>
+
         {/* ── Cookbook ─────────────────────────────────────────────────────── */}
         <section id="cookbook" className={styles.section}>
           <h2 className={styles.sectionTitle}>Cookbook</h2>
@@ -181,6 +203,21 @@ export default function HelpPage() {
               <li><strong>Mark as Favorite:</strong> Tap the star icon on any recipe to mark it as a favorite. Filter by favorites to find them quickly.</li>
               <li><strong>Save as Template:</strong> Toggle "Save as Template" when editing a recipe. Templates appear separately and can be copied to create new recipes with the same base.</li>
               <li><strong>Incomplete nutrition warning:</strong> A yellow warning on a recipe means some ingredients are missing from your list or have no nutrition data. Tap the recipe to see which ingredients need attention.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>Verified Serving Count</h3>
+            <ul className={styles.featureList}>
+              <li><strong>What it is:</strong> A checkbox in the recipe editor labeled "Verified Serving Count" that you check after you've actually made and portioned the recipe.</li>
+              <li><strong>Why it matters:</strong> Per-serving nutrition is only as accurate as the serving count. A recipe you typed in but never actually cooked and divided into servings might have an estimated or guessed serving count — the per-serving calories, protein, and cost could be off until you verify it.</li>
+              <li><strong>What you'll see:</strong> Recipes that haven't been verified show a subtle amber warning — "Serving count not verified — per-serving nutrition may be inaccurate" — on the recipe card and detail view. Once verified, a green checkmark replaces it.</li>
+              <li><strong>How to use it:</strong> Cook the recipe, portion it into the number of servings you actually got, then open the recipe, check the box, and save. If your actual serving count differs from what's saved, update the Total Servings field too.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>Recipe Pricing</h3>
+            <ul className={styles.featureList}>
+              <li><strong>Pricing completeness:</strong> A recipe's Estimated Cost is only shown when every linked ingredient has a package cost entered. If even one is missing, the app hides the estimate and shows "Missing pricing for X ingredients" instead, so you're never looking at a silently-wrong partial total.</li>
+              <li><strong>How to fix it:</strong> Add a Package Cost and Servings per Package to the missing ingredient(s) in the Ingredient Database — the recipe's cost display updates automatically the next time you view it.</li>
+              <li><strong>Price Last Updated:</strong> Every ingredient variant remembers when its package cost was last changed. When a recipe's pricing is complete, the card and detail view show "Prices Last Updated" using the most recent of those dates across all its ingredients — a quick way to tell if your cost estimate might be stale.</li>
             </ul>
           </div>
         </section>

@@ -10,6 +10,8 @@ import { availableUnits } from '@/utils/units'
 import { calcCostPerServing } from '@/db/ingredients'
 import { parseFraction, formatNumeric } from '@/utils/fractionInput'
 import { NUTRISCORE_DESCRIPTIONS, NOVA_DESCRIPTIONS } from '@/utils/ingredientQuality'
+import { formatPriceDate } from '@/utils/recipeStatus'
+import { normalizeBrandName } from '@/utils/brandNormalization'
 import type { Ingredient, IngredientVariant, IngredientUnit, Macros, NutriscoreGrade, NovaGroupNum } from '@/types'
 import styles from './IngredientForm.module.css'
 
@@ -76,9 +78,15 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
   function updateVariant(patch: Partial<IngredientVariant>) {
     setDraft(d => ({
       ...d,
-      variants: d.variants.map(v =>
-        v.id === editingVariantId ? { ...v, ...patch } : v
-      ),
+      variants: d.variants.map(v => {
+        if (v.id !== editingVariantId) return v
+        // Stamp the price timestamp whenever an actual cost value is set or changed —
+        // not when the field is cleared back to empty.
+        const priceStamp = patch.packageCost != null && patch.packageCost !== v.packageCost
+          ? { priceLastUpdated: now() }
+          : {}
+        return { ...v, ...patch, ...priceStamp }
+      }),
     }))
   }
 
@@ -164,6 +172,7 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
       defaultVariantId: draft.defaultVariantId || draft.variants[0].id,
       variants: draft.variants.map(v => ({
         ...v,
+        brand: normalizeBrandName(v.brand) || 'Generic',
         costPerServing: calcCostPerServing(v),
       })),
     }
@@ -314,6 +323,11 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
                   </span>
                 </div>
               </div>
+              {activeVariant.priceLastUpdated && (
+                <p className={styles.priceUpdatedHint}>
+                  Price Last Updated: {formatPriceDate(activeVariant.priceLastUpdated)}
+                </p>
+              )}
 
               {/* Product Info: barcode, Nutriscore, Nova, allergens */}
               <div className={styles.productInfo}>

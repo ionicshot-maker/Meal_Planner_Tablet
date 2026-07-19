@@ -2,6 +2,7 @@ import { Heart, Clock, FolderPlus } from 'lucide-react'
 import type { Recipe, RecipeCollection, Ingredient } from '@/types'
 import { formatMacro, buildIngredientMap } from '@/utils/recipeCalculations'
 import { getRecipeAllergens } from '@/utils/ingredientQuality'
+import { getRecipeStatus, formatPriceDate } from '@/utils/recipeStatus'
 import { AllergenBadgeList } from '@/components/AllergenChips'
 import { formatMinutes } from '@/utils/units'
 import styles from './RecipeCard.module.css'
@@ -25,7 +26,10 @@ export function RecipeCard({ recipe, collections, allIngredients, onView, onEdit
   const totalTime = recipe.prepTimeMinutes + recipe.cookTimeMinutes
   const m = recipe.macrosPerServing
   const hasUnlinked = recipe.ingredients.some(ri => !ri.ingredientId)
-  const allergens = getRecipeAllergens(recipe.ingredients, buildIngredientMap(allIngredients))
+  const ingredientMap = buildIngredientMap(allIngredients)
+  const allergens = getRecipeAllergens(recipe.ingredients, ingredientMap)
+  const status = getRecipeStatus(recipe.ingredients, ingredientMap)
+  const displayCost = status.pricingComplete ? recipe.estimatedCostPerServing : null
 
   function handleCollectionClick() {
     if (collections.length === 0) {
@@ -98,9 +102,30 @@ export function RecipeCard({ recipe, collections, allIngredients, onView, onEdit
             </span>
           )}
           <span className={styles.stat}>{recipe.servings} serving{recipe.servings !== 1 ? 's' : ''}</span>
-          {recipe.estimatedCostPerServing != null && (
+          {displayCost != null && (
             <span className={styles.stat} title="Estimated cost per serving">
-              ${recipe.estimatedCostPerServing.toFixed(2)}/sv
+              ${displayCost.toFixed(2)}/sv
+            </span>
+          )}
+        </div>
+
+        {/* Pricing + serving-count trust indicators */}
+        <div className={styles.trustRow}>
+          {status.pricingComplete
+            ? status.latestPriceUpdate && (
+                <span className={styles.trustMuted}>Prices Last Updated: {formatPriceDate(status.latestPriceUpdate)}</span>
+              )
+            : status.linkedCount > 0 && status.missingPricingCount > 0 && (
+                <span className={styles.trustWarning}>
+                  ⚠️ Missing pricing for {status.missingPricingCount} ingredient{status.missingPricingCount !== 1 ? 's' : ''}
+                </span>
+              )
+          }
+          {recipe.verifiedServingCount ? (
+            <span className={styles.trustOk}>✓ Verified</span>
+          ) : (
+            <span className={styles.trustWarning}>
+              ⚠️ Serving count not verified — per-serving nutrition may be inaccurate
             </span>
           )}
         </div>
