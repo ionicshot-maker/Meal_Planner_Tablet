@@ -126,6 +126,7 @@ export interface AppSettings {
   ingredientDisplay: IngredientDisplayToggles
   allergenWatchList: string[]   // subset of ALLERGENS — meal planner warns when a planned meal contains one
   miscategoryFixed: boolean     // one-time flag: has fixMiscategorizedIngredients() already run?
+  categoryFixRulesVersion: number // bumped whenever the fix rules change materially, to force one more pass
   // Cloud sync
   supabaseUrl: string
   supabaseAnonKey: string

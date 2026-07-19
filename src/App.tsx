@@ -19,6 +19,13 @@ const GroceryListPage       = lazy(() => import('@/pages/GroceryList/GroceryList
 const IngredientImportPage  = lazy(() => import('@/pages/IngredientImport/IngredientImportPage'))
 const HelpPage              = lazy(() => import('@/pages/Help/HelpPage'))
 
+// Bump whenever fixMiscategorizedIngredients()'s rules change materially — forces
+// one more pass even for households where settings.miscategoryFixed is already true
+// from an earlier, less complete rule set. (Editing DEFAULT_SETTINGS alone doesn't
+// do this: existing households already have a stored `miscategoryFixed` value, which
+// always wins over the default in the settings merge.)
+const CATEGORY_FIX_RULES_VERSION = 2
+
 function AppRoutes() {
   const { settings, updateSettings, reloadSettings, isLoading } = useSettings()
   const [miscategoryToast, setMiscategoryToast] = useState<string | null>(null)
@@ -65,11 +72,15 @@ function AppRoutes() {
       if (categoriesUpdated) await reloadSettings()
 
       // One-time cleanup for ingredients that were bulk-imported with the wrong
-      // category (most visibly, non-beverage items that landed in "Beverages").
-      // Gated by settings.miscategoryFixed so it only ever runs once per household.
-      if (!settings.miscategoryFixed) {
+      // category (most visibly, non-beverage items that landed in "Beverages", and
+      // catch-all buckets like "Baking & Pantry" that still hold items from every
+      // other category). Gated by settings.miscategoryFixed so it normally only runs
+      // once per household — but re-armed whenever CATEGORY_FIX_RULES_VERSION is bumped,
+      // since a completed pass under old rules doesn't cover new ones.
+      const needsRun = !settings.miscategoryFixed || (settings.categoryFixRulesVersion ?? 0) < CATEGORY_FIX_RULES_VERSION
+      if (needsRun) {
         const fixedCount = await fixMiscategorizedIngredients()
-        await updateSettings({ miscategoryFixed: true })
+        await updateSettings({ miscategoryFixed: true, categoryFixRulesVersion: CATEGORY_FIX_RULES_VERSION })
         if (fixedCount > 0) {
           console.log(`[category fix] Fixed ${fixedCount} miscategorized ingredient(s).`)
           setMiscategoryToast(`Fixed ${fixedCount} ingredient categories`)

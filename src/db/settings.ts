@@ -92,6 +92,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   allergenWatchList: [],
   miscategoryFixed: false,
+  categoryFixRulesVersion: 0,
   supabaseUrl: '',
   supabaseAnonKey: '',
   householdSyncCode: '',
@@ -103,7 +104,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
 // Maps every category name from the old 15-category set to its new expanded-category
 // counterpart. Entries that already match a new category name (Seafood, Eggs, etc.) map
 // to themselves so the migration below can treat "known old name" and "already current"
-// uniformly.
+// uniformly. This is a blanket rename only — "Pantry" in particular was a catch-all
+// that held everything from condiments to pasta to spice blends, so renaming it to
+// "Baking & Pantry" is just step one; fixMiscategorizedIngredients() (db/ingredients.ts)
+// runs right after and re-sorts individual ingredients by name via categoryRules.ts.
 export const CATEGORY_MIGRATION_MAP: Record<string, string> = {
   'Meat': 'Meat & Poultry',
   'Seafood': 'Seafood',

@@ -17,9 +17,9 @@ const BEAN_KEYWORDS = ['bean', 'pea', 'lentil', 'chickpea', 'legume']
 export const CATEGORY_RULES: CategoryRule[] = [
   { category: 'Beverages', keywords: [
     'water', 'juice', 'tea', 'coffee', 'soda', 'energy drink', 'alani', 'celsius',
-    'gatorade', 'soft drink', 'sports drink', 'lemonade', 'kombucha',
+    'gatorade', 'soft drink', 'sports drink', 'lemonade', 'kombucha', 'cold brew',
   ] },
-  { category: 'Packaged Meals', keywords: ['ramen', 'instant noodle', 'maruchan'] },
+  { category: 'Packaged Meals', keywords: ['ramen', 'instant noodle', 'maruchan', 'helper', 'meal kit', 'instant meal'] },
   { category: 'Soups & Broths', keywords: ['soup', 'broth', 'bouillon'] },
   { category: 'Pasta & Noodles', keywords: ['pasta', 'spaghetti', 'penne', 'rigatoni', 'noodle', 'macaroni', 'lasagna'] },
   { category: 'Bread & Bakery', keywords: ['bread', 'tortilla', 'bagel', 'bun', 'roll', 'muffin', 'wrap'] },
@@ -33,6 +33,27 @@ export const CATEGORY_RULES: CategoryRule[] = [
   { category: 'Seafood', keywords: ['fish', 'salmon', 'tuna', 'shrimp'] },
   { category: 'Meat & Poultry', keywords: ['chicken', 'beef', 'pork', 'turkey', 'meat'] },
 ]
+
+// A "frozen" item matching one of these categories is ambiguous rather than
+// miscategorized — "Frozen Peas", "Frozen Lasagna", "Frozen Waffles", "Frozen Bean
+// Burritos" etc. are common, correctly-categorized "Frozen" products whose names
+// happen to share a keyword with a pantry-staple category. Meat/seafood/dairy/
+// snacks/condiments/seasonings/beverages keywords are still trusted for frozen
+// items (a "Frozen Chicken Breast" really does belong in Meat & Poultry).
+const FROZEN_AMBIGUOUS_CATEGORIES = new Set([
+  'Soups & Broths', 'Pasta & Noodles', 'Bread & Bakery', 'Breakfast & Cereal',
+  'Rice & Grains', 'Dry Beans & Legumes',
+])
+
+// Categories that historically absorbed items indiscriminately — either as a direct
+// carry-over from the old 15-category set, or via inconsistent bulk imports — and so
+// are worth re-checking against a matched ingredient name. Categories not in this set
+// (Pasta & Noodles, Condiments & Sauces, Canned Goods, etc.) are trusted as already
+// specific and left alone even if a keyword happens to match elsewhere.
+export const RECLASSIFIABLE_CATEGORIES = new Set([
+  'Baking & Pantry', 'Meat & Poultry', 'Seasonings & Spices', 'Bread & Bakery',
+  'Produce', 'Dairy', 'Frozen', 'Snacks', 'Beverages',
+])
 
 // Whole-word match with an optional trailing "s" so plurals ("beans", "chips") match
 // without a naive substring check catching unrelated words ("pea" inside "peanut",
@@ -51,7 +72,9 @@ export function suggestCategory(name: string): string | undefined {
   if (wordMatch(name, 'canned') && BEAN_KEYWORDS.some(k => wordMatch(name, k))) {
     return 'Canned Goods'
   }
+  const isFrozen = wordMatch(name, 'frozen')
   for (const rule of CATEGORY_RULES) {
+    if (isFrozen && FROZEN_AMBIGUOUS_CATEGORIES.has(rule.category)) continue
     if (rule.keywords.some(k => wordMatch(name, k))) return rule.category
   }
   return undefined

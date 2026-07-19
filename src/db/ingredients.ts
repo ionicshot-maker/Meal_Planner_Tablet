@@ -1,6 +1,6 @@
 import { getDB } from './schema'
 import { normalizeIngredient } from '@/utils/importNormalization'
-import { suggestCategory } from '@/utils/categoryRules'
+import { suggestCategory, RECLASSIFIABLE_CATEGORIES } from '@/utils/categoryRules'
 import type { Ingredient, IngredientVariant } from '@/types'
 
 export async function getAllIngredients(includeArchived = false): Promise<Ingredient[]> {
@@ -97,16 +97,22 @@ export async function repairLegacyIngredientData(): Promise<number> {
 
 // One-time cleanup for ingredients that landed in the wrong category during import —
 // most visibly, non-beverage items (pasta, bread, snacks, etc.) that were bulk-imported
-// as "Beverages". Re-derives a category from each ingredient's name via the same
-// priority-ordered keyword rules the external converter tool uses (see
-// utils/categoryRules.ts) and reassigns only when that differs from what's currently
-// stored — items with no keyword match, or whose suggested category already matches,
-// are left untouched. Gated by settings.miscategoryFixed so it only ever runs once.
+// as "Beverages", plus miscellaneous items still lumped into the old catch-all buckets
+// like "Baking & Pantry" (renamed from "Pantry", which used to hold everything from
+// condiments to pasta to spice blends). Re-derives a category from each ingredient's
+// name via the same priority-ordered keyword rules the external converter tool uses
+// (see utils/categoryRules.ts) and reassigns only when: the suggested category differs
+// from what's stored, AND the current category is one of the catch-all-prone buckets in
+// RECLASSIFIABLE_CATEGORIES. Anything already sorted into a specific category (Pasta &
+// Noodles, Condiments & Sauces, Canned Goods, etc.) is trusted and left alone even if a
+// keyword happens to match elsewhere, so this can't undo a correct, specific
+// categorization. Gated by settings.miscategoryFixed so it only ever runs once.
 export async function fixMiscategorizedIngredients(): Promise<number> {
   const all = await getAllIngredients(true)
   const db = await getDB()
   let fixed = 0
   for (const ingredient of all) {
+    if (!RECLASSIFIABLE_CATEGORIES.has(ingredient.category)) continue
     const suggested = suggestCategory(ingredient.name)
     if (suggested && suggested !== ingredient.category) {
       ingredient.category = suggested
