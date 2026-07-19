@@ -77,17 +77,29 @@ export const CATEGORY_RULES: CategoryRule[] = [
   { category: 'Snacks', keywords: [
     'chip', 'cracker', 'cookie', 'pretzel', 'snack', 'nut', 'pistachio', 'almond', 'pecan',
     'donut', 'walnut', 'peanut', 'candy', 'cake', 'cupcake', 'brownie', 'gelatin', 'pudding',
-    'nutrigrain', 'nutri-grain', 'milano', 'protein bar',
+    'nutrigrain', 'nutri-grain', 'milano', 'protein bar', 'fries',
   ] },
   { category: 'Condiments & Sauces', keywords: ['ketchup', 'sauce', 'dressing', 'mustard', 'mayo', 'salsa', 'marinade', 'vinegar', 'jam', 'jelly', 'applesauce', 'ranch'] },
   { category: 'Seasonings & Spices', keywords: ['seasoning', 'spice', 'pepper', 'salt', 'cumin', 'paprika', 'oregano'] },
   { category: 'Baking & Pantry', keywords: ['flour', 'oil', 'spray', 'flaxseed', 'chia seed'] },
-  { category: 'Dairy', keywords: ['butter', 'cheese', 'milk', 'cream', 'yogurt', 'dairy'] },
+  {
+    category: 'Dairy',
+    keywords: ['butter', 'cheese', 'milk', 'cream', 'yogurt', 'dairy'],
+    // "Garlic Butter Steak Bites" and "Butter Chicken" are meat dishes, not dairy
+    // products, despite "butter" matching first in priority order.
+    negativeKeywords: ['chicken', 'beef', 'pork', 'turkey', 'steak', 'sirloin', 'bison', 'ribeye', 'tenderloin'],
+  },
   { category: 'Seafood', keywords: ['fish', 'salmon', 'tuna', 'shrimp'] },
-  { category: 'Meat & Poultry', keywords: [
-    'chicken', 'beef', 'pork', 'turkey', 'meat',
-    'steak', 'sirloin', 'bison', 'ribeye', 'tenderloin', 'strip', 'ny strip',
-  ] },
+  {
+    category: 'Meat & Poultry',
+    keywords: [
+      'chicken', 'beef', 'pork', 'turkey', 'meat',
+      'steak', 'sirloin', 'bison', 'ribeye', 'tenderloin', 'strip', 'ny strip',
+    ],
+    // "Steak Fries" and "Chicken Fries" are potato/novelty-shaped snack products,
+    // not meat cuts, despite matching a positive keyword above.
+    negativeKeywords: ['fries'],
+  },
 ]
 
 // A "frozen" item matching one of these categories is ambiguous rather than

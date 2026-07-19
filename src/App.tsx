@@ -24,7 +24,7 @@ const HelpPage              = lazy(() => import('@/pages/Help/HelpPage'))
 // from an earlier, less complete rule set. (Editing DEFAULT_SETTINGS alone doesn't
 // do this: existing households already have a stored `miscategoryFixed` value, which
 // always wins over the default in the settings merge.)
-const CATEGORY_FIX_RULES_VERSION = 5
+const CATEGORY_FIX_RULES_VERSION = 6
 
 function AppRoutes() {
   const { settings, updateSettings, reloadSettings, isLoading } = useSettings()
