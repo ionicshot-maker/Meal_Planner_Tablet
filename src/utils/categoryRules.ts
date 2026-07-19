@@ -6,6 +6,11 @@ interface CategoryRule {
   // continues to the next rule in priority order). Used for categories whose
   // positive keywords are broad enough to misfire on unrelated products.
   negativeKeywords?: string[]
+  // If any of these match, the negativeKeywords guard above is skipped — for
+  // words unambiguous enough that no non-Beverages product would plausibly be
+  // named with them, even alongside a negative keyword (e.g. "Donut Shop" is a
+  // real coffee brand name, so "coffee"/"cold brew" should win over "donut").
+  overrideKeywords?: string[]
 }
 
 const BEAN_KEYWORDS = ['bean', 'pea', 'lentil', 'chickpea', 'legume']
@@ -53,9 +58,10 @@ export const CATEGORY_RULES: CategoryRule[] = [
     keywords: [
       'water', 'juice', 'tea', 'coffee', 'soda', 'energy drink', 'alani', 'celsius',
       'gatorade', 'soft drink', 'sports drink', 'lemonade', 'kombucha', 'cold brew',
-      'creamer', 'starry', '7up', 'protein shake',
+      'creamer', 'starry', '7up', 'protein shake', 'k-cup', 'kcup',
     ],
     negativeKeywords: BEVERAGES_NEGATIVE_KEYWORDS,
+    overrideKeywords: ['coffee', 'cold brew', 'k-cup', 'kcup'],
   },
   { category: 'Packaged Meals', keywords: ['ramen', 'instant noodle', 'maruchan', 'helper', 'meal kit', 'instant meal', 'pizza', 'burrito'] },
   { category: 'Frozen', keywords: ['pot pie'] },
@@ -119,7 +125,8 @@ export function suggestCategory(name: string): string | undefined {
   const isFrozen = wordMatch(name, 'frozen')
   for (const rule of CATEGORY_RULES) {
     if (isFrozen && FROZEN_AMBIGUOUS_CATEGORIES.has(rule.category)) continue
-    if (rule.negativeKeywords?.some(k => wordMatch(name, k))) continue
+    const overridden = rule.overrideKeywords?.some(k => wordMatch(name, k))
+    if (!overridden && rule.negativeKeywords?.some(k => wordMatch(name, k))) continue
     if (rule.keywords.some(k => wordMatch(name, k))) return rule.category
   }
   return undefined
