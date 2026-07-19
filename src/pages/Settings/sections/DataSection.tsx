@@ -7,6 +7,7 @@ import { loadSettings } from '@/db/settings'
 import { getAllMealPlanTemplates } from '@/db/mealPlan'
 import { getAllHouseholdItems } from '@/db/householdItems'
 import { getDB } from '@/db/schema'
+import { isNativeBackupFormat } from '@/utils/nativeBackupValidation'
 import styles from './DataSection.module.css'
 
 type ResetTarget = 'ingredients' | 'recipes' | 'mealPlan' | 'macroHistory' | 'groceryHistory' | 'everything'
@@ -83,8 +84,18 @@ export function DataSection() {
 
     try {
       const text = await file.text()
+      const parsed: unknown = JSON.parse(text)
+
+      if (!isNativeBackupFormat(parsed)) {
+        setImportError(
+          'This file does not appear to be a Meal Planner backup. For ingredient files from the ' +
+          'Open Food Facts converter, use Import Ingredients → JSON Import tab instead.'
+        )
+        return
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = JSON.parse(text) as Record<string, any[]>
+      const data = parsed as Record<string, any[]>
 
       let ingredientConflicts = 0
       let recipeConflicts = 0
