@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSettings, useHouseholdTitle } from '@/context/SettingsContext'
 import { Button, Input, Select, Card, Modal, Toggle } from '@/components/ui'
-import { Download, Info, X, SlidersHorizontal } from 'lucide-react'
+import { Download, FileJson, Info, X, SlidersHorizontal } from 'lucide-react'
 import { getAllIngredients, getIngredient, saveIngredient, archiveIngredient, deleteIngredient, searchIngredients } from '@/db/ingredients'
 import { newId, now } from '@/utils/ids'
 import { IngredientForm } from './IngredientForm'
@@ -130,6 +130,7 @@ export default function IngredientsPage() {
         <h1 className={styles.heading}>{pageTitle}</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           <Button variant="secondary" onClick={() => navigate('/import-ingredients')} title="Import"><Download size={16} style={{ marginRight: 4, verticalAlign: 'middle' }} /><span className={styles.btnLabel}>Import</span></Button>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/import-ingredients?tab=jsonImport')} title="Import from JSON"><FileJson size={15} style={{ marginRight: 4, verticalAlign: 'middle' }} /><span className={styles.btnLabel}>Import from JSON</span></Button>
           <Button onClick={createNew} title="Add Ingredient">+ <span className={styles.btnLabel}>Add Ingredient</span></Button>
           <PageHelpButton />
         </div>
