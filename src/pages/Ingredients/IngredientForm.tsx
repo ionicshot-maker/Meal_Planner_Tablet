@@ -440,18 +440,18 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
                     key={key}
                     label={label}
                     unit={unit}
-                    value={activeVariant.macros[key] ?? 0}
+                    value={activeVariant.macros?.[key] ?? 0}
                     onChange={n => updateMacro(key, n)}
                   />
                 ))}
                 {settings.nutrientToggles.saturatedFat && (
-                  <FormMacroField label="Sat. Fat" unit="g" value={activeVariant.macros.saturatedFat ?? 0} onChange={n => updateMacro('saturatedFat', n)} />
+                  <FormMacroField label="Sat. Fat" unit="g" value={activeVariant.macros?.saturatedFat ?? 0} onChange={n => updateMacro('saturatedFat', n)} />
                 )}
                 {settings.nutrientToggles.transFat && (
-                  <FormMacroField label="Trans Fat" unit="g" value={activeVariant.macros.transFat ?? 0} onChange={n => updateMacro('transFat', n)} />
+                  <FormMacroField label="Trans Fat" unit="g" value={activeVariant.macros?.transFat ?? 0} onChange={n => updateMacro('transFat', n)} />
                 )}
                 {settings.nutrientToggles.alcohol && (
-                  <FormMacroField label="Alcohol" unit="g" value={activeVariant.macros.alcohol ?? 0} onChange={n => updateMacro('alcohol', n)} />
+                  <FormMacroField label="Alcohol" unit="g" value={activeVariant.macros?.alcohol ?? 0} onChange={n => updateMacro('alcohol', n)} />
                 )}
               </div>
             </Card>

@@ -1,4 +1,5 @@
 import { getDB } from './schema'
+import { normalizeIngredient } from '@/utils/importNormalization'
 import type { Ingredient, IngredientVariant } from '@/types'
 
 export async function getAllIngredients(includeArchived = false): Promise<Ingredient[]> {
@@ -64,6 +65,33 @@ export async function searchIngredients(query: string, includeArchived = false):
     i.name.toLowerCase().includes(q) ||
     i.variants.some(v => v.brand.toLowerCase().includes(q))
   )
+}
+
+// One-time repair for ingredients saved via Settings → Data → Import (or any
+// other path) that bypassed normalization and landed in the database in a raw,
+// non-app shape — most commonly an Open Food Facts bulk-converter export whose
+// variants carry flat macro fields instead of a nested `macros` object. Those
+// records render fine as long as nothing reads `variant.macros.<field>`
+// directly, but the missing `macros` object still means broken nutrition/cost
+// everywhere it matters, so this reshapes them in place using the same
+// normalization the JSON Import tab applies, preserving every id so existing
+// recipe links keep working.
+export async function repairLegacyIngredientData(): Promise<number> {
+  const all = await getAllIngredients(true)
+  const broken = all.filter(i => i.variants.some(v => !v.macros))
+  if (broken.length === 0) return 0
+
+  const db = await getDB()
+  let repaired = 0
+  for (const ingredient of broken) {
+    // The stored object IS the raw shape at this point — normalizeIngredient
+    // reads it structurally, so no cast-time validation is needed here.
+    const fixed = normalizeIngredient(ingredient as unknown as Parameters<typeof normalizeIngredient>[0])
+    if (!fixed) continue
+    await db.put('ingredients', fixed)
+    repaired++
+  }
+  return repaired
 }
 
 export function calcCostPerServing(variant: IngredientVariant): number | undefined {

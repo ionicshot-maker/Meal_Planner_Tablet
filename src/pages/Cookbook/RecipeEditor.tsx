@@ -1047,7 +1047,7 @@ function IngredientNameInput({ value, rowId, allIngredients, onChange, onLink }:
           {suggestions.map((ing, i) => {
             const dv = ing.variants.find(v => v.id === ing.defaultVariantId) ?? ing.variants[0]
             const brand = dv?.brand ?? ''
-            const calories = dv ? Math.round(dv.macros.calories) : 0
+            const calories = dv?.macros ? Math.round(dv.macros.calories ?? 0) : 0
             return (
               <li key={ing.id} role="option" aria-selected={highlightedIndex === i}>
                 <button
@@ -1177,7 +1177,7 @@ function IngredientRow({
 
           {variant && (
             <span className={styles.ingMacroHint}>
-              {Math.round(variant.macros.calories)} cal · {variant.macros.protein}g P per serving
+              {Math.round(variant.macros?.calories ?? 0)} cal · {variant.macros?.protein ?? 0}g P per serving
               {(variant.nutriscore || variant.novaGroup) && (
                 <span className={styles.ingQualityBadges}>
                   <NutriscoreBadge grade={variant.nutriscore} />

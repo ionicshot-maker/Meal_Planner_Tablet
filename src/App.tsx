@@ -6,6 +6,7 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { SetupWizard } from '@/pages/Setup/SetupWizard'
 import { StarterLibraryPrompt } from '@/components/StarterLibraryPrompt'
 import { isSupabaseConfigured, pingSupabaseKeepAlive } from '@/db/supabase'
+import { repairLegacyIngredientData } from '@/db/ingredients'
 
 const SettingsPage          = lazy(() => import('@/pages/Settings/SettingsPage'))
 const IngredientsPage       = lazy(() => import('@/pages/Ingredients/IngredientsPage'))
@@ -31,6 +32,17 @@ function AppRoutes() {
       void pingSupabaseKeepAlive(settings)
     }
   }, [isLoading, settings])
+
+  // One-time repair for ingredients that landed in the database in a raw,
+  // non-app shape (e.g. an Open Food Facts file imported via Settings → Data →
+  // Import, which does no validation) — reshapes them so every screen that
+  // reads variant.macros works again. Cheap no-op once the data is clean.
+  useEffect(() => {
+    if (isLoading) return
+    repairLegacyIngredientData().then(count => {
+      if (count > 0) console.log(`[data repair] Fixed ${count} ingredient(s) with legacy/raw data.`)
+    })
+  }, [isLoading])
 
   return (
     <ThemeProvider

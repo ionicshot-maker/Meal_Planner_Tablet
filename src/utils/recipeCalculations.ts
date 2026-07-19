@@ -26,7 +26,7 @@ export function calcRecipeMacros(
     const ing = ri.ingredientId ? ingredientMap.get(ri.ingredientId) : undefined
     if (!ing) continue
     const variant = ing.variants.find(v => v.id === ri.variantId) ?? ing.variants[0]
-    if (!variant || variant.servingSize <= 0) continue
+    if (!variant || !variant.macros || variant.servingSize <= 0) continue
 
     const qInServingUnits = quantityInServingUnits(ri.quantity, ri.unit, variant.servingUnit)
     const servingsUsed = qInServingUnits / variant.servingSize

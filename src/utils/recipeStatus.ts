@@ -22,6 +22,7 @@ function resolveVariant(ri: RecipeIngredient, ingredientMap: Map<string, Ingredi
 // to flag nutrition data that was never filled in versus a legitimately zero-calorie item.
 function hasNutritionData(variant: IngredientVariant): boolean {
   const m = variant.macros
+  if (!m) return false
   return !((m.calories ?? 0) === 0 && (m.protein ?? 0) === 0 && (m.carbs ?? 0) === 0 && (m.fat ?? 0) === 0)
 }
 

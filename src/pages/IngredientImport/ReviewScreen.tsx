@@ -434,13 +434,13 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
               ['fat',      'Fat',      'g'],
               ['sodium',   'Sodium',   'mg'],
             ] as [keyof Macros, string, string][]).map(([key, label, unit]) => (
-              <MacroField key={key} label={label} unit={unit} value={v.macros[key] ?? 0} onChange={n => setMacro(key, n)} warning={uncertainFields?.has(key)} />
+              <MacroField key={key} label={label} unit={unit} value={v.macros?.[key] ?? 0} onChange={n => setMacro(key, n)} warning={uncertainFields?.has(key)} />
             ))}
             {settings.nutrientToggles.saturatedFat && (
-              <MacroField label="Sat. Fat" unit="g" value={v.macros.saturatedFat ?? 0} onChange={n => setMacro('saturatedFat', n)} warning={uncertainFields?.has('saturatedFat')} />
+              <MacroField label="Sat. Fat" unit="g" value={v.macros?.saturatedFat ?? 0} onChange={n => setMacro('saturatedFat', n)} warning={uncertainFields?.has('saturatedFat')} />
             )}
             {settings.nutrientToggles.transFat && (
-              <MacroField label="Trans Fat" unit="g" value={v.macros.transFat ?? 0} onChange={n => setMacro('transFat', n)} warning={uncertainFields?.has('transFat')} />
+              <MacroField label="Trans Fat" unit="g" value={v.macros?.transFat ?? 0} onChange={n => setMacro('transFat', n)} warning={uncertainFields?.has('transFat')} />
             )}
           </div>
         </Card>

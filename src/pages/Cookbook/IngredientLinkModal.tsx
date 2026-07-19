@@ -153,7 +153,7 @@ export function IngredientLinkModal({ open, initialQuery, allIngredients, onClos
                       </div>
                       <div className={styles.resultMeta}>
                         <span className={styles.resultCategory}>{ingredient.category}</span>
-                        <span className={styles.resultCalories}>{Math.round(variant.macros.calories)} cal/serving</span>
+                        <span className={styles.resultCalories}>{Math.round(variant.macros?.calories ?? 0)} cal/serving</span>
                       </div>
                     </button>
                   ))}

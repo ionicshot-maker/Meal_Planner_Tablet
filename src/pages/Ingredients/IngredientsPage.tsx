@@ -314,8 +314,8 @@ function IngredientCard({ ingredient, display, onEdit, onArchive, onDelete }: {
             {ingredient.variants.length > 0 && (
               <span>{ingredient.variants.length} brand{ingredient.variants.length !== 1 ? 's' : ''}</span>
             )}
-            {defaultVariant && (
-              <span>{defaultVariant.macros.calories} cal / serving</span>
+            {defaultVariant?.macros && (
+              <span>{defaultVariant.macros.calories ?? 0} cal / serving</span>
             )}
             {ingredient.perishable && (
               <span>{ingredient.frozen ? '❄️ Frozen' : '🥬 Perishable'}</span>
