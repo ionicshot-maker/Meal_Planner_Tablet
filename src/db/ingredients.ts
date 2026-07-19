@@ -1,5 +1,6 @@
 import { getDB } from './schema'
 import { normalizeIngredient } from '@/utils/importNormalization'
+import { suggestCategory } from '@/utils/categoryRules'
 import type { Ingredient, IngredientVariant } from '@/types'
 
 export async function getAllIngredients(includeArchived = false): Promise<Ingredient[]> {
@@ -92,6 +93,29 @@ export async function repairLegacyIngredientData(): Promise<number> {
     repaired++
   }
   return repaired
+}
+
+// One-time cleanup for ingredients that landed in the wrong category during import —
+// most visibly, non-beverage items (pasta, bread, snacks, etc.) that were bulk-imported
+// as "Beverages". Re-derives a category from each ingredient's name via the same
+// priority-ordered keyword rules the external converter tool uses (see
+// utils/categoryRules.ts) and reassigns only when that differs from what's currently
+// stored — items with no keyword match, or whose suggested category already matches,
+// are left untouched. Gated by settings.miscategoryFixed so it only ever runs once.
+export async function fixMiscategorizedIngredients(): Promise<number> {
+  const all = await getAllIngredients(true)
+  const db = await getDB()
+  let fixed = 0
+  for (const ingredient of all) {
+    const suggested = suggestCategory(ingredient.name)
+    if (suggested && suggested !== ingredient.category) {
+      ingredient.category = suggested
+      ingredient.updatedAt = new Date().toISOString()
+      await db.put('ingredients', ingredient)
+      fixed++
+    }
+  }
+  return fixed
 }
 
 export function calcCostPerServing(variant: IngredientVariant): number | undefined {

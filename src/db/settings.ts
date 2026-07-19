@@ -91,6 +91,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     showAllergens: true,
   },
   allergenWatchList: [],
+  miscategoryFixed: false,
   supabaseUrl: '',
   supabaseAnonKey: '',
   householdSyncCode: '',

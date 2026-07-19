@@ -1,12 +1,13 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SettingsProvider, useSettings } from '@/context/SettingsContext'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { SetupWizard } from '@/pages/Setup/SetupWizard'
 import { StarterLibraryPrompt } from '@/components/StarterLibraryPrompt'
+import { Toast } from '@/pages/IngredientImport/Toast'
 import { isSupabaseConfigured, pingSupabaseKeepAlive } from '@/db/supabase'
-import { repairLegacyIngredientData } from '@/db/ingredients'
+import { repairLegacyIngredientData, fixMiscategorizedIngredients } from '@/db/ingredients'
 import { migrateIngredientCategories } from '@/db/settings'
 
 const SettingsPage          = lazy(() => import('@/pages/Settings/SettingsPage'))
@@ -20,6 +21,7 @@ const HelpPage              = lazy(() => import('@/pages/Help/HelpPage'))
 
 function AppRoutes() {
   const { settings, updateSettings, reloadSettings, isLoading } = useSettings()
+  const [miscategoryToast, setMiscategoryToast] = useState<string | null>(null)
 
   // Text Size setting — device-local, applied as a CSS custom property on the
   // root element so every rem-based --text-* token scales proportionally.
@@ -48,6 +50,10 @@ function AppRoutes() {
   // One-time migration from the old 15-category ingredient list to the expanded
   // 21-category list — remaps existing ingredients' category field and the
   // household's stored category list. Cheap no-op once already migrated.
+  //
+  // The miscategory fix below runs right after, in the same chain rather than its
+  // own effect — both write to ingredient.category, so running them concurrently
+  // could race and have one silently clobber the other's write for the same item.
   useEffect(() => {
     if (isLoading) return
     migrateIngredientCategories().then(async ({ categoriesUpdated, ingredientsRemapped }) => {
@@ -57,6 +63,18 @@ function AppRoutes() {
       // The migration writes settings straight to IndexedDB, bypassing this context's
       // local state — reload so the category list updates without a page refresh.
       if (categoriesUpdated) await reloadSettings()
+
+      // One-time cleanup for ingredients that were bulk-imported with the wrong
+      // category (most visibly, non-beverage items that landed in "Beverages").
+      // Gated by settings.miscategoryFixed so it only ever runs once per household.
+      if (!settings.miscategoryFixed) {
+        const fixedCount = await fixMiscategorizedIngredients()
+        await updateSettings({ miscategoryFixed: true })
+        if (fixedCount > 0) {
+          console.log(`[category fix] Fixed ${fixedCount} miscategorized ingredient(s).`)
+          setMiscategoryToast(`Fixed ${fixedCount} ingredient categories`)
+        }
+      }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading])
@@ -69,6 +87,9 @@ function AppRoutes() {
       <BrowserRouter>
         {!isLoading && !settings.setupComplete && <SetupWizard />}
         {!isLoading && settings.setupComplete && <StarterLibraryPrompt />}
+        {miscategoryToast && (
+          <Toast message={miscategoryToast} onDone={() => setMiscategoryToast(null)} />
+        )}
         <AppLayout>
           <Suspense fallback={<PageLoader />}>
             <Routes>
