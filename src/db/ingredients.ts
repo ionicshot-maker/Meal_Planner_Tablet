@@ -68,18 +68,33 @@ export async function searchIngredients(query: string, includeArchived = false):
   )
 }
 
+// A variant can carry a nested `macros` object that's present but effectively
+// empty (every field defaulted to 0) while the real values are still sitting in
+// old flat fields (variant.calories, variant.protein, ...) left over from a prior
+// import — `!v.macros` alone misses this, since a zeroed-but-present object is
+// still truthy. Recognizable by: macros is missing or all-zero, AND at least one
+// flat macro field on the variant itself has a genuinely nonzero value to recover.
+function hasRecoverableFlatMacros(v: IngredientVariant): boolean {
+  const flat = v as IngredientVariant & { calories?: number; protein?: number; carbs?: number; fat?: number }
+  if (!flat.calories && !flat.protein && !flat.carbs && !flat.fat) return false
+  const m = v.macros
+  return !m || (!m.calories && !m.protein && !m.carbs && !m.fat)
+}
+
 // One-time repair for ingredients saved via Settings → Data → Import (or any
 // other path) that bypassed normalization and landed in the database in a raw,
 // non-app shape — most commonly an Open Food Facts bulk-converter export whose
-// variants carry flat macro fields instead of a nested `macros` object. Those
-// records render fine as long as nothing reads `variant.macros.<field>`
-// directly, but the missing `macros` object still means broken nutrition/cost
-// everywhere it matters, so this reshapes them in place using the same
-// normalization the JSON Import tab applies, preserving every id so existing
-// recipe links keep working.
+// variants carry flat macro fields instead of a nested `macros` object, or a
+// nested `macros` object that's present but zeroed while real values are still
+// sitting in those flat fields. Those records render fine as long as nothing
+// reads `variant.macros.<field>` directly, but the missing/wrong `macros` object
+// still means broken nutrition/cost everywhere it matters, so this reshapes them
+// in place using the same normalization the JSON Import tab applies (which now
+// merges nested and flat sources field-by-field — see importNormalization.ts),
+// preserving every id so existing recipe links keep working.
 export async function repairLegacyIngredientData(): Promise<number> {
   const all = await getAllIngredients(true)
-  const broken = all.filter(i => i.variants.some(v => !v.macros))
+  const broken = all.filter(i => i.variants.some(v => !v.macros || hasRecoverableFlatMacros(v)))
   if (broken.length === 0) return 0
 
   const db = await getDB()

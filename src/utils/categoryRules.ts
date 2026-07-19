@@ -25,6 +25,8 @@ const BEVERAGES_NEGATIVE_KEYWORDS = [
   'naan', 'pizza', 'donut', 'cake', 'brownie', 'granola', 'waffle', 'pancake',
   'muffin', 'cookie', 'cracker', 'chip', 'pretzel', 'hummus', 'couscous', 'oatnut',
   'krispie', 'frosted', 'streusel', 'batter', 'fries', 'cupcake', 'loaf',
+  'steak', 'sirloin', 'bison', 'ribeye', 'tenderloin', 'strip', 'ny strip',
+  'whole grains oat',
 ]
 
 // Same idea for Produce — there is no positive "this name sounds like Produce"
@@ -39,6 +41,7 @@ export const PRODUCE_NEGATIVE_KEYWORDS = [
   'donut', 'candy', 'chocolate', 'ranch', 'dressing', 'oil', 'spray', 'jam', 'jelly',
   'gelatin', 'pudding', 'cake', 'cupcake', 'pancake', 'waffle', 'pizza', 'burrito',
   'pie', 'cookie', 'cracker', 'loaf', 'muffin', 'pretzel', 'brownie', 'shake', 'protein',
+  'nutrigrain', 'nutri-grain', 'milano', 'protein bar', 'rotini',
 ]
 
 // Priority-ordered — first matching rule wins. Mirrors the keyword categorization
@@ -66,7 +69,7 @@ export const CATEGORY_RULES: CategoryRule[] = [
   { category: 'Packaged Meals', keywords: ['ramen', 'instant noodle', 'maruchan', 'helper', 'meal kit', 'instant meal', 'pizza', 'burrito'] },
   { category: 'Frozen', keywords: ['pot pie'] },
   { category: 'Soups & Broths', keywords: ['soup', 'broth', 'bouillon'] },
-  { category: 'Pasta & Noodles', keywords: ['pasta', 'spaghetti', 'penne', 'rigatoni', 'noodle', 'macaroni', 'lasagna'] },
+  { category: 'Pasta & Noodles', keywords: ['pasta', 'spaghetti', 'penne', 'rigatoni', 'noodle', 'macaroni', 'lasagna', 'rotini'] },
   { category: 'Bread & Bakery', keywords: ['bread', 'tortilla', 'bagel', 'bun', 'roll', 'muffin', 'wrap', 'flatbread', 'naan', 'loaf'] },
   { category: 'Breakfast & Cereal', keywords: ['oatmeal', 'oat', 'cereal', 'granola', 'grits', 'pancake', 'waffle'] },
   { category: 'Rice & Grains', keywords: ['rice'] },
@@ -74,13 +77,17 @@ export const CATEGORY_RULES: CategoryRule[] = [
   { category: 'Snacks', keywords: [
     'chip', 'cracker', 'cookie', 'pretzel', 'snack', 'nut', 'pistachio', 'almond', 'pecan',
     'donut', 'walnut', 'peanut', 'candy', 'cake', 'cupcake', 'brownie', 'gelatin', 'pudding',
+    'nutrigrain', 'nutri-grain', 'milano', 'protein bar',
   ] },
   { category: 'Condiments & Sauces', keywords: ['ketchup', 'sauce', 'dressing', 'mustard', 'mayo', 'salsa', 'marinade', 'vinegar', 'jam', 'jelly', 'applesauce', 'ranch'] },
   { category: 'Seasonings & Spices', keywords: ['seasoning', 'spice', 'pepper', 'salt', 'cumin', 'paprika', 'oregano'] },
   { category: 'Baking & Pantry', keywords: ['flour', 'oil', 'spray', 'flaxseed', 'chia seed'] },
   { category: 'Dairy', keywords: ['butter', 'cheese', 'milk', 'cream', 'yogurt', 'dairy'] },
   { category: 'Seafood', keywords: ['fish', 'salmon', 'tuna', 'shrimp'] },
-  { category: 'Meat & Poultry', keywords: ['chicken', 'beef', 'pork', 'turkey', 'meat'] },
+  { category: 'Meat & Poultry', keywords: [
+    'chicken', 'beef', 'pork', 'turkey', 'meat',
+    'steak', 'sirloin', 'bison', 'ribeye', 'tenderloin', 'strip', 'ny strip',
+  ] },
 ]
 
 // A "frozen" item matching one of these categories is ambiguous rather than

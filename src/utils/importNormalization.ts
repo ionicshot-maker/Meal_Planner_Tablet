@@ -58,17 +58,34 @@ export interface RawIngredient {
 
 const NUTRISCORE_GRADES = new Set(['A', 'B', 'C', 'D', 'E'])
 
+// Prefers a genuinely nonzero value over a zero/missing one, checking `nested`
+// (variant.macros.<field>) before `flat` (variant.<field>). A raw record can carry
+// BOTH shapes at once — e.g. a nested macros object with everything defaulted to 0
+// alongside real values still sitting in the old flat fields from a prior import —
+// and plain `rv.macros ?? {...flat}` would keep the zeroed nested object and never
+// look at the flat fields, since a present-but-empty object is still truthy. Only
+// falls through when both sides agree there's genuinely nothing (both zero/missing),
+// so a real, legitimate 0 (salt, a zero-calorie soda) is never overwritten.
+function pickMacro(nested: number | undefined, flat: number | undefined): number {
+  if (nested != null && nested !== 0) return nested
+  if (flat != null && flat !== 0) return flat
+  return nested ?? flat ?? 0
+}
+
 export function normalizeVariant(rv: RawVariant, parentId: string): IngredientVariant {
-  const macros: Macros = rv.macros ?? {
-    calories: rv.calories ?? 0,
-    protein: rv.protein ?? 0,
-    carbs: rv.carbs ?? 0,
-    fiber: rv.fiber ?? 0,
-    sugar: rv.sugar ?? 0,
-    fat: rv.fat ?? 0,
-    sodium: rv.sodium ?? 0,
-    ...(rv.saturatedFat != null ? { saturatedFat: rv.saturatedFat } : {}),
-    ...(rv.transFat != null ? { transFat: rv.transFat } : {}),
+  const nestedMacros = rv.macros
+  const macros: Macros = {
+    calories: pickMacro(nestedMacros?.calories, rv.calories),
+    protein: pickMacro(nestedMacros?.protein, rv.protein),
+    carbs: pickMacro(nestedMacros?.carbs, rv.carbs),
+    fiber: pickMacro(nestedMacros?.fiber, rv.fiber),
+    sugar: pickMacro(nestedMacros?.sugar, rv.sugar),
+    fat: pickMacro(nestedMacros?.fat, rv.fat),
+    sodium: pickMacro(nestedMacros?.sodium, rv.sodium),
+    ...((nestedMacros?.saturatedFat ?? rv.saturatedFat) != null
+      ? { saturatedFat: pickMacro(nestedMacros?.saturatedFat, rv.saturatedFat ?? undefined) } : {}),
+    ...((nestedMacros?.transFat ?? rv.transFat) != null
+      ? { transFat: pickMacro(nestedMacros?.transFat, rv.transFat ?? undefined) } : {}),
   }
   const totalServingsInPackage = rv.totalServingsInPackage ?? rv.packageServings ?? undefined
   const store = rv.store ?? rv.storePreference ?? undefined
