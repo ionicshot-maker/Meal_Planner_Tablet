@@ -110,6 +110,36 @@ export async function repairLegacyIngredientData(): Promise<number> {
   return repaired
 }
 
+// One-time repair for a unit-detection bug in the (now-fixed) ingredient converter
+// script: sodium values were sometimes multiplied by 1000 on the way in, so a
+// genuine 450mg reading landed in the database as 450000. Recognizable by: greater
+// than 5000mg AND an exact multiple of 1000 — the signature of a value that went
+// through an extra ×1000 unit conversion it shouldn't have. High-but-not-a-clean-
+// multiple values (e.g. 5400) are left alone since they aren't provably bugged and
+// need manual review instead. Naturally idempotent — once a value is divided down
+// it's no longer a multiple-of-1000 value above 5000mg in the overwhelming majority
+// of cases, so this is a cheap no-op on every load once the data is clean, the same
+// as repairLegacyIngredientData() above.
+export async function repairSodiumUnitBug(): Promise<number> {
+  const all = await getAllIngredients(true)
+  const broken = all.filter(i => i.variants.some(v => v.macros && v.macros.sodium > 5000 && v.macros.sodium % 1000 === 0))
+  if (broken.length === 0) return 0
+
+  const db = await getDB()
+  let repaired = 0
+  for (const ingredient of broken) {
+    for (const variant of ingredient.variants) {
+      if (variant.macros && variant.macros.sodium > 5000 && variant.macros.sodium % 1000 === 0) {
+        variant.macros.sodium = variant.macros.sodium / 1000
+      }
+    }
+    ingredient.updatedAt = new Date().toISOString()
+    await db.put('ingredients', ingredient)
+    repaired++
+  }
+  return repaired
+}
+
 // One-time cleanup for ingredients that landed in the wrong category during import —
 // most visibly, non-beverage items (pasta, bread, snacks, etc.) that were bulk-imported
 // as "Beverages", plus miscellaneous items still lumped into the old catch-all buckets

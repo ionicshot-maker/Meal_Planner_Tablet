@@ -7,7 +7,7 @@ import { SetupWizard } from '@/pages/Setup/SetupWizard'
 import { StarterLibraryPrompt } from '@/components/StarterLibraryPrompt'
 import { Toast } from '@/pages/IngredientImport/Toast'
 import { isSupabaseConfigured, pingSupabaseKeepAlive } from '@/db/supabase'
-import { repairLegacyIngredientData, fixMiscategorizedIngredients } from '@/db/ingredients'
+import { repairLegacyIngredientData, repairSodiumUnitBug, fixMiscategorizedIngredients } from '@/db/ingredients'
 import { migrateIngredientCategories } from '@/db/settings'
 
 const SettingsPage          = lazy(() => import('@/pages/Settings/SettingsPage'))
@@ -57,6 +57,17 @@ function AppRoutes() {
     if (isLoading) return
     repairLegacyIngredientData().then(count => {
       if (count > 0) console.log(`[data repair] Fixed ${count} ingredient(s) with legacy/raw data.`)
+    })
+  }, [isLoading])
+
+  // One-time repair for a since-fixed unit-detection bug in the ingredient converter
+  // script that multiplied some sodium readings by 1000 on the way in (see
+  // repairSodiumUnitBug() in db/ingredients.ts for the exact detection rule). Cheap
+  // no-op once the data is clean, same as the legacy-data repair above.
+  useEffect(() => {
+    if (isLoading) return
+    repairSodiumUnitBug().then(count => {
+      if (count > 0) console.log(`[sodium fix] Fixed ${count} ingredient(s) with a ×1000 sodium value.`)
     })
   }, [isLoading])
 
