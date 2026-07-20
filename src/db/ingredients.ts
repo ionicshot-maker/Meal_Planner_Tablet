@@ -1,6 +1,6 @@
 import { getDB } from './schema'
 import { normalizeIngredient } from '@/utils/importNormalization'
-import { suggestCategory, RECLASSIFIABLE_CATEGORIES } from '@/utils/categoryRules'
+import { suggestCategory, getCategoryOverride, RECLASSIFIABLE_CATEGORIES } from '@/utils/categoryRules'
 import type { Ingredient, IngredientVariant } from '@/types'
 
 export async function getAllIngredients(includeArchived = false): Promise<Ingredient[]> {
@@ -114,19 +114,30 @@ export async function repairLegacyIngredientData(): Promise<number> {
 // most visibly, non-beverage items (pasta, bread, snacks, etc.) that were bulk-imported
 // as "Beverages", plus miscellaneous items still lumped into the old catch-all buckets
 // like "Baking & Pantry" (renamed from "Pantry", which used to hold everything from
-// condiments to pasta to spice blends). Re-derives a category from each ingredient's
-// name via the same priority-ordered keyword rules the external converter tool uses
-// (see utils/categoryRules.ts) and reassigns only when: the suggested category differs
-// from what's stored, AND the current category is one of the catch-all-prone buckets in
-// RECLASSIFIABLE_CATEGORIES. Anything already sorted into a specific category (Pasta &
-// Noodles, Condiments & Sauces, Canned Goods, etc.) is trusted and left alone even if a
-// keyword happens to match elsewhere, so this can't undo a correct, specific
-// categorization. Gated by settings.miscategoryFixed so it only ever runs once.
+// condiments to pasta to spice blends). For each ingredient: first checks
+// CATEGORY_NAME_OVERRIDES for a human-verified exact-name correction (applied
+// unconditionally, regardless of current category — these were confirmed by reviewing
+// a real backup export, not guessed); otherwise re-derives a category from the name via
+// the priority-ordered keyword rules (see utils/categoryRules.ts) and reassigns only
+// when the suggestion differs AND the current category is one of the catch-all-prone
+// buckets in RECLASSIFIABLE_CATEGORIES. Anything already sorted into a specific
+// category (Pasta & Noodles, Condiments & Sauces, Canned Goods, etc.) is trusted and
+// left alone even if a keyword happens to match elsewhere, so this can't undo a
+// correct, specific categorization. Gated by settings.miscategoryFixed so it only ever
+// runs once (until CATEGORY_FIX_RULES_VERSION is bumped in App.tsx).
 export async function fixMiscategorizedIngredients(): Promise<number> {
   const all = await getAllIngredients(true)
   const db = await getDB()
   let fixed = 0
   for (const ingredient of all) {
+    const override = getCategoryOverride(ingredient.name)
+    if (override && override !== ingredient.category) {
+      ingredient.category = override
+      ingredient.updatedAt = new Date().toISOString()
+      await db.put('ingredients', ingredient)
+      fixed++
+      continue
+    }
     if (!RECLASSIFIABLE_CATEGORIES.has(ingredient.category)) continue
     const suggested = suggestCategory(ingredient.name)
     if (suggested && suggested !== ingredient.category) {

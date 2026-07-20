@@ -24,7 +24,13 @@ const HelpPage              = lazy(() => import('@/pages/Help/HelpPage'))
 // from an earlier, less complete rule set. (Editing DEFAULT_SETTINGS alone doesn't
 // do this: existing households already have a stored `miscategoryFixed` value, which
 // always wins over the default in the settings merge.)
-const CATEGORY_FIX_RULES_VERSION = 6
+//
+// v8: adopted the full CATEGORY_RULES.md shopper-intuition philosophy — jerky/Slim
+// Jims/nuggets/chicken patties now auto-route to Snacks/Frozen instead of Meat &
+// Poultry, raw frozen produce now auto-routes to Produce instead of staying in
+// Frozen, and ~500 individually-reviewed ingredients from a real household backup
+// were added to CATEGORY_NAME_OVERRIDES.
+const CATEGORY_FIX_RULES_VERSION = 8
 
 function AppRoutes() {
   const { settings, updateSettings, reloadSettings, isLoading } = useSettings()
