@@ -207,7 +207,10 @@ export default function CookbookPage() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.pageTitle}>{pageTitle}</h1>
+      <div className={styles.headingGroup}>
+        <h1 className={styles.pageTitle}>{pageTitle}</h1>
+        <p className={styles.countIndicator}>{recipes.length} {recipes.length === 1 ? 'recipe' : 'recipes'}</p>
+      </div>
 
       {/* ── Toolbar ── */}
       <div className={styles.toolbar}>

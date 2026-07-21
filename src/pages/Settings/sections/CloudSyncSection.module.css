@@ -119,3 +119,9 @@
   font-size: var(--text-xs);
   color: var(--color-text-muted);
 }
+
+.lastSynced {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}

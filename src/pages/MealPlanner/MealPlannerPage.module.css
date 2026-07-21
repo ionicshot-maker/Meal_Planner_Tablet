@@ -33,8 +33,11 @@
 
 .pageTitle {
   font-size: var(--text-base); font-weight: 700; color: var(--color-text);
-  margin: 0; margin-right: var(--space-2); white-space: nowrap;
+  margin: 0; white-space: nowrap;
 }
+
+.headingGroup { display: flex; flex-direction: column; gap: 1px; margin-right: var(--space-2); }
+.countIndicator { font-size: var(--text-xs); color: var(--color-text-muted); margin: 0; white-space: nowrap; }
 
 .todayBtn {
   padding: var(--space-1) var(--space-3);

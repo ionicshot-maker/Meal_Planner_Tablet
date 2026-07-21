@@ -9,6 +9,7 @@ import {
   saveMealPlanTemplate,
   deleteMealPlanTemplate,
   getActiveGroceryListsInRange,
+  getPlannedDayCount,
 } from '@/db/mealPlan'
 import { useSettings, useHouseholdTitle } from '@/context/SettingsContext'
 import type { Recipe, MealPlanDay, MealPlanWeekTemplate, Ingredient } from '@/types'
@@ -61,6 +62,9 @@ export default function MealPlannerPage() {
   const [templates, setTemplates] = useState<MealPlanWeekTemplate[]>([])
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [staleGroceryWarning, setStaleGroceryWarning] = useState(false)
+  // Global count across the whole local plan, not just the visible week(s) —
+  // dayMap only holds whatever range is currently on screen.
+  const [plannedDayCount, setPlannedDayCount] = useState<number | null>(null)
 
   const dateRange = useMemo(
     () => getDateRange(weekStart, numWeeks),
@@ -93,6 +97,10 @@ export default function MealPlannerPage() {
   useEffect(() => {
     getMealPlanDays(dateRange).then(setDayMap)
   }, [dateRange])
+
+  useEffect(() => {
+    getPlannedDayCount().then(setPlannedDayCount)
+  }, [dayMap])
 
   // Check for stale grocery lists when day map changes
   useEffect(() => {
@@ -177,7 +185,12 @@ export default function MealPlannerPage() {
       {/* Toolbar */}
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
-          <h1 className={styles.pageTitle}>{pageTitle}</h1>
+          <div className={styles.headingGroup}>
+            <h1 className={styles.pageTitle}>{pageTitle}</h1>
+            {plannedDayCount !== null && (
+              <p className={styles.countIndicator}>{plannedDayCount} {plannedDayCount === 1 ? 'day' : 'days'} planned</p>
+            )}
+          </div>
           <button className={styles.todayBtn} onClick={handleToday}>Today</button>
           <button className={styles.navBtn} onClick={handlePrevPeriod} aria-label="Previous">‹</button>
           <button className={styles.navBtn} onClick={handleNextPeriod} aria-label="Next">›</button>

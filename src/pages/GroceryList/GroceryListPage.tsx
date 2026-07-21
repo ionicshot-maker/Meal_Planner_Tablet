@@ -76,7 +76,17 @@ export default function GroceryListPage() {
       {/* Toolbar */}
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
-          <h1 className={styles.pageTitle}>{pageTitle}</h1>
+          <div className={styles.headingGroup}>
+            <h1 className={styles.pageTitle}>{pageTitle}</h1>
+            <p className={styles.countIndicator}>
+              {activeList
+                ? (() => {
+                    const n = activeList.items.length + activeList.manualItems.length
+                    return `${n} ${n === 1 ? 'item' : 'items'} on active list`
+                  })()
+                : 'No active list'}
+            </p>
+          </div>
         </div>
         <div className={styles.toolbarRight}>
           <button

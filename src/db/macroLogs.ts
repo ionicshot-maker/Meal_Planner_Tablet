@@ -27,6 +27,14 @@ export async function getEntriesForRange(
   return all.filter(e => e.date >= startDate && e.date <= endDate)
 }
 
+// Total entry count across everyone — macro logs are device-local (never synced,
+// see SYNCED_SETTINGS_KEYS/runSync), so this is mainly useful on the Data tab as a
+// reminder that this particular number is expected to differ between devices.
+export async function getMacroLogCount(): Promise<number> {
+  const db = await getDB()
+  return db.count('macroLogs')
+}
+
 export async function pruneOldEntries(maxDays: number): Promise<void> {
   const db = await getDB()
   const cutoff = new Date()

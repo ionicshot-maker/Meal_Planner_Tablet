@@ -47,6 +47,10 @@ export default function IngredientsPage() {
   const [bannerDismissed, setBannerDismissed] = useState(
     () => localStorage.getItem('starter_banner_dismissed') === '1'
   )
+  // Total local count, independent of the search/archived filters above — this is
+  // what's actually useful for spotting a sync mismatch between devices, so it
+  // shouldn't fluctuate as someone types into the search box.
+  const [totalCount, setTotalCount] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     const results = search
@@ -57,6 +61,10 @@ export default function IngredientsPage() {
   }, [search, showArchived])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    getAllIngredients(true).then(all => setTotalCount(all.length))
+  }, [ingredients])
 
   // Deep-link support: /ingredients?edit=<id> opens that ingredient's editor directly —
   // used when a barcode scan matches an ingredient already in the local database.
@@ -128,7 +136,12 @@ export default function IngredientsPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.heading}>{pageTitle}</h1>
+        <div className={styles.headingGroup}>
+          <h1 className={styles.heading}>{pageTitle}</h1>
+          {totalCount !== null && (
+            <p className={styles.countIndicator}>{totalCount} {totalCount === 1 ? 'ingredient' : 'ingredients'}</p>
+          )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           <Button variant="secondary" onClick={() => navigate('/import-ingredients')} title="Import"><Download size={16} style={{ marginRight: 4, verticalAlign: 'middle' }} /><span className={styles.btnLabel}>Import</span></Button>
           <Button variant="ghost" size="sm" onClick={() => navigate('/import-ingredients?tab=jsonImport')} title="Import from JSON"><FileJson size={15} style={{ marginRight: 4, verticalAlign: 'middle' }} /><span className={styles.btnLabel}>Import from JSON</span></Button>

@@ -133,6 +133,11 @@ export interface AppSettings {
   householdSyncCode: string
   familyShareCode: string
   familyShareRole: FamilyShareRole
+  // Device-local — deliberately excluded from cloud sync (see SYNCED_SETTINGS_KEYS
+  // in db/supabase.ts). Each device tracks when *it* last synced; syncing this
+  // field itself would just show whichever device synced last, everywhere.
+  lastHouseholdSyncAt?: string
+  lastFamilySyncAt?: string
   updatedAt: string
 }
 

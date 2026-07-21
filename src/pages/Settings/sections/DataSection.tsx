@@ -1,11 +1,12 @@
-import { useState, ChangeEvent } from 'react'
+import { useState, useEffect, ChangeEvent } from 'react'
 import { Button, Card, Modal } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { getAllIngredients, getAllRecipes } from '@/db'
 import { CloudSyncSection } from './CloudSyncSection'
 import { loadSettings } from '@/db/settings'
-import { getAllMealPlanTemplates } from '@/db/mealPlan'
+import { getAllMealPlanTemplates, getPlannedDayCount } from '@/db/mealPlan'
 import { getAllHouseholdItems } from '@/db/householdItems'
+import { getMacroLogCount } from '@/db/macroLogs'
 import { getDB } from '@/db/schema'
 import { isNativeBackupFormat } from '@/utils/nativeBackupValidation'
 import styles from './DataSection.module.css'
@@ -28,6 +29,13 @@ interface ImportPending {
   recipeConflicts: number
 }
 
+interface LocalCounts {
+  ingredients: number
+  recipes: number
+  plannedDays: number
+  macroLogEntries: number
+}
+
 export function DataSection() {
   const { settings } = useSettings()
   const [confirmTarget, setConfirmTarget] = useState<ResetTarget | null>(null)
@@ -35,6 +43,24 @@ export function DataSection() {
   const [importPending, setImportPending] = useState<ImportPending | null>(null)
   const [importResult, setImportResult] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [counts, setCounts] = useState<LocalCounts | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadCounts() {
+      const [ingredients, recipes, plannedDays, macroLogEntries] = await Promise.all([
+        getAllIngredients(true).then(r => r.length),
+        getAllRecipes(true).then(r => r.length),
+        getPlannedDayCount(),
+        getMacroLogCount(),
+      ])
+      if (!cancelled) setCounts({ ingredients, recipes, plannedDays, macroLogEntries })
+    }
+    loadCounts()
+    return () => { cancelled = true }
+    // Re-run after import/reset so the counts reflect what just changed —
+    // importResult/importError only ever flip after those actions complete.
+  }, [importResult, importError])
 
   function makeFilename(label: string) {
     const hn = settings.householdName.trim().replace(/\s+/g, '-')
@@ -220,6 +246,17 @@ export function DataSection() {
   return (
     <div className={styles.section}>
       <h2 className={styles.sectionTitle}>Data</h2>
+
+      {/* Local data counts — meant to make a stale/partial sync between devices
+          obvious at a glance instead of requiring a deep debugging session. */}
+      {counts && (
+        <p className={styles.localCounts}>
+          On this device: {counts.ingredients} {counts.ingredients === 1 ? 'ingredient' : 'ingredients'} ·{' '}
+          {counts.recipes} {counts.recipes === 1 ? 'recipe' : 'recipes'} ·{' '}
+          {counts.plannedDays} meal plan {counts.plannedDays === 1 ? 'day' : 'days'} planned ·{' '}
+          {counts.macroLogEntries} macro log {counts.macroLogEntries === 1 ? 'entry' : 'entries'} (not synced)
+        </p>
+      )}
 
       {/* Cloud Sync */}
       <CloudSyncSection />

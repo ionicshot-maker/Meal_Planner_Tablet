@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { Button, Card, Input, Select, Modal } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
@@ -8,6 +8,7 @@ import {
   resolveIngredientDuplicate, resolveRecipeDuplicate,
   type SyncSummary, type SyncDuplicate,
 } from '@/db/supabase'
+import { formatRelativeTime } from '@/utils/relativeTime'
 import type { FamilyShareRole, Ingredient, Recipe } from '@/types'
 import styles from './CloudSyncSection.module.css'
 
@@ -22,6 +23,14 @@ export function CloudSyncSection() {
   const [showSQL, setShowSQL] = useState(false)
   const [dupToResolve, setDupToResolve] = useState<SyncDuplicate | null>(null)
 
+  // "X ago" only recomputes on render — tick every minute so it doesn't read
+  // "just now" for the whole time this section happens to stay open.
+  const [, forceTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => forceTick(t => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
   const configured = isSupabaseConfigured(settings)
 
   async function handleSync(direction: SyncDirection) {
@@ -30,6 +39,11 @@ export function CloudSyncSection() {
     try {
       const result = await runSync(settings, direction)
       setSummary(result)
+      // Only stamp "last synced" on a clean run — a sync that errored didn't
+      // actually reconcile anything, so it shouldn't read as up to date.
+      if (result.errors.length === 0) {
+        await updateSettings({ lastHouseholdSyncAt: new Date().toISOString() })
+      }
       // Settings may have been written directly to IndexedDB during sync — refresh context state
       await reloadSettings()
     } catch (e) {
@@ -45,6 +59,9 @@ export function CloudSyncSection() {
     try {
       const result = await runFamilyShareSync(settings, direction)
       setFamilySummary(result)
+      if (result.errors.length === 0) {
+        await updateSettings({ lastFamilySyncAt: new Date().toISOString() })
+      }
     } catch (e) {
       setFamilySummary({ addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0, duplicatesForReview: [], errors: [String(e)] })
     } finally {
@@ -197,6 +214,9 @@ export function CloudSyncSection() {
             ↓ Pull from Cloud
           </Button>
         </div>
+        <p className={styles.lastSynced}>
+          Last synced on this device: {formatRelativeTime(settings.lastHouseholdSyncAt)}
+        </p>
 
         {summary && <SyncResultDisplay summary={summary} onReviewDuplicate={setDupToResolve} onBulkResolve={bulkResolveHousehold} />}
       </Card>
@@ -253,6 +273,9 @@ export function CloudSyncSection() {
         {settings.familyShareRole === 'readonly' && (
           <p className={styles.roleNote}>Read-only mode: you can pull from family but not push changes.</p>
         )}
+        <p className={styles.lastSynced}>
+          Last synced on this device: {formatRelativeTime(settings.lastFamilySyncAt)}
+        </p>
 
         {familySummary && <SyncResultDisplay summary={familySummary} onReviewDuplicate={setDupToResolve} onBulkResolve={bulkResolveFamily} />}
       </Card>
