@@ -9,7 +9,7 @@ import { consolidateIngredients, aggToGroceryItem } from '@/utils/groceryUtils'
 import { toISODate } from '@/utils/mealPlanUtils'
 import { MealPlanCalendarPicker } from './MealPlanCalendarPicker'
 import type { GroceryList, GroceryItem, HouseholdItem, IngredientUnit } from '@/types'
-import type { AggregatedItem } from '@/utils/groceryUtils'
+import type { AggregatedItem, UnresolvedIngredientRef } from '@/utils/groceryUtils'
 import styles from './GroceryGenerator.module.css'
 
 interface Props {
@@ -52,6 +52,10 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
   const [aohHouseholdItems, setAohHouseholdItems] = useState<HouseholdItem[]>([])
   const [aohHouseholdMissing, setAohHouseholdMissing] = useState<Set<string>>(new Set())
 
+  // Ingredient lines that were dropped from this list because they couldn't be
+  // resolved to an ingredient record — surfaced instead of silently vanishing.
+  const [danglingRefs, setDanglingRefs] = useState<UnresolvedIngredientRef[]>([])
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
@@ -85,11 +89,13 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
     const ingredientMap = buildIngredientMap(ingredients)
     const days = dates.map(d => dayMap.get(d)).filter(Boolean) as ReturnType<typeof dayMap.get>[]
 
-    const aggregated = consolidateIngredients(
+    const { items: aggregated, unresolved } = consolidateIngredients(
       days.filter(d => d !== undefined) as NonNullable<typeof days[number]>[],
       recipeMap,
       ingredientMap
     )
+    const dangling = unresolved.filter(u => u.reason === 'dangling')
+    setDanglingRefs(dangling)
 
     const aoh = aggregated.filter(a => a.alwaysOnHand)
     const aohHousehold = householdAll.filter(h => h.alwaysOnHand)
@@ -98,7 +104,7 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
     setAohItems(aoh)
     setAohHouseholdItems(aohHousehold)
 
-    if (aoh.length > 0 || aohHousehold.length > 0) {
+    if (aoh.length > 0 || aohHousehold.length > 0 || dangling.length > 0) {
       setStep('aoh')
     } else {
       generateList(aggregated, new Set(), new Set())
@@ -189,6 +195,22 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
 
           {step === 'aoh' && (
             <>
+              {danglingRefs.length > 0 && (
+                <div className={styles.error} role="alert">
+                  <strong>{danglingRefs.length} ingredient line{danglingRefs.length !== 1 ? 's' : ''} couldn't be added</strong> —
+                  {' '}they reference an ingredient record that no longer exists (likely a sync data issue).
+                  <ul>
+                    {danglingRefs.slice(0, 8).map((u, i) => (
+                      <li key={i}>{u.recipeName}: {u.ingredientName}</li>
+                    ))}
+                    {danglingRefs.length > 8 && <li>…and {danglingRefs.length - 8} more</li>}
+                  </ul>
+                  Try Settings → Cloud Sync → Sync Now, or edit the affected recipe(s) to relink the ingredient.
+                </div>
+              )}
+
+              {(aohCount > 0 || aohHouseholdCount > 0) ? (
+              <>
               <div className={styles.stepTitle}>Always-on-hand check</div>
               <p className={styles.aohDesc}>
                 {aohCount > 0 && (
@@ -265,6 +287,12 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
                       : 'no additions'}
                   </button>
                 </>
+              )}
+              </>
+              ) : (
+                <button className={styles.btnPrimary} onClick={handleAohYesAll}>
+                  Continue
+                </button>
               )}
             </>
           )}

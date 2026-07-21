@@ -14,11 +14,26 @@ export interface AggregatedItem {
   alwaysOnHand: boolean
 }
 
+export interface UnresolvedIngredientRef {
+  recipeName: string
+  ingredientName: string
+  ingredientId?: string
+  // 'dangling' = ingredientId is set but doesn't match any ingredient record (data
+  // corruption, e.g. the unmerged-duplicate sync bug this was added to catch).
+  // 'unlinked' = the recipe line was never matched to an ingredient record at all.
+  reason: 'dangling' | 'unlinked'
+}
+
+export interface ConsolidateResult {
+  items: AggregatedItem[]
+  unresolved: UnresolvedIngredientRef[]
+}
+
 export function consolidateIngredients(
   days: MealPlanDay[],
   recipeMap: Map<string, Recipe>,
   ingredientMap: Map<string, Ingredient>
-): AggregatedItem[] {
+): ConsolidateResult {
   // Count how many times each recipe is used across all slots in the range
   const recipeCount = new Map<string, number>()
   for (const day of days) {
@@ -33,13 +48,24 @@ export function consolidateIngredients(
 
   // Aggregate ingredients across all recipe uses
   const aggregated = new Map<string, AggregatedItem>()
+  const unresolved: UnresolvedIngredientRef[] = []
   for (const [recipeId, count] of recipeCount) {
     const recipe = recipeMap.get(recipeId)
     if (!recipe) continue
     for (const ri of recipe.ingredients) {
-      if (!ri.ingredientId) continue
+      if (!ri.ingredientId) {
+        unresolved.push({ recipeName: recipe.name, ingredientName: ri.name, reason: 'unlinked' })
+        continue
+      }
       const ing = ingredientMap.get(ri.ingredientId)
-      if (!ing) continue
+      if (!ing) {
+        console.warn(
+          `[consolidateIngredients] "${recipe.name}" references ingredient id ${ri.ingredientId} (${ri.name}), ` +
+          `which doesn't match any ingredient record — dropped from the grocery list.`
+        )
+        unresolved.push({ recipeName: recipe.name, ingredientName: ri.name, ingredientId: ri.ingredientId, reason: 'dangling' })
+        continue
+      }
       const key = `${ri.ingredientId}::${ri.variantId ?? ''}::${ri.unit}`
       const existing = aggregated.get(key)
       if (existing) {
@@ -62,9 +88,12 @@ export function consolidateIngredients(
     }
   }
 
-  return Array.from(aggregated.values()).sort((a, b) =>
-    a.category.localeCompare(b.category) || a.name.localeCompare(b.name)
-  )
+  return {
+    items: Array.from(aggregated.values()).sort((a, b) =>
+      a.category.localeCompare(b.category) || a.name.localeCompare(b.name)
+    ),
+    unresolved,
+  }
 }
 
 export function aggToGroceryItem(agg: AggregatedItem): GroceryItem {

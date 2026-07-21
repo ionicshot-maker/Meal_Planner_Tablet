@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import { getAllIngredients, saveIngredient } from './ingredients'
-import { getAllRecipes, saveRecipe } from './recipes'
+import { getAllIngredients, saveIngredient, deleteIngredient } from './ingredients'
+import { getAllRecipes, saveRecipe, deleteRecipe } from './recipes'
 import { getAllHouseholdItems, saveHouseholdItem } from './householdItems'
 import { getAllCollections, saveCollection } from './collections'
 import { getAllReferences, saveReference } from './references'
@@ -642,13 +642,75 @@ export async function runFamilyShareSync(
   return summary
 }
 
+// Repoints every recipe's ingredient reference from a losing ingredient id to the
+// surviving one. Without this, resolving a duplicate (in either direction) leaves
+// existing recipes pointing at an id that's about to be discarded, which is exactly
+// how ingredients silently vanished from grocery lists (see consolidateIngredients).
+async function repointIngredientId(fromId: string, toId: string): Promise<void> {
+  const recipes = await getAllRecipes(true)
+  for (const recipe of recipes) {
+    let changed = false
+    for (const ri of recipe.ingredients) {
+      if (ri.ingredientId === fromId) {
+        ri.ingredientId = toId
+        changed = true
+      }
+    }
+    if (changed) await saveRecipe(recipe)
+  }
+}
+
+// Same idea for recipes: repoints meal plan slots and recipe collections so a
+// discarded recipe id doesn't leave a meal plan or collection pointing at nothing.
+async function repointRecipeId(fromId: string, toId: string): Promise<void> {
+  const db = await getDB()
+  const days = await db.getAll('mealPlanDays') as MealPlanDay[]
+  for (const day of days) {
+    let changed = false
+    const slots = [day.meals.breakfast, day.meals.lunch, day.meals.dinner, day.meals.snacks, day.meals.drinks ?? []]
+    for (const slot of slots) {
+      for (const item of slot) {
+        if (item.recipeId === fromId) {
+          item.recipeId = toId
+          changed = true
+        }
+        if (item.individualAssignments) {
+          for (const personId of Object.keys(item.individualAssignments)) {
+            if (item.individualAssignments[personId] === fromId) {
+              item.individualAssignments[personId] = toId
+              changed = true
+            }
+          }
+        }
+      }
+    }
+    if (changed) await saveMealPlanDay(day)
+  }
+
+  const collections = await getAllCollections()
+  for (const c of collections) {
+    if (c.recipeIds.includes(fromId)) {
+      c.recipeIds = c.recipeIds.map(id => (id === fromId ? toId : id))
+      await saveCollection(c)
+    }
+  }
+}
+
 // Re-export helpers needed in CloudSyncSection
 export async function resolveIngredientDuplicate(
   action: 'keep-local' | 'keep-cloud' | 'keep-both',
   dup: SyncDuplicate & { type: 'ingredient' },
 ): Promise<void> {
+  const local = dup.localItem as Ingredient
+  const cloud = dup.cloudItem as Ingredient
   if (action === 'keep-cloud' || action === 'keep-both') {
-    await saveIngredient(dup.cloudItem as Ingredient)
+    await saveIngredient(cloud)
+  }
+  if (action === 'keep-cloud') {
+    await repointIngredientId(local.id, cloud.id)
+    await deleteIngredient(local.id)
+  } else if (action === 'keep-local') {
+    await repointIngredientId(cloud.id, local.id)
   }
 }
 
@@ -656,7 +718,15 @@ export async function resolveRecipeDuplicate(
   action: 'keep-local' | 'keep-cloud' | 'keep-both',
   dup: SyncDuplicate & { type: 'recipe' },
 ): Promise<void> {
+  const local = dup.localItem as Recipe
+  const cloud = dup.cloudItem as Recipe
   if (action === 'keep-cloud' || action === 'keep-both') {
-    await saveRecipe(dup.cloudItem as Recipe)
+    await saveRecipe(cloud)
+  }
+  if (action === 'keep-cloud') {
+    await repointRecipeId(local.id, cloud.id)
+    await deleteRecipe(local.id)
+  } else if (action === 'keep-local') {
+    await repointRecipeId(cloud.id, local.id)
   }
 }
