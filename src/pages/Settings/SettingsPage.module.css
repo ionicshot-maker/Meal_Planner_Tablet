@@ -70,6 +70,31 @@
   min-width: 0;
   overflow-y: auto;
   padding: var(--space-6);
+  /* .content is a fixed-height box (it fills whatever's left of .layout
+     below the header) shared by every tab, but tabs vary a lot in how much
+     they actually render — Data (Export/Import/Reset) is short, Household
+     or Nutrients can be much taller. Without this, a short tab's content
+     sits at the top with the rest of the box just empty below it.
+     "safe center" vertically centers short content, but falls back to
+     top-alignment once content is tall enough to overflow — same trick
+     used for the SetupWizard modal — so tabs that genuinely need to
+     scroll (many people profiles, etc.) are unaffected. */
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+}
+
+/* Each tab renders one (or two, e.g. Nutrients' second "History Retention"
+   block) top-level wrapper div here, using a section-wrapper class scoped
+   to that tab's own CSS module rather than this one. Without flex-shrink:0,
+   a flex column with a bounded-height container will shrink an oversized
+   child to fit instead of letting it overflow — which is fine for a plain
+   box, but would visually compress real form/list content instead of the
+   intended behavior (fits+centers if short, scrolls at full size if tall).
+   The child combinator reaches every tab's wrapper regardless of which
+   module it comes from. */
+.content > * {
+  flex-shrink: 0;
 }
 
 /* ── Section layout helpers ──────────────────────────────────────────────── */
