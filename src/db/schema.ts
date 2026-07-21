@@ -1,8 +1,8 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb'
-import type { AppSettings, Ingredient, Recipe, MealPlanDay, MealPlanWeekTemplate, MacroLogEntry, GroceryList, HouseholdItem, RecipeCollection, KitchenReference } from '@/types'
+import type { AppSettings, Ingredient, Recipe, MealPlanDay, MealPlanWeekTemplate, MacroLogEntry, GroceryList, HouseholdItem, RecipeCollection, KitchenReference, ProcessedReceipt } from '@/types'
 
 const DB_NAME = 'MealPlannerDB'
-const DB_VERSION = 4
+const DB_VERSION = 5
 
 interface MealPlannerDB extends DBSchema {
   settings: {
@@ -66,6 +66,10 @@ interface MealPlannerDB extends DBSchema {
     indexes: {
       'by-title': string
     }
+  }
+  processedReceipts: {
+    key: string
+    value: ProcessedReceipt
   }
 }
 
@@ -134,6 +138,11 @@ export async function getDB(): Promise<IDBPDatabase<MealPlannerDB>> {
       if (!db.objectStoreNames.contains('references')) {
         const store = db.createObjectStore('references', { keyPath: 'id' })
         store.createIndex('by-title', 'title')
+      }
+
+      // V5: Processed receipts — duplicate-scan protection for the Receipt Scanner
+      if (!db.objectStoreNames.contains('processedReceipts')) {
+        db.createObjectStore('processedReceipts', { keyPath: 'id' })
       }
     },
   })

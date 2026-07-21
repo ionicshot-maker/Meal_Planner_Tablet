@@ -1,6 +1,6 @@
 import type { Ingredient } from '@/types'
 
-function editDistance(a: string, b: string): number {
+export function editDistance(a: string, b: string): number {
   const la = a.toLowerCase(), lb = b.toLowerCase()
   const m = la.length, n = lb.length
   const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
@@ -14,7 +14,7 @@ function editDistance(a: string, b: string): number {
   return dp[m][n]
 }
 
-function keywords(s: string): string[] {
+export function keywords(s: string): string[] {
   return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 1)
 }
 

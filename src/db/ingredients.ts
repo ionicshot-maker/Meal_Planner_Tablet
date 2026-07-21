@@ -1,6 +1,7 @@
 import { getDB } from './schema'
 import { normalizeIngredient } from '@/utils/importNormalization'
 import { suggestCategory, getCategoryOverride, RECLASSIFIABLE_CATEGORIES } from '@/utils/categoryRules'
+import { now } from '@/utils/ids'
 import type { Ingredient, IngredientVariant } from '@/types'
 
 export async function getAllIngredients(includeArchived = false): Promise<Ingredient[]> {
@@ -185,4 +186,72 @@ export function calcCostPerServing(variant: IngredientVariant): number | undefin
     return variant.packageCost / variant.totalServingsInPackage
   }
   return undefined
+}
+
+export type IngredientBatchOp =
+  | { type: 'updatePrice'; ingredientId: string; variantId: string; packageCost: number; totalServingsInPackage: number }
+  | { type: 'addVariant'; ingredientId: string; variant: IngredientVariant }
+  | { type: 'createIngredient'; ingredient: Ingredient }
+
+// Applies a batch of writes as a single IndexedDB transaction — either every
+// op commits or none do. Used by the Receipt Scanner so a mid-batch failure
+// (a missing ingredient, a bad id) can't leave some rows saved and others not;
+// on any error the whole transaction is explicitly aborted, which rolls back
+// every put already issued in this call, not just the one that failed.
+export async function applyIngredientBatch(ops: IngredientBatchOp[]): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction('ingredients', 'readwrite')
+  const store = tx.objectStore('ingredients')
+
+  try {
+    for (const op of ops) {
+      if (op.type === 'createIngredient') {
+        await store.put(op.ingredient)
+        continue
+      }
+
+      const ingredient = await store.get(op.ingredientId)
+      if (!ingredient) throw new Error(`Ingredient ${op.ingredientId} not found`)
+
+      if (op.type === 'updatePrice') {
+        const variant = ingredient.variants.find(v => v.id === op.variantId)
+        if (!variant) throw new Error(`Variant ${op.variantId} not found on ingredient ${op.ingredientId}`)
+        variant.packageCost = op.packageCost
+        variant.totalServingsInPackage = op.totalServingsInPackage
+        variant.costPerServing = calcCostPerServing(variant)
+        variant.priceLastUpdated = now()
+      } else if (op.type === 'addVariant') {
+        ingredient.variants.push(op.variant)
+      }
+      ingredient.updatedAt = now()
+      await store.put(ingredient)
+    }
+    await tx.done
+  } catch (err) {
+    try { tx.abort() } catch { /* transaction already finished */ }
+    throw err
+  }
+}
+
+// In-place price patch for a specific variant — used anywhere re-pricing an
+// already-known ingredient/variant pair outside a batch (e.g. a single edit
+// from the Ingredients page) instead of pushing a duplicate variant.
+export async function updateVariantPrice(
+  ingredientId: string,
+  variantId: string,
+  patch: { packageCost?: number; totalServingsInPackage?: number }
+): Promise<void> {
+  const db = await getDB()
+  const ingredient = await db.get('ingredients', ingredientId)
+  if (!ingredient) throw new Error(`Ingredient ${ingredientId} not found`)
+  const variant = ingredient.variants.find(v => v.id === variantId)
+  if (!variant) throw new Error(`Variant ${variantId} not found on ingredient ${ingredientId}`)
+
+  if (patch.packageCost !== undefined) variant.packageCost = patch.packageCost
+  if (patch.totalServingsInPackage !== undefined) variant.totalServingsInPackage = patch.totalServingsInPackage
+  variant.costPerServing = calcCostPerServing(variant)
+  variant.priceLastUpdated = now()
+
+  ingredient.updatedAt = now()
+  await db.put('ingredients', ingredient)
 }

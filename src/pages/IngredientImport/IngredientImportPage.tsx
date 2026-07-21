@@ -2,12 +2,13 @@ import { useState, useEffect, ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useHouseholdTitle } from '@/context/SettingsContext'
 import { newId } from '@/utils/ids'
-import { ScanBarcode, Microscope, Sparkles, ClipboardList, ScanText, FileJson } from 'lucide-react'
+import { ScanBarcode, Microscope, Sparkles, ClipboardList, ScanText, FileJson, Receipt } from 'lucide-react'
 import { BarcodeTab } from './BarcodeTab'
 import { USDATab } from './USDATab'
 import { BulkEntryTab } from './BulkEntryTab'
 import { GeminiTab } from './GeminiTab'
 import { ScanLabelTab } from './ScanLabelTab'
+import { ReceiptScannerTab } from './ReceiptScannerTab'
 import { JsonImportTab } from './JsonImportTab'
 import { ReviewScreen } from './ReviewScreen'
 import { Toast } from './Toast'
@@ -23,15 +24,16 @@ interface SavedDraft {
   savedAt: string
 }
 
-type TabId = 'barcode' | 'usda' | 'bulk' | 'gemini' | 'scanLabel' | 'jsonImport'
+type TabId = 'barcode' | 'usda' | 'bulk' | 'gemini' | 'scanLabel' | 'receiptScanner' | 'jsonImport'
 
 const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
-  { id: 'barcode',    label: 'Barcode Lookup',  icon: <ScanBarcode size={18} /> },
-  { id: 'usda',       label: 'USDA Lookup',     icon: <Microscope size={18} /> },
-  { id: 'gemini',     label: 'Gemini Lookup',   icon: <Sparkles size={18} /> },
-  { id: 'scanLabel',  label: 'Scan Label',      icon: <ScanText size={18} /> },
-  { id: 'bulk',       label: 'Bulk Entry',      icon: <ClipboardList size={18} /> },
-  { id: 'jsonImport', label: 'JSON Import',     icon: <FileJson size={18} /> },
+  { id: 'barcode',        label: 'Barcode Lookup',   icon: <ScanBarcode size={18} /> },
+  { id: 'usda',           label: 'USDA Lookup',      icon: <Microscope size={18} /> },
+  { id: 'gemini',         label: 'Gemini Lookup',    icon: <Sparkles size={18} /> },
+  { id: 'scanLabel',      label: 'Scan Label',       icon: <ScanText size={18} /> },
+  { id: 'receiptScanner', label: 'Receipt Scanner',  icon: <Receipt size={18} /> },
+  { id: 'bulk',           label: 'Bulk Entry',       icon: <ClipboardList size={18} /> },
+  { id: 'jsonImport',     label: 'JSON Import',      icon: <FileJson size={18} /> },
 ]
 
 interface ToastItem { id: string; message: string }
@@ -276,6 +278,9 @@ export default function IngredientImportPage() {
             )}
             {activeTab === 'scanLabel' && (
               <ScanLabelTab onReview={handleLabelScanReview} />
+            )}
+            {activeTab === 'receiptScanner' && (
+              <ReceiptScannerTab onItemSaved={handleBulkSaved} />
             )}
             {activeTab === 'bulk' && (
               <BulkEntryTab onSaved={handleBulkSaved} />

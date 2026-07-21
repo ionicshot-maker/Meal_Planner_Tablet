@@ -334,6 +334,19 @@ export interface KitchenReference {
   updatedAt: string
 }
 
+// ─── Receipt Scanner ────────────────────────────────────────────────────────
+// A record of a receipt that's already been scanned and applied — checked
+// before applying a new scan so the same receipt can't silently be reprocessed
+// (same store + date + total is treated as a likely re-scan).
+export interface ProcessedReceipt {
+  id: string
+  store: string | null
+  date: string | null
+  total: number | null
+  photoDataUrl?: string   // present only if the user chose to keep the photo
+  processedAt: string
+}
+
 // ─── Grocery List ─────────────────────────────────────────────────────────────
 export interface GroceryItem {
   id: string
