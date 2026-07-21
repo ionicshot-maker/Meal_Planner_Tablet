@@ -156,7 +156,14 @@
 
 .tabContent {
   flex: 1;
-  overflow: hidden;
+  /* overflow-y:auto (not hidden) — when the keyboard shrinks the visible
+     viewport, this can be squeezed down to a sliver (e.g. ~50px) below the
+     header and tab bar. A focused input still gets auto-scrolled into view
+     by the browser even under overflow:hidden, but overflow:hidden also
+     blocks the user's own touch-scroll, stranding anything else in the tab
+     (buttons, later fields) with no way to reach it. */
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }

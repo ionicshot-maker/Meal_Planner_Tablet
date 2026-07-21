@@ -183,4 +183,23 @@
 @media (max-width: 640px) {
   .layout { flex-direction: column; }
   .tabs { width: 100%; flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--color-border); }
+
+  /* .page relies on .layout's flex:1 to fill whatever's left after the
+     header and the "Getting Set Up" card (a variable-height sibling above
+     .layout that can be tall — 8 checklist items — when expanded). With
+     .page pinned to a fixed height and overflow:hidden, if those two
+     siblings alone are taller than the viewport, .layout's flex-basis:0
+     has nothing left to grow into and renders at 0 height — the whole
+     tabs+content area silently disappears instead of the page scrolling.
+     The same squeeze happens when the on-screen keyboard shrinks the
+     visible viewport height while a field inside .content has focus,
+     independent of the checklist's state. Letting the page flow and
+     scroll as one column at this width (instead of carving out a fixed
+     region for .layout) fixes both: the parent .main in AppLayout already
+     provides the actual scroll container, so .page just needs to get out
+     of the way rather than also trying to be a nested scroll region. */
+  .page { height: auto; overflow: visible; }
+  .layout { flex: none; min-height: 0; overflow: visible; }
+  .tabs { overflow: visible; }
+  .content { flex: none; overflow: visible; }
 }

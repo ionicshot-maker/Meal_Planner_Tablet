@@ -13,6 +13,11 @@
   flex-direction: column;
   gap: var(--space-4);
   max-width: 720px;
+  /* Same reasoning as BulkEntryTab's .tableWrap — once .footer appears
+     (after a file loads), it's a second flex-shrink:0 sibling alongside
+     this flex:1 region, so without a floor this can be squeezed to 0
+     under a keyboard-shrunk viewport instead of just getting smaller. */
+  min-height: 120px;
 }
 
 .desc { font-size: var(--text-sm); color: var(--color-text-muted); line-height: 1.5; }

@@ -34,7 +34,11 @@
 .search:focus { border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-selected); }
 .search::placeholder { color: var(--color-text-muted); opacity: 0.7; }
 
-.filterBtns { display: flex; gap: var(--space-1); }
+/* flex-wrap so the 5 buttons (All Recipes/Favorites/Templates/Collections/
+   Reference) drop to a second line instead of overflowing past the edge of
+   the screen with no way to reach whichever one doesn't fit — the same
+   collision class as the Ingredients page toolbar. */
+.filterBtns { display: flex; gap: var(--space-1); flex-wrap: wrap; }
 
 .filterBtn {
   padding: var(--space-1) var(--space-3);
