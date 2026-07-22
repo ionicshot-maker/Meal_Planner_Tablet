@@ -58,14 +58,19 @@ export function ReceiptScannerTab({ onItemSaved }: Props) {
       const selection = result.tier === 'high' && top
         ? resolveCandidateSelection(normalized, top, '', startingUnitPrice)
         : null
+      // Best guess between Ingredient and Household Item, from the receipt's
+      // own text/category hint — "Don't Add" is never guessed toward, only
+      // ever chosen explicitly by the user.
+      const guessedType = guessItemType(normalized.parsedName, normalized.categoryHint)
+      // A household guess shouldn't land on an ingredient-flavored default
+      // category (e.g. "Baking & Pantry") just because the receipt gave no
+      // explicit hint — fall back to "Household Items" for that case instead.
+      const householdDefault = settings.ingredientCategories.find(c => c === 'Household Items') ?? defaultCategory
       return {
         id: newId(),
         normalized,
         match: result,
-        // Best guess between Ingredient and Household Item, from the receipt's
-        // own text/category hint — "Don't Add" is never guessed toward, only
-        // ever chosen explicitly by the user.
-        itemType: guessItemType(normalized.parsedName, normalized.categoryHint),
+        itemType: guessedType,
         mode: result.tier === 'high' ? 'match' : result.tier === 'medium' ? 'pending' : 'createNew',
         selectedIngredientId: selection?.selectedIngredientId,
         selectedVariantId: selection?.selectedVariantId,
@@ -73,7 +78,7 @@ export function ReceiptScannerTab({ onItemSaved }: Props) {
         editableName: normalized.parsedName,
         editableUnitPrice: startingUnitPrice,
         editableServings: selection?.servings ?? '',
-        newCategory: normalized.categoryHint || defaultCategory,
+        newCategory: normalized.categoryHint || (guessedType === 'household' ? householdDefault : defaultCategory),
         newBrand: '',
         priceDecision: selection?.priceDecision ?? 'not-needed',
         macros: { calories: 0, protein: 0, carbs: 0, fiber: 0, sugar: 0, fat: 0, sodium: 0 },

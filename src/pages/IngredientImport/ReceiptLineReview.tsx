@@ -96,6 +96,15 @@ export function ReceiptLineReview({
     setLines(ls => ls.map(l => (l.id === id ? { ...l, ...patch } : l)))
   }
 
+  // Switching a line to Household Item should land on a sensible category for
+  // that context rather than carrying over whatever the ingredient-path guess
+  // picked (e.g. "Meat & Poultry") — falls back to the household default, or
+  // the first available category if that isn't configured.
+  function switchToHousehold(id: string) {
+    const householdDefault = categories.find(c => c === 'Household Items') ?? categories[0] ?? ''
+    updateLine(id, { itemType: 'household', newCategory: householdDefault })
+  }
+
   // Auto-attempts a barcode lookup for any line that's sitting in "create a
   // new ingredient" with a legible, checksum-valid barcode — the same
   // Open Food Facts source/logic the Barcode Lookup tab uses — so nutrition
@@ -372,7 +381,7 @@ export function ReceiptLineReview({
                   type="button"
                   className={`${styles.itemTypeBtn} ${line.itemType === 'household' ? styles.itemTypeBtnActive : ''}`}
                   disabled={line.saved}
-                  onClick={() => updateLine(line.id, { itemType: 'household' })}
+                  onClick={() => switchToHousehold(line.id)}
                 >
                   Add as Household Item
                 </button>
@@ -574,7 +583,7 @@ export function ReceiptLineReview({
                             type="button"
                             className={styles.linkBtn}
                             disabled={line.saved}
-                            onClick={() => updateLine(line.id, { itemType: 'household' })}
+                            onClick={() => switchToHousehold(line.id)}
                           >
                             Switch to Household Item
                           </button>
