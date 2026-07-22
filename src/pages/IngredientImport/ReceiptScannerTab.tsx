@@ -86,6 +86,10 @@ export function ReceiptScannerTab({ onItemSaved }: Props) {
         servingUnit: 'each',
         barcodeLookupStatus: 'idle',
         barcodeLookupAttempted: false,
+        webLookupStatus: 'idle',
+        webLookupAttempted: false,
+        webSuggestionApplied: false,
+        webSuggestionDismissed: false,
         saved: false,
         error: '',
       }

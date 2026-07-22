@@ -25,6 +25,11 @@
 [functions."gemini-receipt-scan"]
   timeout = 30
 
+# Increase timeout for barcode web-search fallback: grounded search call plus
+# up to 3 parallel source-page fetches for independent barcode verification
+[functions."gemini-barcode-web-lookup"]
+  timeout = 40
+
 # API proxy — must come before the SPA catch-all
 [[redirects]]
   from = "/api/*"

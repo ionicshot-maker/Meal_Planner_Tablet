@@ -8,6 +8,7 @@ import { newId, now } from '@/utils/ids'
 import { resolveCandidateSelection, candidateLabel } from '@/utils/receiptMatching'
 import type { LineMatchResult, RankedCandidate, ConfidenceTier } from '@/utils/receiptMatching'
 import { lookupBarcodeProduct } from '@/utils/barcodeLookup'
+import { lookupBarcodeWeb, type WebLookupProduct } from '@/utils/webBarcodeLookup'
 import { IngredientPicker, type PickedIngredient } from '@/pages/Cookbook/IngredientPicker'
 import type { NormalizedLine } from '@/utils/receiptPriceNormalization'
 import type { Ingredient, IngredientUnit, IngredientVariant, HouseholdItem, Macros } from '@/types'
@@ -17,6 +18,7 @@ type Mode = 'match' | 'pending' | 'createNew'
 type PriceDecision = 'not-needed' | 'pending' | 'update' | 'sale-skip'
 type ItemType = 'ingredient' | 'household' | 'skip'
 type BarcodeLookupStatus = 'idle' | 'loading' | 'found' | 'not-found' | 'non-food' | 'error'
+type WebLookupStatus = 'idle' | 'loading' | 'found' | 'not-found' | 'error'
 
 const BLANK_MACROS: Macros = { calories: 0, protein: 0, carbs: 0, fiber: 0, sugar: 0, fat: 0, sodium: 0 }
 
@@ -45,6 +47,15 @@ export interface ReceiptLineDraft {
   servingUnit: IngredientUnit
   barcodeLookupStatus: BarcodeLookupStatus
   barcodeLookupAttempted: boolean
+  // Fallback that only fires when Open Food Facts comes back not-found —
+  // Gemini runs a grounded web search instead. A suggestion here is never
+  // auto-applied; webSuggestionDismissed tracks an explicit "no thanks" so
+  // the card can be hidden without losing what was found.
+  webLookupStatus: WebLookupStatus
+  webLookupAttempted: boolean
+  webLookupResult?: WebLookupProduct
+  webSuggestionApplied: boolean
+  webSuggestionDismissed: boolean
   saved: boolean
   error: string
 }
@@ -65,6 +76,12 @@ const TIER_LABEL: Record<ConfidenceTier, string> = {
   high: 'High confidence',
   medium: 'Pick a match',
   none: 'No match found',
+}
+
+const WEB_CONFIDENCE_LABEL: Record<WebLookupProduct['confidence'], string> = {
+  high: 'High confidence — barcode confirmed',
+  medium: 'Medium confidence — barcode unconfirmed',
+  low: 'Low confidence — name/brand match only',
 }
 
 // Sale detection: under 10% difference is a simple "update?"; 10%+ gets
@@ -144,6 +161,60 @@ export function ReceiptLineReview({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines])
+
+  // Only fires once Open Food Facts has already come back not-found for a
+  // line — Gemini runs a grounded web search as a fallback source. Never
+  // triggers on an OFF 'error' (network hiccup, not "doesn't exist") or on
+  // 'non-food', since a non-food item shouldn't get a nutrition search at
+  // all. Requires a Gemini key, which the Receipt Scanner tab already gates
+  // on to be reachable in the first place.
+  useEffect(() => {
+    if (!settings.geminiApiKey) return
+    const toLookup = lines.filter(l =>
+      l.itemType === 'ingredient' &&
+      l.mode === 'createNew' &&
+      l.barcodeLookupStatus === 'not-found' &&
+      !l.webLookupAttempted
+    )
+    if (toLookup.length === 0) return
+
+    setLines(ls => ls.map(l => (
+      toLookup.some(t => t.id === l.id) ? { ...l, webLookupAttempted: true, webLookupStatus: 'loading' } : l
+    )))
+
+    for (const line of toLookup) {
+      lookupBarcodeWeb(
+        line.match.validBarcode!,
+        line.editableName,
+        line.newBrand,
+        settings.geminiApiKey,
+        settings.geminiModel || 'gemini-3.1-flash-lite'
+      ).then(result => {
+        if (result.status === 'found' && result.product) {
+          updateLine(line.id, { webLookupStatus: 'found', webLookupResult: result.product })
+        } else {
+          updateLine(line.id, { webLookupStatus: result.status === 'error' ? 'error' : 'not-found' })
+        }
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines])
+
+  // Copies a web-search suggestion's fields into the line's own editable
+  // state — still fully editable afterward, never a silent/final write.
+  // Only overrides macro fields Gemini actually reported (partial merge),
+  // and only fills brand/serving if the user hasn't already typed something.
+  function applyWebSuggestion(line: ReceiptLineDraft) {
+    const product = line.webLookupResult
+    if (!product) return
+    updateLine(line.id, {
+      macros: { ...line.macros, ...product.macros },
+      servingSize: product.servingDisplaySize ?? line.servingSize,
+      servingUnit: (product.servingDisplayUnit as IngredientUnit) ?? line.servingUnit,
+      newBrand: line.newBrand || product.brand,
+      webSuggestionApplied: true,
+    })
+  }
 
   function selectCandidate(line: ReceiptLineDraft, candidate: RankedCandidate) {
     const selection = resolveCandidateSelection(line.normalized, candidate, line.editableServings, line.editableUnitPrice)
@@ -349,6 +420,8 @@ export function ReceiptLineReview({
           const variant = currentVariant(line)
           const showPriceDecision = line.itemType === 'ingredient' && line.priceDecision !== 'not-needed' && variant?.packageCost != null
           const delta = showPriceDecision ? priceDeltaInfo(variant!.packageCost!, line.editableUnitPrice) : null
+          const showWebSuggestion = line.webLookupStatus === 'found' && !!line.webLookupResult && !line.webSuggestionDismissed
+          const showPlainNotFound = line.barcodeLookupStatus === 'not-found' && line.webLookupStatus !== 'loading' && !showWebSuggestion
 
           return (
             <div key={line.id} className={`${styles.row} ${line.saved ? styles.rowSaved : ''} ${line.error ? styles.rowError : ''}`}>
@@ -570,7 +643,56 @@ export function ReceiptLineReview({
                       {line.barcodeLookupStatus === 'found' && (
                         <p className={styles.barcodeStatusOk}>✓ Nutrition filled in from barcode lookup — please verify.</p>
                       )}
-                      {line.barcodeLookupStatus === 'not-found' && (
+                      {line.barcodeLookupStatus === 'not-found' && line.webLookupStatus === 'loading' && (
+                        <p className={styles.barcodeStatus}>🔍 Open Food Facts didn't have this one — searching the web…</p>
+                      )}
+                      {showWebSuggestion && line.webLookupResult && (
+                        <div className={styles.webSuggestionCard}>
+                          <div className={styles.webSuggestionHeader}>
+                            <span className={`${styles.tierBadge} ${styles[`tier_${line.webLookupResult.confidence}`]}`}>
+                              {WEB_CONFIDENCE_LABEL[line.webLookupResult.confidence]}
+                            </span>
+                            <span className={styles.webSuggestionName}>
+                              {line.webLookupResult.productName}
+                              {line.webLookupResult.brand ? ` — ${line.webLookupResult.brand}` : ''}
+                            </span>
+                          </div>
+                          <a
+                            href={line.webLookupResult.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={styles.webSuggestionSource}
+                          >
+                            Source: {line.webLookupResult.sourceTitle}
+                          </a>
+                          <p className={styles.webVerifyNotice}>
+                            ⚠️ Please verify against the source before saving — a matched barcode confirms product identity, not that these numbers were read correctly.
+                          </p>
+                          {line.webSuggestionApplied ? (
+                            <p className={styles.barcodeStatusOk}>✓ Applied — please double-check the values below against the source.</p>
+                          ) : (
+                            <div className={styles.webSuggestionActions}>
+                              <button
+                                type="button"
+                                className={styles.priceDecisionBtn}
+                                disabled={line.saved}
+                                onClick={() => applyWebSuggestion(line)}
+                              >
+                                Use this data
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.linkBtn}
+                                disabled={line.saved}
+                                onClick={() => updateLine(line.id, { webSuggestionDismissed: true })}
+                              >
+                                Dismiss
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {showPlainNotFound && (
                         <p className={styles.barcodeNotFoundBanner}>Barcode lookup found no product — nutrition left blank, fill in manually if you'd like.</p>
                       )}
                       {line.barcodeLookupStatus === 'error' && (
