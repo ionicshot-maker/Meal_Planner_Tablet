@@ -205,6 +205,13 @@
   margin-top: var(--space-1);
 }
 
+.apiCardBody {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  line-height: 1.6;
+  margin-top: var(--space-3);
+}
+
 .apiSteps {
   display: flex;
   flex-direction: column;

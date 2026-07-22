@@ -5,6 +5,7 @@ import { useSettings } from '@/context/SettingsContext'
 import {
   runSync, runFamilyShareSync, generateSyncCode,
   isSupabaseConfigured, SUPABASE_SETUP_SQL,
+  AUTH_MIGRATION_SQL, AUTH_MIGRATION_FIX_SQL, AUTH_MIGRATION_FIX2_SQL, AUTH_MIGRATION_FIX3_SQL,
   resolveIngredientDuplicate, resolveRecipeDuplicate,
   type SyncSummary, type SyncDuplicate,
 } from '@/db/supabase'
@@ -15,6 +16,16 @@ import styles from './CloudSyncSection.module.css'
 
 type SyncDirection = 'both' | 'push' | 'pull'
 
+// Four scripts, meant to be run back-to-back in this exact order in a fresh
+// Supabase project (each was authored as a standalone patch on top of the
+// last during live testing, and each says so in its own header comment).
+// Concatenating them here — rather than hand-authoring one "final state"
+// script — means what a new user runs is exactly what was actually tested,
+// not a rewritten summary of it.
+const AUTH_SETUP_SQL_COMBINED = [
+  AUTH_MIGRATION_SQL, AUTH_MIGRATION_FIX_SQL, AUTH_MIGRATION_FIX2_SQL, AUTH_MIGRATION_FIX3_SQL,
+].join('\n\n\n')
+
 export function CloudSyncSection() {
   const { settings, updateSettings, reloadSettings } = useSettings()
   const [syncing, setSyncing] = useState(false)
@@ -22,6 +33,7 @@ export function CloudSyncSection() {
   const [summary, setSummary] = useState<SyncSummary | null>(null)
   const [familySummary, setFamilySummary] = useState<SyncSummary | null>(null)
   const [showSQL, setShowSQL] = useState(false)
+  const [showAuthSQL, setShowAuthSQL] = useState(false)
   const [dupToResolve, setDupToResolve] = useState<SyncDuplicate | null>(null)
 
   // "X ago" only recomputes on render — tick every minute so it doesn't read
@@ -163,6 +175,19 @@ export function CloudSyncSection() {
       )}
 
       <AccountSection />
+
+      {configured && (
+        <p className={styles.desc}>
+          Signing up or creating/joining a household above erroring out with a database error usually means
+          this Supabase project is missing some setup.{' '}
+          <button className={styles.sqlBtn} onClick={() => setShowAuthSQL(v => !v)} style={{ display: 'inline' }}>
+            {showAuthSQL ? 'Hide account/sign-in setup SQL ▲' : 'Show account/sign-in setup SQL ▼'}
+          </button>
+        </p>
+      )}
+      {showAuthSQL && (
+        <pre className={styles.sqlBlock}>{AUTH_SETUP_SQL_COMBINED}</pre>
+      )}
 
       <Toggle
         checked={!settings.cloudSyncPromptDismissed}
