@@ -3,6 +3,19 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  /* Bounds the whole page — header, "Getting Set Up" card, and the tabs+content
+     layout below — as one consistently-centered block. Without this, each of
+     those three pieces independently stretches to whatever width .main
+     happens to be, which looks fine for the full-bleed header/checklist but
+     left the (deliberately width-capped, see .section below) settings form
+     looking off-balance on wide screens: dead space stranded only on its
+     right, with nothing narrowing the checklist card to match. Capping and
+     centering .page itself means both pieces move in lockstep — on anything
+     narrower than the cap they're still edge-to-edge as before; only past
+     it do symmetric margins appear on both sides at once. */
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .header {
@@ -87,6 +100,16 @@
      result and no "safe" keyword dependency. */
   display: flex;
   flex-direction: column;
+  /* Every tab's content is width-capped at 640px (see .section below) for
+     readable line lengths and sane label↔control spacing in .toggleRow's
+     space-between rows — but .content itself is a flex:1 pane that's often
+     considerably wider than that cap, especially now that .page can stretch
+     to 1280px. Without centering, the capped content sits flush against
+     .tabs on the left, leaving the rest of the pane empty only on the
+     right. align-items: center keeps the visible gap balanced on both
+     sides instead — same idea as the .page-level fix above, one level
+     deeper. */
+  align-items: center;
 }
 
 /* Each tab renders one (or two, e.g. Nutrients' second "History Retention"
@@ -111,7 +134,7 @@
 }
 
 /* ── Section layout helpers ──────────────────────────────────────────────── */
-.section { display: flex; flex-direction: column; gap: var(--space-4); max-width: 640px; }
+.section { display: flex; flex-direction: column; gap: var(--space-4); max-width: 640px; width: 100%; }
 
 .sectionTitle {
   font-size: var(--text-xl);

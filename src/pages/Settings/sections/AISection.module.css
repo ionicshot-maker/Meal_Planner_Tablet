@@ -1,4 +1,4 @@
-.section { display: flex; flex-direction: column; gap: var(--space-4); max-width: 640px; }
+.section { display: flex; flex-direction: column; gap: var(--space-4); max-width: 640px; width: 100%; }
 .sectionTitle { font-size: var(--text-xl); font-weight: 600; color: var(--color-text); }
 .subTitle { font-size: var(--text-lg); font-weight: 600; color: var(--color-text); }
 .desc { font-size: var(--text-sm); color: var(--color-text-muted); }
