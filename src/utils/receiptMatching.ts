@@ -118,9 +118,15 @@ function findAllBarcodeMatches(code: string, ingredients: Ingredient[]): Ingredi
 export function matchLine(line: NormalizedLine, allIngredients: Ingredient[]): LineMatchResult {
   // 1. Barcode — checksum-validated first, since an unvalidated OCR digit
   // string is exactly the kind of "looks legible" false confidence to avoid.
+  // A valid-but-unmatched barcode is remembered (not just discarded) even
+  // when nothing in the database has it — the Create New flow uses it to
+  // attempt an Open Food Facts lookup instead of defaulting to blank/zeroed
+  // nutrition.
+  let validBarcodeNoMatch: string | undefined
   if (line.barcodeText) {
     for (const candidate of barcodeLookupCandidates(line.barcodeText)) {
       if (!isValidBarcodeChecksum(candidate)) continue
+      if (validBarcodeNoMatch === undefined) validBarcodeNoMatch = candidate
 
       const allMatches = findAllBarcodeMatches(candidate, allIngredients)
       if (allMatches.length === 0) continue
@@ -165,13 +171,39 @@ export function matchLine(line: NormalizedLine, allIngredients: Ingredient[]): L
   const candidates = ordered.slice(0, 5).map(ing => ({ ingredient: ing, variant: findVariantForBrand(ing, line), source: 'name' as const }))
 
   if (candidates.length === 0) {
-    return { tier: 'none', candidates: [], barcodeTextDisagreement: false, barcodeMultiMatch: false }
+    return { tier: 'none', candidates: [], barcodeTextDisagreement: false, barcodeMultiMatch: false, validBarcode: validBarcodeNoMatch }
   }
   return {
     tier: candidates.length === 1 ? 'high' : 'medium',
     candidates,
     barcodeTextDisagreement: false,
     barcodeMultiMatch: false,
+    validBarcode: validBarcodeNoMatch,
   }
+}
+
+// Keywords suggesting a receipt line is a non-food household item rather
+// than an ingredient — checked against the line's own text/category hint
+// before any barcode lookup happens, so the review screen can pre-select a
+// reasonable default. Deliberately the same spirit of list as
+// barcodeLookup.ts's non-food keyword set (kept separate since this one
+// matches informal receipt text, not normalized OFF category tags).
+const HOUSEHOLD_KEYWORDS = [
+  'trash bag', 'garbage bag', 'paper towel', 'toilet paper', 'tissue', 'napkin',
+  'foil', 'plastic wrap', 'ziploc', 'freezer bag', 'sandwich bag',
+  'detergent', 'fabric softener', 'dryer sheet', 'dish soap', 'dishwasher',
+  'bleach', 'disinfectant', 'cleaner', 'cleaning', 'sponge', 'scrubber',
+  'shampoo', 'conditioner', 'body wash', 'soap', 'lotion', 'deodorant',
+  'toothpaste', 'toothbrush', 'mouthwash', 'floss', 'razor', 'shaving',
+  'diaper', 'wipes', 'feminine', 'tampon', 'pad',
+  'battery', 'batteries', 'light bulb', 'candle', 'air freshener',
+  'pet food', 'cat litter', 'dog food',
+]
+
+export function guessItemType(parsedName: string, categoryHint: string | null): 'ingredient' | 'household' {
+  const haystack = `${parsedName} ${categoryHint ?? ''}`.toLowerCase()
+  if (categoryHint && /household|clean|personal.?care|paper.?good/i.test(categoryHint)) return 'household'
+  if (HOUSEHOLD_KEYWORDS.some(k => haystack.includes(k))) return 'household'
+  return 'ingredient'
 }
 

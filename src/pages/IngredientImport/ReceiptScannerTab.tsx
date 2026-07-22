@@ -4,7 +4,7 @@ import { PhotoCaptureCrop } from '@/components/PhotoCaptureCrop'
 import { getAllIngredients } from '@/db/ingredients'
 import { findMatchingProcessedReceipt } from '@/db/processedReceipts'
 import { normalizeLine, type ParsedReceiptLine } from '@/utils/receiptPriceNormalization'
-import { matchLine, resolveCandidateSelection, candidateLabel } from '@/utils/receiptMatching'
+import { matchLine, resolveCandidateSelection, candidateLabel, guessItemType } from '@/utils/receiptMatching'
 import { newId } from '@/utils/ids'
 import { ReceiptLineReview, type ReceiptLineDraft } from './ReceiptLineReview'
 import styles from './ScanLabelTab.module.css'
@@ -62,6 +62,10 @@ export function ReceiptScannerTab({ onItemSaved }: Props) {
         id: newId(),
         normalized,
         match: result,
+        // Best guess between Ingredient and Household Item, from the receipt's
+        // own text/category hint — "Don't Add" is never guessed toward, only
+        // ever chosen explicitly by the user.
+        itemType: guessItemType(normalized.parsedName, normalized.categoryHint),
         mode: result.tier === 'high' ? 'match' : result.tier === 'medium' ? 'pending' : 'createNew',
         selectedIngredientId: selection?.selectedIngredientId,
         selectedVariantId: selection?.selectedVariantId,
@@ -72,6 +76,11 @@ export function ReceiptScannerTab({ onItemSaved }: Props) {
         newCategory: normalized.categoryHint || defaultCategory,
         newBrand: '',
         priceDecision: selection?.priceDecision ?? 'not-needed',
+        macros: { calories: 0, protein: 0, carbs: 0, fiber: 0, sugar: 0, fat: 0, sodium: 0 },
+        servingSize: 1,
+        servingUnit: 'each',
+        barcodeLookupStatus: 'idle',
+        barcodeLookupAttempted: false,
         saved: false,
         error: '',
       }
