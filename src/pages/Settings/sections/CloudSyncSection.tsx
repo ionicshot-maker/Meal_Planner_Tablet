@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { Button, Card, Input, Select, Modal } from '@/components/ui'
+import { Button, Card, Input, Select, Modal, Toggle } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import {
   runSync, runFamilyShareSync, generateSyncCode,
@@ -163,6 +163,13 @@ export function CloudSyncSection() {
       )}
 
       <AccountSection />
+
+      <Toggle
+        checked={!settings.cloudSyncPromptDismissed}
+        onChange={checked => updateSettings({ cloudSyncPromptDismissed: !checked })}
+        label="Show the sign-in reminder on launch when not signed in"
+        id="cloud-sync-prompt-toggle"
+      />
 
       {/* ── Household Sync ─────────────────────────────────────────── */}
       <h3 className={styles.subTitle}>Household Sync</h3>

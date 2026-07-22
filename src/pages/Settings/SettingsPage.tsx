@@ -1,5 +1,5 @@
 import { useState, ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useSettings } from '@/context/SettingsContext'
 import { useTheme } from '@/context/ThemeContext'
 import { Toggle, Card } from '@/components/ui'
@@ -36,7 +36,11 @@ const FONT_SIZE_PRESETS: { pt: number; label: string }[] = [
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings()
   const { preference, setPreference } = useTheme()
-  const [active, setActive] = useState<Section>('household')
+  const [searchParams] = useSearchParams()
+  const [active, setActive] = useState<Section>(() => {
+    const section = searchParams.get('section') as Section | null
+    return section && SECTIONS.some(s => s.id === section) ? section : 'household'
+  })
 
   return (
     <div className={styles.page}>

@@ -98,6 +98,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   householdSyncCode: '',
   familyShareCode: '',
   familyShareRole: 'owner',
+  cloudSyncPromptDismissed: false,
   updatedAt: new Date(0).toISOString(),
 }
 

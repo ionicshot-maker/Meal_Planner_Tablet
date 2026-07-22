@@ -138,6 +138,12 @@ export interface AppSettings {
   // field itself would just show whichever device synced last, everywhere.
   lastHouseholdSyncAt?: string
   lastFamilySyncAt?: string
+  // Device-local — deliberately excluded from cloud sync. A dismissal on one
+  // device says nothing about whether a *different* device has ever seen the
+  // Cloud Sync explainer — a brand-new device should still get it once, so
+  // syncing this would be wrong even though it lives right next to fields
+  // that do sync.
+  cloudSyncPromptDismissed: boolean
   updatedAt: string
 }
 

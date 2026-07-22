@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/context/ThemeContext'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { SetupWizard } from '@/pages/Setup/SetupWizard'
 import { StarterLibraryPrompt } from '@/components/StarterLibraryPrompt'
+import { CloudSyncPrompt } from '@/components/CloudSyncPrompt'
 import { Toast } from '@/pages/IngredientImport/Toast'
 import { isSupabaseConfigured, pingSupabaseKeepAlive } from '@/db/supabase'
 import { repairLegacyIngredientData, repairSodiumUnitBug, fixMiscategorizedIngredients } from '@/db/ingredients'
@@ -115,6 +116,7 @@ function AppRoutes() {
       <BrowserRouter>
         {!isLoading && !settings.setupComplete && <SetupWizard />}
         {!isLoading && settings.setupComplete && <StarterLibraryPrompt />}
+        {!isLoading && <CloudSyncPrompt />}
         {miscategoryToast && (
           <Toast message={miscategoryToast} onDone={() => setMiscategoryToast(null)} />
         )}
