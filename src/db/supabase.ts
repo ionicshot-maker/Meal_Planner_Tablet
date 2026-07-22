@@ -174,13 +174,32 @@ export function generateSyncCode(householdName?: string): string {
 
 // ─── Sync helpers ────────────────────────────────────────────────────────────
 
+// PostgREST caps an unpaginated select at its default row limit (1000 on
+// this project) — for a household with more rows than that (this one has
+// 6,500+ ingredients), an unpaginated fetch silently returns only a partial,
+// arbitrarily-ordered slice. That's not just an efficiency concern: every
+// duplicate check in this file (push and pull alike) depends on seeing the
+// cloud's *complete* current name index, so a truncated fetch here means
+// name collisions past row 1000 go undetected — which was actively caught
+// reproducing this exact bug during testing. Always page through everything.
 async function fetchCloudRows(supabase: SupabaseClient, table: string, code: string): Promise<CloudRow[]> {
-  const { data, error } = await supabase
-    .from(table)
-    .select('*')
-    .eq('household_code', code)
-  if (error) throw new Error(`Supabase fetch error (${table}): ${error.message}`)
-  return (data ?? []) as CloudRow[]
+  const pageSize = 1000
+  const all: CloudRow[] = []
+  let offset = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .eq('household_code', code)
+      .order('id')
+      .range(offset, offset + pageSize - 1)
+    if (error) throw new Error(`Supabase fetch error (${table}): ${error.message}`)
+    if (!data || data.length === 0) break
+    all.push(...(data as CloudRow[]))
+    if (data.length < pageSize) break
+    offset += pageSize
+  }
+  return all
 }
 
 async function upsertCloudRow(supabase: SupabaseClient, table: string, code: string, id: string, data: unknown, updatedAt: string) {
@@ -188,6 +207,15 @@ async function upsertCloudRow(supabase: SupabaseClient, table: string, code: str
     .from(table)
     .upsert({ id, household_code: code, data, updated_at: updatedAt }, { onConflict: 'id' })
   if (error) throw new Error(`Supabase upsert error (${table}): ${error.message}`)
+}
+
+async function deleteCloudRow(supabase: SupabaseClient, table: string, code: string, id: string) {
+  const { error } = await supabase
+    .from(table)
+    .delete()
+    .eq('id', id)
+    .eq('household_code', code)
+  if (error) throw new Error(`Supabase delete error (${table}): ${error.message}`)
 }
 
 // Strips cost/store fields for Family Share sync
@@ -268,9 +296,41 @@ export async function syncIngredients(
   const localMap = new Map(localItems.map(i => [i.id, i]))
   const localNameMap = new Map(localItems.map(i => [i.name.toLowerCase().trim(), i]))
 
+  // Fetched once and reused by both directions. Pushing needs the cloud's
+  // current state up front — a push that upserts blindly, without checking
+  // whether the cloud already has this name under a different id, is exactly
+  // how duplicate rows kept reappearing even after a full cloud cleanup: any
+  // device pushing its own independently-created ingredients would silently
+  // recreate the same duplicate-name groups the cleanup had just removed.
+  const cloudRows = await fetchCloudRows(supabase, 'ingredients', code)
+  const cloudIdSet = new Set(cloudRows.map(r => r.id))
+  const cloudNameMap = new Map<string, CloudRow>()
+  for (const row of cloudRows) {
+    const name = ((row.data as Ingredient)?.name ?? '').toLowerCase().trim()
+    if (name && !cloudNameMap.has(name)) cloudNameMap.set(name, row)
+  }
+
+  // Tracks local ids already routed to duplicatesForReview so a 'both' sync
+  // doesn't flag the same local/cloud collision twice (once discovered while
+  // deciding whether to push, once again while deciding whether to pull).
+  const flaggedLocalIds = new Set<string>()
+
   if (direction !== 'pull') {
     // Push local → cloud
     for (const item of localItems) {
+      if (!cloudIdSet.has(item.id)) {
+        const nameMatch = cloudNameMap.get(item.name.toLowerCase().trim())
+        if (nameMatch && nameMatch.id !== item.id) {
+          // Pushing this would create a second cloud row for the same
+          // ingredient under a different id — flag it for review instead,
+          // the same way an incoming duplicate is flagged on pull, so it
+          // goes through the same resolution path (which repoints recipe
+          // references) rather than silently duplicating.
+          result.duplicatesForReview.push({ type: 'ingredient', localItem: item, cloudItem: nameMatch.data as Ingredient })
+          flaggedLocalIds.add(item.id)
+          continue
+        }
+      }
       const toUpload = familyShare ? stripCostData(item) : item
       await upsertCloudRow(supabase, 'ingredients', code, item.id, toUpload, item.updatedAt)
       result.uploadedToCloud++
@@ -279,7 +339,6 @@ export async function syncIngredients(
 
   if (direction !== 'push') {
     // Pull cloud → local
-    const cloudRows = await fetchCloudRows(supabase, 'ingredients', code)
     for (const row of cloudRows) {
       const cloudItem = row.data as Ingredient
       if (!cloudItem?.id) continue
@@ -289,7 +348,10 @@ export async function syncIngredients(
         // Check for name duplicate (same name, different ID)
         const nameDup = localNameMap.get(cloudItem.name?.toLowerCase().trim() ?? '')
         if (nameDup && nameDup.id !== cloudItem.id) {
-          result.duplicatesForReview.push({ type: 'ingredient', localItem: nameDup, cloudItem })
+          if (!flaggedLocalIds.has(nameDup.id)) {
+            result.duplicatesForReview.push({ type: 'ingredient', localItem: nameDup, cloudItem })
+            flaggedLocalIds.add(nameDup.id)
+          }
         } else {
           await saveIngredient(cloudItem)
           result.addedLocally++
@@ -319,15 +381,34 @@ export async function syncRecipes(
   const localMap = new Map(localItems.map(r => [r.id, r]))
   const localNameMap = new Map(localItems.map(r => [r.name.toLowerCase().trim(), r]))
 
+  // See syncIngredients() above for why this is fetched once up front and
+  // consulted before pushing — a push that skips this check is exactly how
+  // duplicate rows kept reappearing even after a full cloud cleanup.
+  const cloudRows = await fetchCloudRows(supabase, 'recipes', code)
+  const cloudIdSet = new Set(cloudRows.map(r => r.id))
+  const cloudNameMap = new Map<string, CloudRow>()
+  for (const row of cloudRows) {
+    const name = ((row.data as Recipe)?.name ?? '').toLowerCase().trim()
+    if (name && !cloudNameMap.has(name)) cloudNameMap.set(name, row)
+  }
+  const flaggedLocalIds = new Set<string>()
+
   if (direction !== 'pull') {
     for (const item of localItems) {
+      if (!cloudIdSet.has(item.id)) {
+        const nameMatch = cloudNameMap.get(item.name.toLowerCase().trim())
+        if (nameMatch && nameMatch.id !== item.id) {
+          result.duplicatesForReview.push({ type: 'recipe', localItem: item, cloudItem: nameMatch.data as Recipe })
+          flaggedLocalIds.add(item.id)
+          continue
+        }
+      }
       await upsertCloudRow(supabase, 'recipes', code, item.id, item, item.updatedAt)
       result.uploadedToCloud++
     }
   }
 
   if (direction !== 'push') {
-    const cloudRows = await fetchCloudRows(supabase, 'recipes', code)
     for (const row of cloudRows) {
       const cloudItem = row.data as Recipe
       if (!cloudItem?.id) continue
@@ -336,7 +417,10 @@ export async function syncRecipes(
       if (!local) {
         const nameDup = localNameMap.get(cloudItem.name?.toLowerCase().trim() ?? '')
         if (nameDup && nameDup.id !== cloudItem.id) {
-          result.duplicatesForReview.push({ type: 'recipe', localItem: nameDup, cloudItem })
+          if (!flaggedLocalIds.has(nameDup.id)) {
+            result.duplicatesForReview.push({ type: 'recipe', localItem: nameDup, cloudItem })
+            flaggedLocalIds.add(nameDup.id)
+          }
         } else {
           await saveRecipe(cloudItem)
           result.addedLocally++
@@ -697,9 +781,20 @@ async function repointRecipeId(fromId: string, toId: string): Promise<void> {
 }
 
 // Re-export helpers needed in CloudSyncSection
+//
+// `settings` is needed for keep-local: a duplicate can now be discovered
+// either on pull (an incoming cloud item collides with an existing local
+// name) or on push (a local item was withheld from upload because the cloud
+// already had this name under a different id). In the pull case "keep-local"
+// simply means "ignore the incoming cloud item" — nothing local references
+// it yet, so there's nothing to push. In the push case, though, the local
+// item was never actually uploaded, and the cloud's competing row is still
+// sitting there — so "keep-local" has to push the local item and retire the
+// cloud's old row, or the same collision just gets flagged again next sync.
 export async function resolveIngredientDuplicate(
   action: 'keep-local' | 'keep-cloud' | 'keep-both',
   dup: SyncDuplicate & { type: 'ingredient' },
+  settings: AppSettings,
 ): Promise<void> {
   const local = dup.localItem as Ingredient
   const cloud = dup.cloudItem as Ingredient
@@ -711,12 +806,19 @@ export async function resolveIngredientDuplicate(
     await deleteIngredient(local.id)
   } else if (action === 'keep-local') {
     await repointIngredientId(cloud.id, local.id)
+    const supabase = getSupabaseClient(settings.supabaseUrl, settings.supabaseAnonKey)
+    const code = settings.householdSyncCode?.trim()
+    if (supabase && code) {
+      await upsertCloudRow(supabase, 'ingredients', code, local.id, local, local.updatedAt)
+      await deleteCloudRow(supabase, 'ingredients', code, cloud.id)
+    }
   }
 }
 
 export async function resolveRecipeDuplicate(
   action: 'keep-local' | 'keep-cloud' | 'keep-both',
   dup: SyncDuplicate & { type: 'recipe' },
+  settings: AppSettings,
 ): Promise<void> {
   const local = dup.localItem as Recipe
   const cloud = dup.cloudItem as Recipe
@@ -728,5 +830,11 @@ export async function resolveRecipeDuplicate(
     await deleteRecipe(local.id)
   } else if (action === 'keep-local') {
     await repointRecipeId(cloud.id, local.id)
+    const supabase = getSupabaseClient(settings.supabaseUrl, settings.supabaseAnonKey)
+    const code = settings.householdSyncCode?.trim()
+    if (supabase && code) {
+      await upsertCloudRow(supabase, 'recipes', code, local.id, local, local.updatedAt)
+      await deleteCloudRow(supabase, 'recipes', code, cloud.id)
+    }
   }
 }

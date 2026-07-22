@@ -82,9 +82,9 @@ export function CloudSyncSection() {
   async function handleResolveDuplicate(action: 'keep-local' | 'keep-cloud' | 'keep-both') {
     if (!dupToResolve) return
     if (dupToResolve.type === 'ingredient') {
-      await resolveIngredientDuplicate(action, dupToResolve as SyncDuplicate & { type: 'ingredient' })
+      await resolveIngredientDuplicate(action, dupToResolve as SyncDuplicate & { type: 'ingredient' }, settings)
     } else {
-      await resolveRecipeDuplicate(action, dupToResolve as SyncDuplicate & { type: 'recipe' })
+      await resolveRecipeDuplicate(action, dupToResolve as SyncDuplicate & { type: 'recipe' }, settings)
     }
     // Remove from the pending list
     if (summary) {
@@ -101,9 +101,9 @@ export function CloudSyncSection() {
       ? (new Date(dup.cloudItem.updatedAt).getTime() > new Date(dup.localItem.updatedAt).getTime() ? 'keep-cloud' : 'keep-local')
       : action
     if (dup.type === 'ingredient') {
-      await resolveIngredientDuplicate(resolvedAction, dup as SyncDuplicate & { type: 'ingredient' })
+      await resolveIngredientDuplicate(resolvedAction, dup as SyncDuplicate & { type: 'ingredient' }, settings)
     } else {
-      await resolveRecipeDuplicate(resolvedAction, dup as SyncDuplicate & { type: 'recipe' })
+      await resolveRecipeDuplicate(resolvedAction, dup as SyncDuplicate & { type: 'recipe' }, settings)
     }
     return resolvedAction
   }
