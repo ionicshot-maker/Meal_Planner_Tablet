@@ -2,8 +2,7 @@ import { useRef, useState } from 'react'
 import { FileJson, Upload } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { getAllIngredients, saveIngredient } from '@/db/ingredients'
-import { findSmartMatches } from '@/utils/smartDuplicate'
-import { normalizeIngredient, extractRawIngredients } from '@/utils/importNormalization'
+import { normalizeIngredient, extractRawIngredients, findIngredientMatch } from '@/utils/importNormalization'
 import { now } from '@/utils/ids'
 import type { Ingredient, IngredientVariant } from '@/types'
 import styles from './JsonImportTab.module.css'
@@ -33,20 +32,6 @@ const IMPORT_MODES: { id: ImportMode; label: string; hint: string }[] = [
 
 const BRAND_DISPLAY_LIMIT = 40
 const PREVIEW_ITEM_LIMIT = 10
-
-// Find the existing ingredient (if any) this imported item matches, using the
-// same priority order as everywhere else in the app: barcode first (strongest
-// signal — skips name comparison entirely when it hits), then exact name,
-// then fuzzy name match.
-function findMatch(item: Ingredient, workingList: Ingredient[], barcodeIndex: Map<string, Ingredient>): Ingredient | undefined {
-  for (const v of item.variants) {
-    if (v.barcode && barcodeIndex.has(v.barcode)) return barcodeIndex.get(v.barcode)
-  }
-  const norm = item.name.trim().toLowerCase()
-  const exact = workingList.find(i => i.name.trim().toLowerCase() === norm)
-  if (exact) return exact
-  return findSmartMatches(item.name, workingList)[0]
-}
 
 export function JsonImportTab() {
   const [dragActive, setDragActive] = useState(false)
@@ -144,7 +129,7 @@ export function JsonImportTab() {
 
     for (let i = 0; i < toImport.length; i++) {
       const item = toImport[i]
-      const target = findMatch(item, workingList, barcodeIndex)
+      const target = findIngredientMatch(item, workingList, barcodeIndex)
 
       if (!target) {
         await saveIngredient(item)

@@ -438,8 +438,9 @@ function SyncResultDisplay({
       {hasDups && (
         <div className={styles.dupList}>
           <p className={styles.dupSummaryLine}>
-            {dups.length} duplicate{dups.length !== 1 ? 's' : ''} found — most are likely from the starter ingredient
-            library seeding on multiple devices. Use Keep All Newer to resolve automatically.
+            {dups.length} duplicate{dups.length !== 1 ? 's' : ''} found — most are likely from one of the starter
+            ingredient libraries (USDA basics or Great Value branded products) being loaded independently on
+            multiple devices. Use Keep All Newer to resolve automatically.
           </p>
 
           <div className={styles.dupBulkBtnGroup}>

@@ -1,6 +1,6 @@
 # Meal Planner App — Complete Reference
 
-**Version 2.1 — 2026-07-22**
+**Version 2.2 — 2026-07-23**
 
 > **Format change note:** This document was originally `MealPlannerApp_Reference.docx` (Version 1.0, June 2026), written before most of the app was built, as a design-intent spec. That file was never kept in sync with the actual build — most notably, it still listed Cloud Sync as "intentionally left for later" even though real Cloud Sync (including full per-user authentication) has been live for a while. This Version 2.0 is a full rewrite from a code-verified audit of the actual app as it exists today, reorganized to match the original document's section structure. The original `.docx` is left untouched at the repo root for history; **this file is the one to keep current going forward.**
 
@@ -47,10 +47,27 @@ This reference document captures the actual, current design and implementation o
 Three separate first-run overlays exist, gated by settings flags so they never stack on top of each other:
 
 1. **`SetupWizard`** — first thing a brand-new install sees. Household naming + basic setup. Can be skipped and finished later in Settings (a "Skip for now" option exists at each step).
-2. **`StarterLibraryPrompt`** — offers to seed a curated starter ingredient library once initial setup is done. Self-migrates if the household already has legacy-named ingredients.
+2. **`StarterLibraryPrompt`** — offers two fully independent, optional starter ingredient packs (see below). Self-migrates if the household already has legacy-named ingredients from an older single-pack version of this component.
 3. **`CloudSyncPrompt`** (added 2026-07-22) — a one-time-per-session explainer shown to anyone not signed in, explaining Cloud Sync/sign-in and linking directly into Settings → Data → Cloud Sync. Checking "Don't show this again" persists the dismissal (device-local, `cloudSyncPromptDismissed`); a standalone toggle in Cloud Sync settings can turn it back on. A brand-new device always sees it once, regardless of another device's dismissal — this is deliberately never synced.
 
-A **Setup Checklist** widget also lives at the top of the Settings page (`SetupChecklist.tsx`) — a persistent, collapsible progress card tracking 5 required steps (household name, a person profile, first ingredient, first recipe, first planned meal) and 3 optional ones (USDA key, Gemini key, Cloud Sync). Functions as an ongoing "getting started" reference independent of the one-time wizard.
+A **Setup Checklist** widget also lives at the top of the Settings page (`SetupChecklist.tsx`) — a persistent, collapsible progress card tracking 5 required steps (household name, a person profile, first ingredient, first recipe, first planned meal) and 3 optional ones (USDA key, Gemini key, Cloud Sync). Functions as an ongoing "getting started" reference independent of the one-time wizard. It does not track either starter pack's status.
+
+### Two independent starter ingredient packs (2nd pack added 2026-07-23)
+
+`StarterLibraryPrompt.tsx` offers both, each tracked by its own settings flag so loading (or declining) one never affects the other:
+
+| | 101-item USDA set | 867-item Great Value set |
+|---|---|---|
+| Data source | Hardcoded shorthand array, `src/db/starterLibrary.ts` (`DEFS`) — bundled directly into the JS build | Static JSON file, `public/data/great-value-starter.json` (~1.1MB) — fetched at runtime, never bundled into the JS build |
+| Settings flag | `starterLibrarySeeded` + `starterLibraryVersion` | `brandedLibrarySeeded` |
+| Auto-seeds silently? | **Yes** — a completely empty install gets these with no prompt at all | **No, never** — always requires an explicit choice, on any install state, even a brand-new empty one |
+| Content | Generic raw ingredients (meats, produce, dairy, grains, seasonings) — USDA macros, no barcode/brand/price/Nutriscore/Nova/allergen fields exist in the format at all | Real branded products — barcode, Nutriscore, Nova group, allergens, store, package size, sourced from Open Food Facts |
+| Dedup on load | Simple exact-name-match only (`seedStarterLibrary()`) | Barcode + exact-name match, reusing `findIngredientMatch()` from `importNormalization.ts` — the same matching JSON Import uses — but with fuzzy name matching deliberately **off** (see below) |
+| Seed logic | `src/db/starterLibrary.ts`, `seedStarterLibrary()` | `src/db/brandedLibrary.ts`, `seedBrandedLibrary()` |
+
+**Why fuzzy matching is off for the branded pack:** `findIngredientMatch()` (shared with JSON Import) supports an optional fuzzy-name fallback on top of barcode/exact-name. Testing this pack against the tiny 101-item generic set surfaced a real false-positive problem — multi-word branded names like "Whole Milk" or "Creamy Peanut Butter" fuzzy-matched against short generic names like "Milk" or "Butter" a large fraction of the time (roughly half the 867 items got wrongly skipped as "duplicates" in testing), which defeated the entire point of offering the two packs as separate, unmerged catalog entries. `findIngredientMatch()` now takes an `{ fuzzy?: boolean }` option (default on, preserving JSON Import's existing behavior unchanged) — the branded pack explicitly passes `fuzzy: false`.
+
+**UI behavior:** when only one pack's decision is outstanding, the prompt shows that pack alone, with the exact same single-button "Load N Ingredients" / "Skip" presentation the original single-pack version always had (byte-identical trigger conditions for the USDA branch — this was a hard requirement when the second pack was added, not just a nice-to-have). When both are outstanding at once (a non-empty install that hasn't decided on either), the prompt shows two checkboxes instead (USDA defaults checked, branded defaults unchecked — it's a much bigger, single-store, more opinionated dataset) with a unified "Load Selected (N)" / "Skip" pair; clicking either button resolves both decisions at once, loading whichever boxes were checked.
 
 ---
 
@@ -261,5 +278,6 @@ Updated from the original "Intentionally Left for Later" list — Cloud Sync is 
 | 2026-06 | 1.0 | Original design-intent document (`.docx`) — written before most of the build, describing the agreed target design. |
 | 2026-07-22 | 2.0 | Full rewrite as `.md`, from a code-verified audit of the actual current app. Corrected stale claims (Cloud Sync moved out of "later," Macro Tracker's missing TDEE calculator flagged, etc.), added everything built since v1.0 that was never documented (Ingredient Import's 7 tabs including Receipt Scanner, Recipe Collections, Kitchen Reference, real Account sign-in + households, AI Provider vs. standalone Gemini key distinction). Logged the Settings-page layout fix and the modal click-outside-to-close feature as the two build changes landing alongside this rewrite. |
 | 2026-07-22 | 2.1 | Logged a direct Supabase data migration (744 variants: flat macro fields → nested `macros: {}`, no value changes) and flagged one unresolved data conflict (Dill Pickle sodium: 900 vs 290) in Section 4 for manual follow-up. |
+| 2026-07-23 | 2.2 | Added a second, fully independent starter ingredient pack (867 Great Value branded products, Open Food Facts sourced) alongside the original 101-item USDA set — documented in full in Section 2. New `brandedLibrarySeeded` settings flag, new `src/db/brandedLibrary.ts` seed module, new `public/data/great-value-starter.json` static data file. Extracted `findIngredientMatch()` out of JsonImportTab into the shared `importNormalization.ts` (now used by both JSON Import and the new branded pack) and added an opt-out `fuzzy` flag after testing showed fuzzy matching against the tiny generic set produced a high false-positive rate. |
 
 *A more granular, code-line-cited snapshot of the app (routes, exact field lists, live data checks) is also maintained as a published artifact for ad-hoc deep-dives — ask the current session for the link if needed. This document is the one meant for cross-session/cross-chat continuity and should stay the primary source of truth for "what's built."*

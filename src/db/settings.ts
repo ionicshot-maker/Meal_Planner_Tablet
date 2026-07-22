@@ -84,6 +84,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ],
   starterLibrarySeeded: false,
   starterLibraryVersion: 0,
+  brandedLibrarySeeded: false,
   kitchenReferencePhotoPolicy: 'ask',
   ingredientDisplay: {
     showNutriscore: true,

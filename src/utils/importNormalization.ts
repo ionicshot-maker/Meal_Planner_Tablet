@@ -1,4 +1,5 @@
 import { normalizeBrandName } from '@/utils/brandNormalization'
+import { findSmartMatches } from '@/utils/smartDuplicate'
 import { newId, now } from '@/utils/ids'
 import type { Ingredient, IngredientVariant, IngredientUnit, Macros, NutriscoreGrade, NovaGroupNum } from '@/types'
 
@@ -139,6 +140,39 @@ export function normalizeIngredient(raw: RawIngredient): Ingredient | null {
     createdAt: raw.createdAt || now(),
     updatedAt: raw.updatedAt || now(),
   }
+}
+
+// Find the existing ingredient (if any) an imported/seeded item matches, using
+// the same priority order used everywhere else in the app: barcode first
+// (strongest signal — skips name comparison entirely when it hits), then
+// exact name, then (optionally) fuzzy name match. Shared by JsonImportTab and
+// any other bulk-import/seed path (e.g. brandedLibrary.ts) so matching
+// behavior can't drift between them.
+//
+// `fuzzy` defaults to on (JsonImportTab's existing behavior, unchanged) but
+// can be turned off — the branded starter pack needs this: fuzzy-matching
+// real multi-word branded product names ("Whole Milk", "Creamy Peanut
+// Butter") against the tiny 101-item *generic* starter set's short single-
+// concept names ("Milk", "Butter") produced a very high false-positive rate
+// (verified: ~330-420 of 867 items wrongly "matched" and silently skipped),
+// which directly defeated the point of offering the two packs as separate,
+// unmerged catalog entries. Barcode + exact name are precise enough to still
+// catch real duplicates (a re-run of the same seed, an item already
+// hand-added) without that collateral damage.
+export function findIngredientMatch(
+  item: Ingredient,
+  workingList: Ingredient[],
+  barcodeIndex: Map<string, Ingredient>,
+  options: { fuzzy?: boolean } = {},
+): Ingredient | undefined {
+  for (const v of item.variants) {
+    if (v.barcode && barcodeIndex.has(v.barcode)) return barcodeIndex.get(v.barcode)
+  }
+  const norm = item.name.trim().toLowerCase()
+  const exact = workingList.find(i => i.name.trim().toLowerCase() === norm)
+  if (exact) return exact
+  if (options.fuzzy === false) return undefined
+  return findSmartMatches(item.name, workingList)[0]
 }
 
 export function extractRawIngredients(data: unknown): RawIngredient[] {
