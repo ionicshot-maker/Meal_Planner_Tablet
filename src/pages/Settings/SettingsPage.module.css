@@ -73,15 +73,20 @@
   /* .content is a fixed-height box (it fills whatever's left of .layout
      below the header) shared by every tab, but tabs vary a lot in how much
      they actually render — Data (Export/Import/Reset) is short, Household
-     or Nutrients can be much taller. Without this, a short tab's content
-     sits at the top with the rest of the box just empty below it.
-     "safe center" vertically centers short content, but falls back to
-     top-alignment once content is tall enough to overflow — same trick
-     used for the SetupWizard modal — so tabs that genuinely need to
-     scroll (many people profiles, etc.) are unaffected. */
+     or Nutrients can be much taller. Without centering, a short tab's
+     content sits at the top with the rest of the box just empty below it.
+     This used to be `justify-content: safe center`, which centers short
+     content but falls back to top-alignment once content overflows — but
+     the "safe" alignment keyword is a fairly recent CSS addition and isn't
+     reliably supported by every renderer this app runs in (older
+     Chromium/WebView2 builds notably), which was reproducing as a dead gap
+     below content plus a scrollable region that didn't cover the full
+     visible box. Centering is done instead via auto top/bottom margins on
+     the first/last children below — base flexbox behavior supported
+     everywhere, with the identical center-when-short/top-align-when-tall
+     result and no "safe" keyword dependency. */
   display: flex;
   flex-direction: column;
-  justify-content: safe center;
 }
 
 /* Each tab renders one (or two, e.g. Nutrients' second "History Retention"
@@ -92,9 +97,17 @@
    box, but would visually compress real form/list content instead of the
    intended behavior (fits+centers if short, scrolls at full size if tall).
    The child combinator reaches every tab's wrapper regardless of which
-   module it comes from. */
+   module it comes from. Auto margins go on first/last only (not every
+   child) so multi-wrapper tabs like Nutrients get pushed to center as one
+   block instead of having extra space inserted between the wrappers too. */
 .content > * {
   flex-shrink: 0;
+}
+.content > *:first-child {
+  margin-top: auto;
+}
+.content > *:last-child {
+  margin-bottom: auto;
 }
 
 /* ── Section layout helpers ──────────────────────────────────────────────── */

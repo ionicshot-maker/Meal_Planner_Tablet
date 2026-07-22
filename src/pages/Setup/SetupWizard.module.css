@@ -2,17 +2,21 @@
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.55);
   z-index: 9000;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; justify-content: center;
   /* When the on-screen keyboard shrinks the visible viewport (e.g. the
      autofocused household-name input on the next step), .panel can end up
      taller than what's left — without overflow-y here, the "Start
      Planning"/"Back" buttons get clipped off with no way to reach them,
      since fixed-position elements don't inherit scrolling from anything
-     else on the page. "safe center" falls back to start-alignment instead
-     of the plain "center" keyword's normal behavior of clipping whichever
-     end overflows first when the centered content is scrolled. */
+     else on the page. Vertical centering-with-overflow-fallback is done via
+     .panel's own auto top/bottom margins (below) rather than `align-items:
+     safe center` — the "safe" alignment keyword is a fairly recent CSS
+     addition and isn't reliably supported by every renderer this app runs
+     in (older Chromium/WebView2 builds notably), whereas auto-margin
+     centering is base flexbox behavior supported everywhere: it centers
+     when there's spare space and collapses to 0 (top-aligned, scrollable)
+     the moment content overflows — no "safe" keyword needed at all. */
   overflow-y: auto;
-  align-items: safe center;
   padding: var(--space-4) 0;
 }
 
@@ -26,6 +30,10 @@
   display: flex; flex-direction: column; align-items: center;
   gap: var(--space-4);
   text-align: center;
+  /* Auto margins win over stretch, so .panel keeps sizing to its own content
+     height instead of stretching to fill .overlay — see the comment above. */
+  margin-top: auto;
+  margin-bottom: auto;
 }
 
 .icon { font-size: 3rem; line-height: 1; }
