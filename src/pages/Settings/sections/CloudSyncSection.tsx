@@ -8,6 +8,7 @@ import {
   resolveIngredientDuplicate, resolveRecipeDuplicate,
   type SyncSummary, type SyncDuplicate,
 } from '@/db/supabase'
+import { AccountSection } from './AccountSection'
 import { formatRelativeTime } from '@/utils/relativeTime'
 import type { FamilyShareRole, Ingredient, Recipe } from '@/types'
 import styles from './CloudSyncSection.module.css'
@@ -160,6 +161,8 @@ export function CloudSyncSection() {
           </div>
         </div>
       )}
+
+      <AccountSection />
 
       {/* ── Household Sync ─────────────────────────────────────────── */}
       <h3 className={styles.subTitle}>Household Sync</h3>
