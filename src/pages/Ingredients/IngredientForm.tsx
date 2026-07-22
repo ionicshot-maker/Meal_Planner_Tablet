@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Button, Input, NumericInput, Select, Toggle, Modal, Card } from '@/components/ui'
+import { Button, Input, NumericInput, Select, Toggle, Modal, Card, ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import { BrandCombobox } from '@/components/BrandCombobox'
 import { InfoDot } from '@/components/QualityBadges'
 import { AllergenPicker } from '@/components/AllergenChips'
@@ -65,6 +66,10 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
   const [usdaResults, setUsdaResults] = useState<USDAFoodItem[]>([])
   const [usdaSearching, setUsdaSearching] = useState(false)
   const [scanningBarcode, setScanningBarcode] = useState(false)
+
+  const initialDraftRef = useRef(JSON.stringify(draft))
+  const isDirty = JSON.stringify(draft) !== initialDraftRef.current
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(isDirty, onClose)
 
   const units = availableUnits(settings.unitSystem).map(u => ({ value: u, label: u }))
   const categoryOptions = settings.ingredientCategories.map(c => ({ value: c, label: c }))
@@ -197,6 +202,7 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
     <Modal
       open
       onClose={onClose}
+      onBackdropClose={requestClose}
       title={isNew ? 'Add Ingredient' : `Edit ${ingredient.name}`}
       size="lg"
       footer={
@@ -465,6 +471,7 @@ export function IngredientForm({ ingredient, onSave, onClose }: Props) {
           onClose={() => setScanningBarcode(false)}
         />
       )}
+      <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
     </Modal>
   )
 }

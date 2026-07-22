@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Modal } from '@/components/ui'
+import { Button, Modal, ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import { scoreIngredientMatch } from '@/utils/ingredientMatch'
 import { suggestCategory } from '@/utils/categoryRules'
 import { getRecentlyLinked, recordLinked } from '@/utils/recentlyLinked'
@@ -39,6 +40,12 @@ export function IngredientLinkModal({ open, initialQuery, allIngredients, onClos
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined)
   const [recentEntries, setRecentEntries] = useState<{ ingredientId: string; variantId: string }[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // "import" mode hosts the mini add-ingredient flow (MiniIngredientImportPanel
+  // → ReviewScreen) — once there, a stray backdrop click/Escape shouldn't
+  // silently drop whatever's been entered. "pick" mode is a pure search/select
+  // list, safe to close instantly.
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(mode === 'import', onClose)
 
   useEffect(() => {
     if (open) {
@@ -169,6 +176,7 @@ export function IngredientLinkModal({ open, initialQuery, allIngredients, onClos
       <Modal
         open={open}
         onClose={onClose}
+        onBackdropClose={requestClose}
         title={mode === 'import' ? 'Add New Ingredient' : 'Link Ingredient'}
         size={mode === 'import' ? 'lg' : 'md'}
         footer={mode === 'pick'
@@ -237,6 +245,7 @@ export function IngredientLinkModal({ open, initialQuery, allIngredients, onClos
       {showLinkedToast && (
         <Toast message="Ingredient added and linked successfully" onDone={() => setShowLinkedToast(false)} />
       )}
+      <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
     </>
   )
 }

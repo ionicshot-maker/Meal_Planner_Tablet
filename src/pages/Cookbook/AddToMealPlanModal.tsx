@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import { getMealPlanDay, saveMealPlanDay } from '@/db/mealPlan'
 import { blankDayMeals, toISODate } from '@/utils/mealPlanUtils'
 import type { MealItemRole, MealSlotItem } from '@/types'
@@ -33,6 +35,10 @@ export function AddToMealPlanModal({ recipeId, recipeName, onClose }: Props) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  const initialDateRef = useRef(date)
+  const isDirty = date !== initialDateRef.current || slot !== 'dinner' || role !== 'primary'
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(isDirty, onClose)
+
   async function handleAdd() {
     setSaving(true)
     try {
@@ -54,7 +60,8 @@ export function AddToMealPlanModal({ recipeId, recipeName, onClose }: Props) {
   }
 
   return createPortal(
-    <div className={styles.overlay} onClick={onClose}>
+    <>
+    <div className={styles.overlay} onClick={requestClose}>
       <div className={styles.panel} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
           <span className={styles.title}>Add to Meal Plan</span>
@@ -112,7 +119,9 @@ export function AddToMealPlanModal({ recipeId, recipeName, onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>,
+    </div>
+    <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    </>,
     document.body
   )
 }

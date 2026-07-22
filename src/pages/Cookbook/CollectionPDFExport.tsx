@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useSettings } from '@/context/SettingsContext'
+import { ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import { formatMinutes } from '@/utils/units'
 import { formatMacro } from '@/utils/recipeCalculations'
 import type { Recipe, RecipeCollection, KitchenReference } from '@/types'
@@ -34,6 +36,10 @@ export function CollectionPDFExport({ collection, recipes, references, onClose }
     includeCost: false,
     includeReferences: true,
   })
+
+  const initialOptionsRef = useRef(JSON.stringify(options))
+  const isDirty = JSON.stringify(options) !== initialOptionsRef.current
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(isDirty, onClose)
 
   // "Reference pages tagged to the same source" — derive the collection's
   // source(s) from whichever Source-group tags its recipes carry, then match
@@ -155,7 +161,8 @@ ${referencePages}
   }
 
   return createPortal(
-    <div className={styles.overlay}>
+    <>
+    <div className={styles.overlay} onClick={e => { if (e.target === e.currentTarget) requestClose() }}>
       <div className={styles.dialog}>
         <div className={styles.dialogHeader}>
           <h3 className={styles.dialogTitle}>Export Collection as PDF</h3>
@@ -211,7 +218,9 @@ ${referencePages}
           <button className={styles.btnPrimary} onClick={handleExport}>Export &amp; Print</button>
         </div>
       </div>
-    </div>,
+    </div>
+    <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    </>,
     document.body
   )
 }

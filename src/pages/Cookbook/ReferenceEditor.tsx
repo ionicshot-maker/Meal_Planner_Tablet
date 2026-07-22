@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Bold, Italic, List, ListOrdered, Camera, Sparkles, X } from 'lucide-react'
 import { useSettings } from '@/context/SettingsContext'
+import { ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import { PhotoCaptureCrop } from '@/components/PhotoCaptureCrop'
 import { ScrollHint } from '@/components/ScrollHint'
 import { useVisualViewportHeight } from '@/hooks/useVisualViewportHeight'
@@ -51,6 +53,17 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
   const [lowConfidenceReason, setLowConfidenceReason] = useState<string | null>(null)
   const [photoDecisionPending, setPhotoDecisionPending] = useState(false)
 
+  const initialSnapshotRef = useRef(JSON.stringify({
+    title: reference?.title ?? '', contentType: reference?.contentType ?? 'tips',
+    sourceTags: reference?.sourceTags ?? [], content: reference?.content ?? '',
+    tableMode: Boolean(reference?.tableData?.length), tableData: reference?.tableData ?? blankTable(),
+    photoDataUrl: reference?.photoUrl,
+  }))
+  const isDirty = JSON.stringify({
+    title, contentType, sourceTags, content, tableMode, tableData, photoDataUrl,
+  }) !== initialSnapshotRef.current
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(isDirty, onClose)
+
   const contentRef = useRef<HTMLTextAreaElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   // Shrinks the centered modal (and where it's centered within) to the true
@@ -62,10 +75,10 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
   const availableSourceTags = (sourceGroup?.tags ?? []).filter(t => !sourceTags.includes(t))
 
   useEffect(() => {
-    function handleEscape(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    function handleEscape(e: KeyboardEvent) { if (e.key === 'Escape') requestClose() }
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
-  }, [onClose])
+  }, [requestClose])
 
   useEffect(() => {
     if (!tagPickerOpen) return
@@ -217,7 +230,8 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
   }
 
   return createPortal(
-    <div className={styles.overlay} style={vvh ? { height: vvh } : undefined} onClick={onClose}>
+    <>
+    <div className={styles.overlay} style={vvh ? { height: vvh } : undefined} onClick={requestClose}>
       <div className={styles.panel} style={vvh ? { maxHeight: vvh - 32 } : undefined} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
           <span className={styles.title}>{reference ? 'Edit Reference' : 'Add Reference'}</span>
@@ -422,7 +436,9 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>,
+    </div>
+    <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    </>,
     document.body
   )
 }

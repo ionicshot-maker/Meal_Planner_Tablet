@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, Link2, Link2Off, Calculator } from 'lucide-react'
 import { useSettings } from '@/context/SettingsContext'
-import { Button, Toggle, Modal } from '@/components/ui'
+import { Button, Toggle, Modal, ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import { ConversionCalculator } from '@/components/ConversionCalculator'
 import type { ConversionUnit } from '@/utils/conversions'
 import { IngredientPicker } from './IngredientPicker'
@@ -119,6 +120,10 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
   // keyboard, which can otherwise cover the sticky footer while typing.
   const vvh = useVisualViewportHeight()
   const bodyRef = useRef<HTMLDivElement>(null)
+
+  // Dirty-tracking baseline — null until the async ingredient-row load below
+  // fills it in, so the brief loading window never falsely reads as "dirty".
+  const initialSnapshotRef = useRef<string | null>(null)
 
   // Fields the AI couldn't read confidently — highlighted in amber until fixed
   const uncertainFields = useMemo(() => new Set(uncertainFieldsProp ?? []), [uncertainFieldsProp])
@@ -249,10 +254,12 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
     getAllIngredients(false).then(ings => {
       setAllIngredients(ings)
       // Init rows from recipe or prefill
+      let loadedRows: DraftIngRow[] = []
       if (recipe) {
-        setRows(recipeToRows(recipe, buildIngredientMap(ings)))
+        loadedRows = recipeToRows(recipe, buildIngredientMap(ings))
+        setRows(loadedRows)
       } else if (prefill) {
-        const initRows: DraftIngRow[] = prefill.ingredients.map(ai => {
+        loadedRows = prefill.ingredients.map(ai => {
           const match = ings.find(i => i.name.toLowerCase() === ai.name.toLowerCase())
           return {
             _rowId: newId(),
@@ -264,8 +271,14 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
             servingDisplay: ai.servingDisplay ?? '',
           }
         })
-        setRows(initRows)
+        setRows(loadedRows)
       }
+      // Baseline for dirty-tracking, captured once rows reflect the real
+      // starting recipe/prefill instead of the empty array they start as.
+      initialSnapshotRef.current = JSON.stringify({
+        name, servings, prepMin, cookMin, notes, sourceUrl, sourceName,
+        isFavorite, isTemplate, verifiedServingCount, photoUrl, selectedTags, steps, rows: loadedRows,
+      })
     })
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -463,12 +476,20 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
     setSaving(false)
   }
 
+  // isDirty stays false until the ingredient-row load above sets a baseline —
+  // see initialSnapshotRef above.
+  const isDirty = initialSnapshotRef.current !== null && JSON.stringify({
+    name, servings, prepMin, cookMin, notes, sourceUrl, sourceName,
+    isFavorite, isTemplate, verifiedServingCount, photoUrl, selectedTags, steps, rows,
+  }) !== initialSnapshotRef.current
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(isDirty, onClose)
+
   // Close on Escape
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') requestClose() }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [requestClose])
 
   // Clipboard image paste (Ctrl+V anywhere in the editor)
   useEffect(() => {
@@ -491,9 +512,11 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
   const units = availableUnits(settings.unitSystem).map(u => ({ value: u, label: u }))
 
   return createPortal(
+    <>
     <div
       className={`${styles.overlay} ${referenceText ? styles.overlaySplit : ''}`}
       role="dialog" aria-modal="true" aria-label={isNew ? 'New Recipe' : `Edit ${recipe?.name}`}
+      onClick={e => { if (e.target === e.currentTarget) requestClose() }}
     >
       {referenceText && (
         <div className={styles.referencePanel}>
@@ -936,7 +959,9 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
         onPick={handleLinkPick}
         onIngredientSaved={handleIngredientSaved}
       />
-    </div>,
+    </div>
+    <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    </>,
     document.body
   )
 }

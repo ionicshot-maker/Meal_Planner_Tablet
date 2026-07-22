@@ -92,7 +92,11 @@ ${recipe.notes ? `<h2>Notes</h2><div class="notes">${recipe.notes}</div>` : ''}
   }
 
   return createPortal(
-    <div className={styles.overlay} role="dialog" aria-modal="true" aria-label={recipe.name}>
+    <div
+      className={styles.overlay}
+      role="dialog" aria-modal="true" aria-label={recipe.name}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
       <div className={styles.panel}>
 
         {/* Photo banner */}

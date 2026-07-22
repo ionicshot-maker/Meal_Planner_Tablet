@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { saveHouseholdItem, deleteHouseholdItem } from '@/db/householdItems'
 import { BrandCombobox } from '@/components/BrandCombobox'
+import { ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import { useSettings } from '@/context/SettingsContext'
 import type { HouseholdItem, GroceryItem, IngredientUnit } from '@/types'
 import styles from './HouseholdModal.module.css'
@@ -40,6 +42,11 @@ export function HouseholdModal({ items, hasActiveList, onItemsChange, onAddToLis
   const [editingItem, setEditingItem] = useState<HouseholdItem | null>(null)
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
   const [aohPendingId, setAohPendingId] = useState<string | null>(null)
+
+  // Quick Add is pure picker/browse — safe to close instantly. Manage Items has
+  // real unsaved typing whenever the add-form has a name or an item is mid-edit.
+  const isDirty = tab === 'manage' && (form.name.trim() !== '' || editingItem !== null)
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(isDirty, onClose)
 
   const categories = Array.from(new Set(items.map(i => i.category).filter(Boolean))).sort()
 
@@ -101,7 +108,8 @@ export function HouseholdModal({ items, hasActiveList, onItemsChange, onAddToLis
   }
 
   return createPortal(
-    <div className={styles.overlay} onClick={onClose}>
+    <>
+    <div className={styles.overlay} onClick={requestClose}>
       <div className={styles.panel} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
           <div className={styles.tabs}>
@@ -238,7 +246,9 @@ export function HouseholdModal({ items, hasActiveList, onItemsChange, onAddToLis
           )}
         </div>
       </div>
-    </div>,
+    </div>
+    <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    </>,
     document.body
   )
 }

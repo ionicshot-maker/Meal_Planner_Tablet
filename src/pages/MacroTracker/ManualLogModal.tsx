@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import type { MacroLogEntry, Macros, NutrientToggles } from '@/types'
 import { ZERO_MACROS, STANDARD_NUTRIENTS, nutrientLabel, nutrientUnit } from '@/utils/macroUtils'
 import type { NutrientKey } from '@/utils/macroUtils'
@@ -29,6 +31,11 @@ export function ManualLogModal({ initialSlot, date, personId, nutrientToggles, o
   const [servings, setServings] = useState('1')
   const [macros, setMacros]     = useState<Macros>({ ...ZERO_MACROS })
 
+  const initialMacrosRef = useRef(JSON.stringify(macros))
+  const isDirty = label.trim() !== '' || slot !== initialSlot || servings !== '1' ||
+    JSON.stringify(macros) !== initialMacrosRef.current
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(isDirty, onClose)
+
   const activeOptional: NutrientKey[] = []
   if (nutrientToggles.saturatedFat) activeOptional.push('saturatedFat')
   if (nutrientToggles.transFat)     activeOptional.push('transFat')
@@ -55,7 +62,8 @@ export function ManualLogModal({ initialSlot, date, personId, nutrientToggles, o
   }
 
   return createPortal(
-    <div className={styles.overlay} onClick={onClose}>
+    <>
+    <div className={styles.overlay} onClick={requestClose}>
       <div className={styles.panel} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
           <span className={styles.title}>Add Manual Entry</span>
@@ -118,7 +126,9 @@ export function ManualLogModal({ initialSlot, date, personId, nutrientToggles, o
           </button>
         </div>
       </div>
-    </div>,
+    </div>
+    <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    </>,
     document.body
   )
 }

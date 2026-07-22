@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Camera } from 'lucide-react'
 import { useSettings } from '@/context/SettingsContext'
+import { ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import { PhotoCaptureCrop } from '@/components/PhotoCaptureCrop'
 import {
   importRecipeFromUrl, importRecipeFromText, importRecipeFromPhoto,
@@ -43,6 +45,14 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
   const [photoStage, setPhotoStage] = useState<PhotoStage>('capture')
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
   const [lowConfidenceReason, setLowConfidenceReason] = useState('')
+
+  // Anything typed/pasted, or a photo already captured, counts as unsaved
+  // progress worth confirming before a stray backdrop click throws it away.
+  const isDirty =
+    (tab === 'url' && url.trim() !== '') ||
+    (tab === 'paste' && pasteText.trim() !== '') ||
+    (tab === 'photo' && photoStage !== 'capture')
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(isDirty, onClose)
 
   const aiConfigured = isRecipeImportAvailable(settings)
   const aiLabel = recipeAILabel(settings)
@@ -138,7 +148,8 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
   }
 
   return (
-    <div className={styles.backdrop} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+    <>
+    <div className={styles.backdrop} onClick={e => { if (e.target === e.currentTarget) requestClose() }}>
       <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Import Recipe">
 
         <header className={styles.header}>
@@ -415,5 +426,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
         )}
       </div>
     </div>
+    <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    </>
   )
 }

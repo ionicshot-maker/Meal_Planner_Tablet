@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
+import { ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import type { MealPlanDay, MealPlanWeekTemplate } from '@/types'
 import { toISODate, addDays, getWeekStart, parseDateLocal } from '@/utils/mealPlanUtils'
 import styles from './TemplateModal.module.css'
@@ -30,6 +32,11 @@ export function TemplateModal({
   const [copyTarget, setCopyTarget] = useState(toISODate(addDays(weekStart, 7)))
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
+  // Only the "save as template" name field on the Templates tab is unsaved
+  // typed input — Copy Week is date/click selections only, low-stakes to lose.
+  const isDirty = tab === 'templates' && newName.trim() !== ''
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(isDirty, onClose)
+
   const currentHasContent = currentWeekDays.some(d =>
     d.meals.breakfast.length + d.meals.lunch.length + d.meals.dinner.length + d.meals.snacks.length > 0
   )
@@ -49,7 +56,8 @@ export function TemplateModal({
   }
 
   return createPortal(
-    <div className={styles.overlay} onClick={onClose}>
+    <>
+    <div className={styles.overlay} onClick={requestClose}>
       <div className={styles.panel} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
           <div className={styles.tabs}>
@@ -154,7 +162,9 @@ export function TemplateModal({
           )}
         </div>
       </div>
-    </div>,
+    </div>
+    <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    </>,
     document.body
   )
 }

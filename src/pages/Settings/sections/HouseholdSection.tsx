@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useSettings } from '@/context/SettingsContext'
-import { Button, Card, Input, Select, Toggle, Modal } from '@/components/ui'
+import { Button, Card, Input, Select, Toggle, Modal, ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import { newId } from '@/utils/ids'
 import type { Person, PersonMode, PayFrequency, Sex, ActivityLevel, PaydaySchedule } from '@/types'
 import styles from './HouseholdSection.module.css'
@@ -170,6 +171,10 @@ function PersonModal({ person, isNew, onSave, onClose }: {
 }) {
   const [draft, setDraft] = useState<Person>({ ...person })
 
+  const initialDraftRef = useRef(JSON.stringify(draft))
+  const isDirty = JSON.stringify(draft) !== initialDraftRef.current
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(isDirty, onClose)
+
   function set<K extends keyof Person>(key: K, value: Person[K]) {
     setDraft(d => ({ ...d, [key]: value }))
   }
@@ -183,6 +188,7 @@ function PersonModal({ person, isNew, onSave, onClose }: {
     <Modal
       open
       onClose={onClose}
+      onBackdropClose={requestClose}
       title={isNew ? 'Add Person' : `Edit ${person.name}`}
       size="md"
       footer={
@@ -277,6 +283,7 @@ function PersonModal({ person, isNew, onSave, onClose }: {
           )}
         </div>
       </div>
+      <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
     </Modal>
   )
 }

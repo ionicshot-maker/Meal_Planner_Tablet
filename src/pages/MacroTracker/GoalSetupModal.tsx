@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useSettings } from '@/context/SettingsContext'
+import { ConfirmDiscardDialog } from '@/components/ui'
+import { useConfirmClose } from '@/hooks/useConfirmClose'
 import type { NutrientGoals, NutrientToggles } from '@/types'
 import { nutrientLabel, nutrientUnit, STANDARD_NUTRIENTS } from '@/utils/macroUtils'
 import type { NutrientKey } from '@/utils/macroUtils'
@@ -17,6 +19,11 @@ export function GoalSetupModal({ personId, nutrientToggles, onClose }: Props) {
   const person = settings.people.find(p => p.id === personId)
   const [method, setMethod] = useState<'individual' | 'percentage'>(person?.goalMethod ?? 'individual')
   const [goals, setGoals]   = useState<NutrientGoals>(person?.goals ?? {})
+
+  const initialMethodRef = useRef(method)
+  const initialGoalsRef = useRef(JSON.stringify(goals))
+  const isDirty = method !== initialMethodRef.current || JSON.stringify(goals) !== initialGoalsRef.current
+  const { confirming, requestClose, confirmDiscard, cancelDiscard } = useConfirmClose(isDirty, onClose)
 
   if (!person) return null
 
@@ -70,7 +77,8 @@ export function GoalSetupModal({ personId, nutrientToggles, onClose }: Props) {
   }
 
   return createPortal(
-    <div className={styles.overlay} onClick={onClose}>
+    <>
+    <div className={styles.overlay} onClick={requestClose}>
       <div className={styles.panel} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
           <span className={styles.title}>Set Goals — {person.name}</span>
@@ -161,7 +169,9 @@ export function GoalSetupModal({ personId, nutrientToggles, onClose }: Props) {
           </div>
         </div>
       </div>
-    </div>,
+    </div>
+    <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    </>,
     document.body
   )
 }
