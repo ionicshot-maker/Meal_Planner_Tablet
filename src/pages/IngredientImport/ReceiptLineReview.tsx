@@ -571,7 +571,7 @@ export function ReceiptLineReview({
                         <p className={styles.barcodeStatusOk}>✓ Nutrition filled in from barcode lookup — please verify.</p>
                       )}
                       {line.barcodeLookupStatus === 'not-found' && (
-                        <p className={styles.barcodeStatus}>Barcode lookup found no product — nutrition left blank, fill in manually if you'd like.</p>
+                        <p className={styles.barcodeNotFoundBanner}>Barcode lookup found no product — nutrition left blank, fill in manually if you'd like.</p>
                       )}
                       {line.barcodeLookupStatus === 'error' && (
                         <p className={styles.barcodeStatus}>Barcode lookup failed — nutrition left blank, fill in manually if you'd like.</p>
