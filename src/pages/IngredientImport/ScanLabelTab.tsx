@@ -3,38 +3,15 @@ import { useSettings } from '@/context/SettingsContext'
 import { PhotoCaptureCrop } from '@/components/PhotoCaptureCrop'
 import { newId, now } from '@/utils/ids'
 import { normalizeUnit } from '@/utils/recipeCalculations'
+import { scanNutritionLabel, uncertainLabelFields, type LabelNutrition } from '@/utils/labelScanLookup'
 import type { Ingredient, Macros } from '@/types'
 import styles from './ScanLabelTab.module.css'
-
-interface LabelNutrition {
-  productName?: string | null
-  brand?: string | null
-  servingSize?: number | null
-  servingUnit?: string | null
-  servingsPerContainer?: number | null
-  calories?: number | null
-  protein?: number | null
-  carbs?: number | null
-  fiber?: number | null
-  sugar?: number | null
-  fat?: number | null
-  saturatedFat?: number | null
-  transFat?: number | null
-  sodium?: number | null
-}
-
-const MACRO_KEYS = ['calories', 'protein', 'carbs', 'fiber', 'sugar', 'fat', 'sodium'] as const
 
 function labelScanToIngredient(
   nutrition: LabelNutrition,
   defaultCategory: string
 ): { ingredient: Ingredient; uncertainFields: Set<string> } {
-  const uncertain = new Set<string>()
-  if (!nutrition.productName) uncertain.add('name')
-  if (nutrition.servingSize == null) uncertain.add('servingSize')
-  for (const key of MACRO_KEYS) {
-    if (nutrition[key] == null) uncertain.add(key)
-  }
+  const uncertain = uncertainLabelFields(nutrition)
 
   const variantId = newId()
   const ingredientId = newId()
@@ -136,36 +113,19 @@ export function ScanLabelTab({ onReview }: Props) {
     setError('')
     setLoading(true)
     try {
-      const commaIdx = dataUrl.indexOf(',')
-      const base64 = dataUrl.slice(commaIdx + 1)
-      const mimeMatch = dataUrl.slice(0, commaIdx).match(/data:(.*);base64/)
-      const mimeType = mimeMatch?.[1] || 'image/jpeg'
+      const result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, settings.geminiModel || 'gemini-3.1-flash-lite')
 
-      const res = await fetch('/api/gemini-label-scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: base64,
-          mimeType,
-          apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-3.1-flash-lite',
-        }),
-      })
-      const json = await res.json() as {
-        status?: number; nutrition?: LabelNutrition; lowConfidence?: boolean; reason?: string; error?: string
-      }
-
-      if (!res.ok || json.error) {
-        setError(json.error ?? 'Could not read the nutrition label. Try again.')
+      if (result.status === 'error') {
+        setError(result.errorMessage ?? 'Could not read the nutrition label. Try again.')
         return
       }
-      if (json.lowConfidence || !json.nutrition) {
-        setLowConfidenceReason(json.reason ?? 'The label was unclear.')
+      if (result.status === 'low-confidence' || !result.nutrition) {
+        setLowConfidenceReason(result.reason ?? 'The label was unclear.')
         setStage('lowConfidence')
         return
       }
 
-      const { ingredient, uncertainFields } = labelScanToIngredient(json.nutrition, defaultCategory)
+      const { ingredient, uncertainFields } = labelScanToIngredient(result.nutrition, defaultCategory)
       const notice: Notice = uncertainFields.size === 0
         ? { level: 'success', message: 'Label scanned successfully — please verify before saving.' }
         : { level: 'warning', message: 'Some values could not be read — please verify highlighted fields against the label before saving.' }

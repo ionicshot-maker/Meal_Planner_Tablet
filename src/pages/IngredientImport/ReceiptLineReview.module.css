@@ -182,6 +182,35 @@
 
 .webSuggestionActions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 
+.fallbackChoiceBox {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fallbackChoiceActions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+
+.labelCaptureBox {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+/* Highlights a field the label-photo OCR couldn't confidently read —
+   matches ReviewScreen.module.css's fieldWarning treatment used for the
+   same kind of AI-import uncertainty elsewhere in the app. */
+.fieldWarning {
+  border-color: var(--color-warning) !important;
+  box-shadow: 0 0 0 1px var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+}
+
 .macroGrid {
   width: 100%;
   display: grid;

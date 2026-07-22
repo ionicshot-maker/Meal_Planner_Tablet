@@ -4,11 +4,14 @@ import { saveHouseholdItem } from '@/db/householdItems'
 import { saveProcessedReceipt } from '@/db/processedReceipts'
 import { useSettings } from '@/context/SettingsContext'
 import { normalizeBrandName } from '@/utils/brandNormalization'
+import { normalizeUnit } from '@/utils/recipeCalculations'
 import { newId, now } from '@/utils/ids'
 import { resolveCandidateSelection, candidateLabel } from '@/utils/receiptMatching'
 import type { LineMatchResult, RankedCandidate, ConfidenceTier } from '@/utils/receiptMatching'
 import { lookupBarcodeProduct } from '@/utils/barcodeLookup'
 import { lookupBarcodeWeb, type WebLookupProduct } from '@/utils/webBarcodeLookup'
+import { scanNutritionLabel, uncertainLabelFields } from '@/utils/labelScanLookup'
+import { PhotoCaptureCrop } from '@/components/PhotoCaptureCrop'
 import { IngredientPicker, type PickedIngredient } from '@/pages/Cookbook/IngredientPicker'
 import type { NormalizedLine } from '@/utils/receiptPriceNormalization'
 import type { Ingredient, IngredientUnit, IngredientVariant, HouseholdItem, Macros } from '@/types'
@@ -19,6 +22,7 @@ type PriceDecision = 'not-needed' | 'pending' | 'update' | 'sale-skip'
 type ItemType = 'ingredient' | 'household' | 'skip'
 type BarcodeLookupStatus = 'idle' | 'loading' | 'found' | 'not-found' | 'non-food' | 'error'
 type WebLookupStatus = 'idle' | 'loading' | 'found' | 'not-found' | 'error'
+type LabelPhotoStatus = 'idle' | 'loading' | 'found' | 'low-confidence' | 'error'
 
 const BLANK_MACROS: Macros = { calories: 0, protein: 0, carbs: 0, fiber: 0, sugar: 0, fat: 0, sodium: 0 }
 
@@ -47,8 +51,18 @@ export interface ReceiptLineDraft {
   servingUnit: IngredientUnit
   barcodeLookupStatus: BarcodeLookupStatus
   barcodeLookupAttempted: boolean
-  // Fallback that only fires when Open Food Facts comes back not-found —
-  // Gemini runs a grounded web search instead. A suggestion here is never
+  // Primary fallback when Open Food Facts comes back not-found — photograph
+  // the actual product's label via the same OCR pipeline the Scan Label tab
+  // uses. Unlike the web-search fallback below, a result here auto-fills
+  // directly (no separate "apply" step): there's no product-identity
+  // ambiguity to resolve since it's a photo of the item in hand, only
+  // transcription risk, which uncertainFields flags per-field.
+  labelCaptureOpen: boolean
+  labelPhotoStatus: LabelPhotoStatus
+  labelUncertainFields?: Set<string>
+  labelStatusMessage?: string
+  // Secondary fallback, only ever triggered by an explicit "Search the web
+  // instead" click — never auto-fires. A suggestion here is never
   // auto-applied; webSuggestionDismissed tracks an explicit "no thanks" so
   // the card can be hidden without losing what was found.
   webLookupStatus: WebLookupStatus
@@ -83,6 +97,13 @@ const WEB_CONFIDENCE_LABEL: Record<WebLookupProduct['confidence'], string> = {
   medium: 'Medium confidence — barcode unconfirmed',
   low: 'Low confidence — name/brand match only',
 }
+
+const LABEL_CAPTURE_TIPS = [
+  'Crop tightly to just the nutrition facts panel for best results',
+  'Make sure the label is flat and not curved or wrinkled',
+  'Good lighting with no glare on the label surface',
+  'Hold the camera straight on, not at an angle',
+]
 
 // Sale detection: under 10% difference is a simple "update?"; 10%+ gets
 // flagged explicitly as a possible sale so a temporary discount doesn't get
@@ -162,43 +183,63 @@ export function ReceiptLineReview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines])
 
-  // Only fires once Open Food Facts has already come back not-found for a
-  // line — Gemini runs a grounded web search as a fallback source. Never
-  // triggers on an OFF 'error' (network hiccup, not "doesn't exist") or on
-  // 'non-food', since a non-food item shouldn't get a nutrition search at
-  // all. Requires a Gemini key, which the Receipt Scanner tab already gates
-  // on to be reachable in the first place.
-  useEffect(() => {
-    if (!settings.geminiApiKey) return
-    const toLookup = lines.filter(l =>
-      l.itemType === 'ingredient' &&
-      l.mode === 'createNew' &&
-      l.barcodeLookupStatus === 'not-found' &&
-      !l.webLookupAttempted
-    )
-    if (toLookup.length === 0) return
+  // Secondary fallback — only ever runs when explicitly requested via
+  // "Search the web instead" (never auto-fires). Guarded by
+  // webLookupAttempted so a second click can't double-fire it.
+  function triggerWebLookup(line: ReceiptLineDraft) {
+    if (!settings.geminiApiKey || line.webLookupAttempted) return
+    updateLine(line.id, { webLookupAttempted: true, webLookupStatus: 'loading' })
+    lookupBarcodeWeb(
+      line.match.validBarcode!,
+      line.editableName,
+      line.newBrand,
+      settings.geminiApiKey,
+      settings.geminiModel || 'gemini-3.1-flash-lite'
+    ).then(result => {
+      if (result.status === 'found' && result.product) {
+        updateLine(line.id, { webLookupStatus: 'found', webLookupResult: result.product })
+      } else {
+        updateLine(line.id, { webLookupStatus: result.status === 'error' ? 'error' : 'not-found' })
+      }
+    })
+  }
 
-    setLines(ls => ls.map(l => (
-      toLookup.some(t => t.id === l.id) ? { ...l, webLookupAttempted: true, webLookupStatus: 'loading' } : l
-    )))
+  // Primary fallback — the user photographs the actual product's nutrition
+  // label and it goes through the same OCR pipeline the Scan Label tab uses.
+  // No product-identity ambiguity to gate on here (it's a photo of the item
+  // in hand), so unlike the web-search path this auto-fills directly; the
+  // per-field uncertainFields set still gets flagged for review since OCR
+  // transcription can still misread a number even off a real photo.
+  async function handleLabelPhoto(line: ReceiptLineDraft, dataUrl: string) {
+    updateLine(line.id, { labelCaptureOpen: false, labelPhotoStatus: 'loading' })
+    const result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, settings.geminiModel || 'gemini-3.1-flash-lite')
 
-    for (const line of toLookup) {
-      lookupBarcodeWeb(
-        line.match.validBarcode!,
-        line.editableName,
-        line.newBrand,
-        settings.geminiApiKey,
-        settings.geminiModel || 'gemini-3.1-flash-lite'
-      ).then(result => {
-        if (result.status === 'found' && result.product) {
-          updateLine(line.id, { webLookupStatus: 'found', webLookupResult: result.product })
-        } else {
-          updateLine(line.id, { webLookupStatus: result.status === 'error' ? 'error' : 'not-found' })
-        }
+    if (result.status === 'found' && result.nutrition) {
+      const n = result.nutrition
+      updateLine(line.id, {
+        labelPhotoStatus: 'found',
+        labelUncertainFields: uncertainLabelFields(n),
+        macros: {
+          calories: n.calories ?? 0,
+          protein: n.protein ?? 0,
+          carbs: n.carbs ?? 0,
+          fiber: n.fiber ?? 0,
+          sugar: n.sugar ?? 0,
+          fat: n.fat ?? 0,
+          sodium: n.sodium ?? 0,
+          saturatedFat: n.saturatedFat ?? undefined,
+          transFat: n.transFat ?? undefined,
+        },
+        servingSize: n.servingSize ?? line.servingSize,
+        servingUnit: n.servingUnit ? normalizeUnit(n.servingUnit) : line.servingUnit,
+        newBrand: line.newBrand || (n.brand?.trim() || ''),
       })
+    } else if (result.status === 'low-confidence') {
+      updateLine(line.id, { labelPhotoStatus: 'low-confidence', labelStatusMessage: result.reason })
+    } else {
+      updateLine(line.id, { labelPhotoStatus: 'error', labelStatusMessage: result.errorMessage })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines])
+  }
 
   // Copies a web-search suggestion's fields into the line's own editable
   // state — still fully editable afterward, never a silent/final write.
@@ -421,7 +462,12 @@ export function ReceiptLineReview({
           const showPriceDecision = line.itemType === 'ingredient' && line.priceDecision !== 'not-needed' && variant?.packageCost != null
           const delta = showPriceDecision ? priceDeltaInfo(variant!.packageCost!, line.editableUnitPrice) : null
           const showWebSuggestion = line.webLookupStatus === 'found' && !!line.webLookupResult && !line.webSuggestionDismissed
-          const showPlainNotFound = line.barcodeLookupStatus === 'not-found' && line.webLookupStatus !== 'loading' && !showWebSuggestion
+          // The choice row (take a photo / search the web) stays available
+          // until one path actually lands something usable — label photo
+          // succeeding, or a web suggestion getting applied — rather than
+          // disappearing the moment either is merely attempted.
+          const showChoiceRow = line.barcodeLookupStatus === 'not-found' &&
+            line.labelPhotoStatus !== 'found' && line.labelPhotoStatus !== 'loading' && !line.labelCaptureOpen
 
           return (
             <div key={line.id} className={`${styles.row} ${line.saved ? styles.rowSaved : ''} ${line.error ? styles.rowError : ''}`}>
@@ -643,8 +689,79 @@ export function ReceiptLineReview({
                       {line.barcodeLookupStatus === 'found' && (
                         <p className={styles.barcodeStatusOk}>✓ Nutrition filled in from barcode lookup — please verify.</p>
                       )}
-                      {line.barcodeLookupStatus === 'not-found' && line.webLookupStatus === 'loading' && (
-                        <p className={styles.barcodeStatus}>🔍 Open Food Facts didn't have this one — searching the web…</p>
+                      {line.labelCaptureOpen && (
+                        <div className={styles.labelCaptureBox}>
+                          <button
+                            type="button"
+                            className={styles.linkBtn}
+                            onClick={() => updateLine(line.id, { labelCaptureOpen: false })}
+                          >
+                            ← Cancel
+                          </button>
+                          <PhotoCaptureCrop
+                            primaryLabel="Take Photo or Scan Label"
+                            tipsTitle="📸 Tips for scanning nutrition labels:"
+                            tips={LABEL_CAPTURE_TIPS}
+                            onComplete={dataUrl => handleLabelPhoto(line, dataUrl)}
+                          />
+                        </div>
+                      )}
+                      {line.barcodeLookupStatus === 'not-found' && line.labelPhotoStatus === 'loading' && (
+                        <p className={styles.barcodeStatus}>🔍 Reading your label photo…</p>
+                      )}
+                      {line.labelPhotoStatus === 'found' && (
+                        <div>
+                          <p className={styles.barcodeStatusOk}>📸 Filled in from your label photo — please verify.</p>
+                          {line.labelUncertainFields && line.labelUncertainFields.size > 0 && (
+                            <p className={styles.barcodeStatus}>Some fields couldn't be read confidently — highlighted below.</p>
+                          )}
+                          <button
+                            type="button"
+                            className={styles.linkBtn}
+                            disabled={line.saved}
+                            onClick={() => updateLine(line.id, { labelCaptureOpen: true, labelPhotoStatus: 'idle', labelUncertainFields: undefined })}
+                          >
+                            Retake photo
+                          </button>
+                        </div>
+                      )}
+                      {showChoiceRow && (
+                        <div className={styles.fallbackChoiceBox}>
+                          {line.labelPhotoStatus === 'low-confidence' && (
+                            <p className={styles.barcodeStatus}>
+                              ⚠️ Couldn't read that label clearly{line.labelStatusMessage ? ` — ${line.labelStatusMessage}` : ''}.
+                            </p>
+                          )}
+                          {line.labelPhotoStatus === 'error' && (
+                            <p className={styles.barcodeStatus}>
+                              ⚠️ Label scan failed{line.labelStatusMessage ? ` — ${line.labelStatusMessage}` : ''}.
+                            </p>
+                          )}
+                          <p className={styles.barcodeNotFoundBanner}>Barcode lookup found no product — nutrition left blank.</p>
+                          <div className={styles.fallbackChoiceActions}>
+                            <button
+                              type="button"
+                              className={styles.priceDecisionBtn}
+                              disabled={line.saved}
+                              onClick={() => updateLine(line.id, { labelCaptureOpen: true })}
+                            >
+                              📸 Take a photo of the label
+                            </button>
+                            {!line.webLookupAttempted && (
+                              <button
+                                type="button"
+                                className={styles.linkBtn}
+                                disabled={line.saved}
+                                onClick={() => triggerWebLookup(line)}
+                              >
+                                Search the web instead
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {line.webLookupStatus === 'loading' && (
+                        <p className={styles.barcodeStatus}>🔍 Searching the web for this product…</p>
                       )}
                       {showWebSuggestion && line.webLookupResult && (
                         <div className={styles.webSuggestionCard}>
@@ -692,8 +809,8 @@ export function ReceiptLineReview({
                           )}
                         </div>
                       )}
-                      {showPlainNotFound && (
-                        <p className={styles.barcodeNotFoundBanner}>Barcode lookup found no product — nutrition left blank, fill in manually if you'd like.</p>
+                      {(line.webLookupStatus === 'not-found' || line.webLookupStatus === 'error') && !showWebSuggestion && (
+                        <p className={styles.barcodeStatus}>Web search didn't find a confident match either — nutrition left blank, fill in manually if you'd like.</p>
                       )}
                       {line.barcodeLookupStatus === 'error' && (
                         <p className={styles.barcodeStatus}>Barcode lookup failed — nutrition left blank, fill in manually if you'd like.</p>
@@ -739,7 +856,7 @@ export function ReceiptLineReview({
                           <label key={f.key} className={styles.macroField}>
                             <span>{f.label}</span>
                             <input
-                              className={styles.inputNum}
+                              className={`${styles.inputNum} ${line.labelUncertainFields?.has(f.key) ? styles.fieldWarning : ''}`}
                               type="text"
                               inputMode="decimal"
                               value={line.macros[f.key] ?? 0}
