@@ -13,12 +13,10 @@
 
 **Original pending list**
 - [ ] Import USDA comprehensive JSON (366 items)
-- [ ] Check status of overnight Claude-for-Chrome price lookup (47 priced as of original session start)
 - [ ] Export Cookbook + Ingredients for bulk recipe-ingredient linking
 
 **Feature gaps (known, undecided)**
 - [ ] TDEE/BMR calculator for Macro Tracker
-- [ ] "Add at least one person profile" setup step still incomplete
 - [ ] Unify the 3 separate ingredient-matching implementations (Receipt Scanner / JSON Import / branded pack) — while investigating a Receipt Scanner produce-matching question (see "New ideas" below), confirmed Receipt Scanner's barcode path has its own bespoke checksum/lookup logic (`receiptMatching.ts`) distinct from the other two, reinforcing that these really are 3 independent implementations, not just differently named wrappers around shared logic
 - [ ] Fix atomic-transaction gap on Receipt Scanner's household-item writes
 - [ ] mergeIngredients() doesn't reconcile category disagreements between merged pairs — kept record's category wins outright with no review step (found while merging the last 3 barcode-duplicate pairs)
@@ -28,6 +26,8 @@
 - [ ] Standalone PLU lookup capability for Receipt Scanner produce items — a static IFPS PLU→generic-produce-name table (e.g. `4038` → Raspberries, `4048` → Bananas), no API/network call/schema change needed (resolves to a name/category hint, not a `variant.barcode` match). Found while verifying why Blueberries/Raspberries on a real receipt only got NAME MATCH suggestions despite numeric codes being present: confirmed **by design, but not for this reason** — `isValidBarcodeChecksum()` (`src/utils/barcodeValidation.ts`) hard-rejects anything that isn't exactly 12/13 digits, so a real 4-5 digit PLU code is rejected before ever reaching ingredient lookup; separately, the Gemini extraction prompt (`netlify/functions/gemini-receipt-scan.ts`) describes the `barcodeText` field as "UPC/PLU, typically 11-13 digits" — internally inconsistent, since real PLU codes are 4-5 digits, not 11-13. No PLU-handling logic exists anywhere in the codebase today (confirmed via full-repo search). Not a bug — current behavior is consistent with the existing UPC/EAN-only design — but a real, unbuilt capability gap for a receipt category (produce) that's extremely common.
 
 **Recently completed (for reference, remove once confirmed no follow-up needed)**
+- [x] Overnight Claude-for-Chrome price lookup — status checked, confirmed done
+- [x] "Add at least one person profile" setup step — confirmed complete
 - [x] Ingredient Converter v5 — fixed leading-zero barcode stripping at both the row-parsing and pandas dtype-inference layers
 - [x] Barcode Duplicate Finder built in Dev Tools, live-verified against real data
 - [x] Merge/Keep/Skip/Delete actions for duplicate ingredients — general mergeIngredients() capability, verified with a real positive-repoint test (1 recipe successfully repointed) and a real negative test (unrelated ingredient correctly returned 0/0/0)
