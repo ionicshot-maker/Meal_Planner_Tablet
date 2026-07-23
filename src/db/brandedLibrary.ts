@@ -21,7 +21,7 @@ export interface BrandedSeedResult {
 // Unlike seedStarterLibrary()'s simple exact-name-match dedup, this reuses the
 // barcode → exact-name matching used by the JSON Import tab (findIngredientMatch)
 // — this pack carries real barcodes, so that's a much stronger signal than the
-// name-only check the 101-item generic set uses. Fuzzy matching is
+// name-only check the generic starter set uses. Fuzzy matching is
 // deliberately turned off here (see findIngredientMatch's comment) — it
 // false-positived heavily against the tiny generic starter set's short
 // names, which would have silently dropped a large fraction of this pack

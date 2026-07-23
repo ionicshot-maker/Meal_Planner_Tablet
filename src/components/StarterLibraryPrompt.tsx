@@ -9,8 +9,34 @@ import styles from './StarterLibraryPrompt.module.css'
 
 type Phase = 'idle' | 'prompt' | 'migrating' | 'migration-done'
 
+// Bumped 2026-07-24: the USDA set grew from 101 to 440 items (339 new
+// entries merged in from a comprehensive USDA import — see
+// MealPlannerApp_Reference.md). Anyone already at version 2 (the old
+// 101-item schema) is neither silently topped up (would add ~339
+// ingredients with zero confirmation, even for someone who explicitly
+// declined the original 101) nor silently left behind forever (the old
+// code's `usdaResolved` gate would never re-run this branch once true) —
+// they're offered the delta via a distinctly-worded "library has grown"
+// prompt (see usdaGrowthOffer below). seedStarterLibrary() is dedup-safe by
+// name against the household's full live ingredient list, so accepting
+// can't create duplicates for anyone who already has some of these 339
+// from another import (e.g. the JSON Import of this same source file).
+const CURRENT_STARTER_VERSION = 3
+
+// Category chips shown in the USDA prompt — a curated display list, NOT
+// auto-derived from DEFS (checked, confirmed, 2026-07-24). Must be updated
+// by hand whenever DEFS's category coverage changes. The 339-item merge
+// introduced 4 categories the old list didn't have: Rice & Grains, Dry
+// Beans & Legumes, Pasta & Noodles, Soups & Broths.
+const USDA_CATEGORY_CHIPS = [
+  'Meat & Poultry', 'Seafood', 'Eggs', 'Dairy', 'Produce',
+  'Rice & Grains', 'Dry Beans & Legumes', 'Pasta & Noodles',
+  'Baking & Pantry', 'Seasonings & Spices', 'Bread & Bakery',
+  'Condiments & Sauces', 'Soups & Broths', 'Beverages',
+]
+
 // Two fully independent starter packs, each tracked by its own settings flag
-// (starterLibrarySeeded/-Version for the 101-item USDA set, brandedLibrarySeeded
+// (starterLibrarySeeded/-Version for the USDA set, brandedLibrarySeeded
 // for the 867-item Great Value set). The USDA branch below — legacy migration,
 // silent auto-seed on an empty install, or falling through to a prompt — is
 // unchanged from before the branded pack existed; the branded decision is
@@ -22,6 +48,7 @@ export function StarterLibraryPrompt() {
   const { settings, updateSettings, isLoading } = useSettings()
   const [phase, setPhase] = useState<Phase>('idle')
   const [showUsdaOption, setShowUsdaOption] = useState(false)
+  const [showUsdaGrowthOffer, setShowUsdaGrowthOffer] = useState(false)
   const [showBrandedOption, setShowBrandedOption] = useState(false)
   const [usdaChecked, setUsdaChecked] = useState(true)
   const [brandedChecked, setBrandedChecked] = useState(false)
@@ -33,7 +60,7 @@ export function StarterLibraryPrompt() {
 
   useEffect(() => {
     if (isLoading) return
-    const usdaResolved = (settings.starterLibraryVersion ?? 0) >= 2
+    const usdaResolved = (settings.starterLibraryVersion ?? 0) >= CURRENT_STARTER_VERSION
     const brandedResolved = settings.brandedLibrarySeeded === true
     if (usdaResolved && brandedResolved) return
     if (checked.current) return
@@ -41,6 +68,7 @@ export function StarterLibraryPrompt() {
 
     ;(async () => {
       let usdaNeedsPrompt = false
+      let usdaGrowth = false
 
       // ── USDA branch — byte-for-byte the same logic as before the branded
       // pack existed, just skipped entirely once already resolved. ──
@@ -56,15 +84,20 @@ export function StarterLibraryPrompt() {
         if (legacyMatches.length > 0) {
           setPhase('migrating')
           await migrateStarterLibrary()
-          await updateRef.current({ starterLibraryVersion: 2, starterLibrarySeeded: true })
+          await updateRef.current({ starterLibraryVersion: CURRENT_STARTER_VERSION, starterLibrarySeeded: true })
           setPhase('migration-done')
           await new Promise(r => setTimeout(r, 5000))
           setPhase('idle')
         } else if (existing.length === 0) {
           await seedStarterLibrary()
-          await updateRef.current({ starterLibraryVersion: 2, starterLibrarySeeded: true })
+          await updateRef.current({ starterLibraryVersion: CURRENT_STARTER_VERSION, starterLibrarySeeded: true })
         } else if (settings.starterLibrarySeeded) {
-          await updateRef.current({ starterLibraryVersion: 2 })
+          // Already resolved the OLD (101-item) set, one way or another —
+          // the set has since grown to 440, so offer the delta via a
+          // distinctly-worded prompt rather than silently adding it or
+          // silently leaving this household without it forever.
+          usdaNeedsPrompt = true
+          usdaGrowth = true
         } else {
           usdaNeedsPrompt = true
         }
@@ -75,6 +108,7 @@ export function StarterLibraryPrompt() {
 
       if (usdaNeedsPrompt || brandedNeedsPrompt) {
         setShowUsdaOption(usdaNeedsPrompt)
+        setShowUsdaGrowthOffer(usdaGrowth)
         setShowBrandedOption(brandedNeedsPrompt)
         setUsdaChecked(true)
         setBrandedChecked(false)
@@ -98,7 +132,7 @@ export function StarterLibraryPrompt() {
         await seedStarterLibrary()
       }
       if (showUsdaOption) {
-        await updateRef.current({ starterLibraryVersion: 2, starterLibrarySeeded: true })
+        await updateRef.current({ starterLibraryVersion: CURRENT_STARTER_VERSION, starterLibrarySeeded: true })
       }
 
       if (doBranded) {
@@ -125,7 +159,7 @@ export function StarterLibraryPrompt() {
 
   async function handleSkip() {
     const flags: { starterLibraryVersion?: number; starterLibrarySeeded?: boolean; brandedLibrarySeeded?: boolean } = {}
-    if (showUsdaOption) { flags.starterLibraryVersion = 2; flags.starterLibrarySeeded = true }
+    if (showUsdaOption) { flags.starterLibraryVersion = CURRENT_STARTER_VERSION; flags.starterLibrarySeeded = true }
     if (showBrandedOption) { flags.brandedLibrarySeeded = true }
     await updateRef.current(flags)
     setPhase('idle')
@@ -158,7 +192,13 @@ export function StarterLibraryPrompt() {
         <Modal
           open
           onClose={handleSkip}
-          title={bothShown ? 'Starter Ingredient Libraries' : showUsdaOption ? 'Starter Ingredient Library' : 'Branded Ingredient Pack'}
+          title={
+            bothShown
+              ? 'Starter Ingredient Libraries'
+              : showUsdaOption
+                ? (showUsdaGrowthOffer ? 'Starter Library Has Grown' : 'Starter Ingredient Library')
+                : 'Branded Ingredient Pack'
+          }
           size="sm"
           footer={
             <>
@@ -168,14 +208,33 @@ export function StarterLibraryPrompt() {
           }
         >
           <div className={styles.body}>
-            {!bothShown && showUsdaOption && (
+            {!bothShown && showUsdaOption && showUsdaGrowthOffer && (
+              <>
+                <p className={styles.desc}>
+                  Our starter ingredient library has grown from 101 to {STARTER_INGREDIENT_COUNT} common
+                  ingredients with USDA nutritional data — want to add the newly added ones?
+                </p>
+                <div className={styles.categories}>
+                  {USDA_CATEGORY_CHIPS.map(c => (
+                    <span key={c} className={styles.chip}>{c}</span>
+                  ))}
+                </div>
+                <p className={styles.note}>
+                  Only ingredients not already in your database will be added — anything you already have,
+                  including from the original 101, won't be duplicated. You can edit or delete any of them
+                  after loading.
+                </p>
+              </>
+            )}
+
+            {!bothShown && showUsdaOption && !showUsdaGrowthOffer && (
               <>
                 <p className={styles.desc}>
                   We have a pre-built library of {STARTER_INGREDIENT_COUNT} common ingredients with USDA nutritional
                   data — meats, produce, dairy, grains, seasonings, and more — ready to add to your database.
                 </p>
                 <div className={styles.categories}>
-                  {['Meat & Poultry', 'Seafood', 'Eggs', 'Dairy', 'Produce', 'Baking & Pantry', 'Seasonings & Spices', 'Bread & Bakery', 'Condiments & Sauces', 'Beverages'].map(c => (
+                  {USDA_CATEGORY_CHIPS.map(c => (
                     <span key={c} className={styles.chip}>{c}</span>
                   ))}
                 </div>
@@ -210,8 +269,18 @@ export function StarterLibraryPrompt() {
                 <label className={styles.checkboxRow}>
                   <input type="checkbox" checked={usdaChecked} onChange={e => setUsdaChecked(e.target.checked)} />
                   <span>
-                    <strong>{STARTER_INGREDIENT_COUNT} USDA basics</strong> — generic raw ingredients
-                    (meats, produce, dairy, grains, seasonings) with USDA nutritional data, no brand or price info.
+                    {showUsdaGrowthOffer ? (
+                      <>
+                        <strong>{STARTER_INGREDIENT_COUNT} USDA basics (grown from 101)</strong> — generic raw
+                        ingredients with USDA nutritional data; only the newly added ones will actually be
+                        inserted, anything you already have won't be duplicated.
+                      </>
+                    ) : (
+                      <>
+                        <strong>{STARTER_INGREDIENT_COUNT} USDA basics</strong> — generic raw ingredients
+                        (meats, produce, dairy, grains, seasonings) with USDA nutritional data, no brand or price info.
+                      </>
+                    )}
                   </span>
                 </label>
                 <label className={styles.checkboxRow}>

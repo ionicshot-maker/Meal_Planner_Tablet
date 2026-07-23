@@ -138,7 +138,7 @@ export function JsonImportTab() {
       // generic USDA set against a large mixed catalog produced a 100%
       // false-positive skip rate under fuzzy matching. brandedLibrary.ts
       // already disabled fuzzy for the same root cause (documented false-
-      // positive rate importing 867 branded names against the tiny 101-item
+      // positive rate importing 867 branded names against the much smaller
       // generic set) — this was the same bug, just never applied here.
       // Barcode + exact name are precise enough to catch real duplicates
       // (a re-run of the same import, an item already hand-added) without

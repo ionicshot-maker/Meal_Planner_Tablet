@@ -149,14 +149,16 @@ export function normalizeIngredient(raw: RawIngredient): Ingredient | null {
 // any other bulk-import/seed path (e.g. brandedLibrary.ts) so matching
 // behavior can't drift between them.
 //
-// `fuzzy` defaults to on (JsonImportTab's existing behavior, unchanged) but
-// can be turned off — the branded starter pack needs this: fuzzy-matching
+// `fuzzy` defaults to on, but both current callers (JSON Import, the branded
+// starter pack) explicitly opt out with `{ fuzzy: false }` — fuzzy-matching
 // real multi-word branded product names ("Whole Milk", "Creamy Peanut
-// Butter") against the tiny 101-item *generic* starter set's short single-
-// concept names ("Milk", "Butter") produced a very high false-positive rate
+// Butter") against the small *generic* starter set's short single-concept
+// names ("Milk", "Butter") produced a very high false-positive rate
 // (verified: ~330-420 of 867 items wrongly "matched" and silently skipped),
-// which directly defeated the point of offering the two packs as separate,
-// unmerged catalog entries. Barcode + exact name are precise enough to still
+// and the same underlying keyword-subset/edit-distance logic separately
+// caused JSON Import to false-positive on a real 366-item USDA import
+// (2026-07-24) before that caller was also switched to `fuzzy: false`.
+// Barcode + exact name are precise enough to still
 // catch real duplicates (a re-run of the same seed, an item already
 // hand-added) without that collateral damage.
 export function findIngredientMatch(

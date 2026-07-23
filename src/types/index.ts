@@ -125,7 +125,7 @@ export interface AppSettings {
   // Device-local, deliberately excluded from cloud sync — same reasoning as
   // starterLibrarySeeded above: a decision on one device says nothing about
   // whether a different device has ever been asked. Tracks the independent
-  // 867-item Great Value branded pack, never the 101-item USDA set.
+  // 867-item Great Value branded pack, never the (440-item) USDA set.
   brandedLibrarySeeded: boolean
   kitchenReferencePhotoPolicy: KitchenReferencePhotoPolicy
   ingredientDisplay: IngredientDisplayToggles
