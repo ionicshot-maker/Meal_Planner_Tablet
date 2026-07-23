@@ -1,15 +1,28 @@
-import { Navigate } from 'react-router-dom'
-import { AlertTriangle, Download, FileWarning } from 'lucide-react'
+import { useState } from 'react'
+import { Navigate, Link } from 'react-router-dom'
+import { AlertTriangle, Download, FileWarning, ScanSearch } from 'lucide-react'
 import { useIsHouseholdOwner } from '@/hooks/useIsHouseholdOwner'
-import { Card } from '@/components/ui'
+import { Card, Button } from '@/components/ui'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
+import { findLeadingZeroBarcodeDupes, type BarcodeDupeGroup } from '@/utils/barcodeDuplicateScan'
 import styles from './DevToolsPage.module.css'
 
 // Extensible by design: each tool is its own <ToolSection> below the shared
 // warning banner. To add a second tool, add another <ToolSection> — nothing
 // about the access-control gate above it needs to change.
+type ScanStatus = 'idle' | 'scanning' | 'done'
+
 export default function DevToolsPage() {
   const { isOwner, loading } = useIsHouseholdOwner()
+  const [scanStatus, setScanStatus] = useState<ScanStatus>('idle')
+  const [dupeGroups, setDupeGroups] = useState<BarcodeDupeGroup[]>([])
+
+  async function runBarcodeDupeScan() {
+    setScanStatus('scanning')
+    const groups = await findLeadingZeroBarcodeDupes()
+    setDupeGroups(groups)
+    setScanStatus('done')
+  }
 
   // While the owner check is in flight, render nothing rather than either the
   // page or a redirect — avoids both a flash of protected content for a real
@@ -132,6 +145,81 @@ export default function DevToolsPage() {
                 explicitly telling you it isn't sure about.
               </p>
             </div>
+
+            <div className={styles.reviewCallout}>
+              <AlertTriangle size={18} className={styles.reviewIcon} aria-hidden="true" />
+              <p>
+                <strong>If you've run this converter before v5, your data may have a known bug.</strong>{' '}
+                Versions before v5 could silently drop a leading zero off a barcode (e.g.{' '}
+                <code>0079492041754</code> became <code>79492041754</code>), which let the same
+                product get imported twice under two different-looking barcodes — real duplicates
+                were found this way in production. Use the <strong>Barcode Duplicate Finder</strong>{' '}
+                below to check your existing ingredients for this exact pattern. Re-downloading and
+                re-running the script won't fix data already imported — only the finder below (and a
+                manual merge) will.
+              </p>
+            </div>
+          </Card>
+        </section>
+
+        {/* ── Barcode Duplicate Finder ─────────────────────────────────── */}
+        <section className={styles.toolSection}>
+          <h2 className={styles.toolTitle}>Barcode Duplicate Finder</h2>
+          <p className={styles.toolDesc}>
+            One-time cleanup check for the leading-zero barcode bug described above. Scans your
+            existing ingredients for variants whose barcodes match once leading zeros are stripped,
+            but are stored as different strings — the exact signature that bug left behind. This
+            only reports candidates; nothing is merged or changed automatically. Review each pair
+            and merge/delete manually in Ingredients if they're really the same product.
+          </p>
+
+          <Card padding="md">
+            <Button
+              variant="secondary"
+              onClick={runBarcodeDupeScan}
+              disabled={scanStatus === 'scanning'}
+            >
+              <ScanSearch size={16} />
+              {scanStatus === 'scanning' ? 'Scanning…' : 'Scan for Leading-Zero Barcode Duplicates'}
+            </Button>
+
+            {scanStatus === 'done' && dupeGroups.length === 0 && (
+              <p className={styles.scanEmpty}>
+                ✓ No leading-zero barcode duplicates found.
+              </p>
+            )}
+
+            {scanStatus === 'done' && dupeGroups.length > 0 && (
+              <div className={styles.dupeResults}>
+                <p className={styles.dupeResultsSummary}>
+                  Found {dupeGroups.length} candidate pair{dupeGroups.length !== 1 ? 's' : ''} —
+                  review each below before merging anything.
+                </p>
+                {dupeGroups.map(group => (
+                  <div key={group.normalizedBarcode} className={styles.dupeGroup}>
+                    <p className={styles.dupeGroupLabel}>
+                      Barcodes matching digits: <code>{group.normalizedBarcode}</code>
+                    </p>
+                    {group.entries.map(entry => (
+                      <div key={entry.variantId} className={styles.dupeEntry}>
+                        <div className={styles.dupeEntryInfo}>
+                          <span className={styles.dupeEntryName}>{entry.ingredientName}</span>
+                          <span className={styles.dupeEntryMeta}>
+                            {entry.brand} · {entry.category} · barcode <code>{entry.rawBarcode}</code>
+                          </span>
+                        </div>
+                        <Link
+                          className={styles.dupeEntryLink}
+                          to={`/ingredients?edit=${entry.ingredientId}`}
+                        >
+                          Open in Ingredients →
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </section>
 

@@ -1,6 +1,25 @@
 """
 Open Food Facts → Angelo Family Meal Planner
-Ingredient Converter v4 — Schema-corrected
+Ingredient Converter v5 — Barcode integrity fix
+
+v5 changes from v4 (see CHANGELOG at bottom of this docstring):
+  - Fixed a real data-corrupting bug: the barcode ("code") column was read
+    with no dtype override, so pandas' own automatic numeric-type inference
+    silently stripped any leading zero BEFORE this script's code ever saw
+    the value — confirmed this happens even for an XLSX cell where the
+    barcode is genuinely stored as text with the zero intact. The previous
+    row_to_ingredient() logic then made it worse by round-tripping the
+    (already-corrupted) value through float()/int(). Barcodes are
+    identifiers, not numbers, and should never pass through numeric
+    conversion at any stage. Fixed by forcing the barcode column to string
+    dtype at read time (the only point the zero can actually be preserved)
+    and rewriting the barcode-parsing logic to keep the original string
+    exactly as given. This caused real duplicate ingredient records in
+    production — the same product imported twice under two different-
+    looking barcodes (one with the leading zero, one without), which meant
+    barcode-based duplicate detection couldn't recognize them as the same
+    item. See MealPlannerApp_Reference.md and Dev Tools' own instructions
+    for the cleanup utility that finds pairs affected by earlier runs.
 
 v4 changes from v3 (see CHANGELOG at bottom of this docstring):
   - Macro fields now nested under a "macros": {} object per variant, matching
@@ -549,8 +568,28 @@ def row_to_ingredient(row, review_log):
         })
 
     barcode_raw = get(COL["barcode"])
-    try: barcode = str(int(float(barcode_raw))) if not pd.isna(barcode_raw) else None
-    except: barcode = str(barcode_raw) if not pd.isna(barcode_raw) else None
+    if pd.isna(barcode_raw):
+        barcode = None
+    elif isinstance(barcode_raw, str):
+        # Normal path — the dtype=str override on read_csv/read_excel above
+        # means this is what actually runs for a well-formed file. Preserves
+        # the original string exactly, leading zeros included. Never round-
+        # trip a barcode through float()/int() — that's what silently
+        # dropped leading zeros before (confirmed against real production
+        # data: "0079492041754" became "79492041754").
+        barcode = barcode_raw.strip() or None
+    else:
+        # Defensive fallback only — should not normally be reached given the
+        # dtype override above. Guards a caller that got here some other way
+        # (e.g. a future code path reading rows from something other than
+        # read_csv/read_excel). If pandas still handed us a float, strip a
+        # trailing ".0" without ever calling int() — that avoids compounding
+        # the damage, but a leading zero already lost upstream of this
+        # function can't be recovered here; there is nothing left to recover
+        # it from.
+        s = str(barcode_raw).strip()
+        s = s[:-2] if s.endswith(".0") else s
+        barcode = s or None
 
     srv_size, srv_unit = parse_serving(get(COL["serving_size"]))
     sodium_val = get(COL["sodium"])
@@ -616,9 +655,20 @@ def row_to_ingredient(row, review_log):
 
 def process_file(path, review_log):
     ext = Path(path).suffix.lower()
+    # Force the barcode column to string dtype at read time. Without this,
+    # pandas' automatic numeric-type inference on an all-digit column (which
+    # happens before any of this script's own code runs) silently drops any
+    # leading zero — confirmed this happens for both CSV and XLSX, even when
+    # the XLSX cell genuinely stores the barcode as text with the zero
+    # intact. This is the only point in the pipeline the zero can actually
+    # be preserved; nothing downstream can recover it once pandas has
+    # already parsed the column as numeric. Referencing a column name that
+    # isn't present in a given file is safely ignored by pandas, so this is
+    # safe to pass unconditionally.
+    barcode_dtype = {COL["barcode"]: str}
     try:
-        df = pd.read_csv(path, sep="\t", low_memory=False) if ext == ".csv" \
-             else pd.read_excel(path)
+        df = pd.read_csv(path, sep="\t", low_memory=False, dtype=barcode_dtype) if ext == ".csv" \
+             else pd.read_excel(path, dtype=barcode_dtype)
     except Exception as e:
         return [], 0, str(e)
     results, skipped = [], 0
@@ -686,7 +736,7 @@ def write_review_log(review_log, out_path):
 class ConverterApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Open Food Facts → Meal Planner Converter v4")
+        self.root.title("Open Food Facts → Meal Planner Converter v5")
         self.root.geometry("900x680")
         self.root.resizable(True, True)
         self.files = []
@@ -945,7 +995,7 @@ class ConverterApp:
 
         out_file.write('{"version":2,"exportDate":"')
         out_file.write(datetime.now(timezone.utc).isoformat())
-        out_file.write('","source":"Open Food Facts bulk converter v4","ingredients":[')
+        out_file.write('","source":"Open Food Facts bulk converter v5","ingredients":[')
 
         for fi, path in enumerate(self.files):
             fname = os.path.basename(path)
@@ -1008,7 +1058,18 @@ if __name__ == "__main__":
     root.mainloop()
 
 # ── CHANGELOG ──────────────────────────────────────────────────────────────
-# v4 (this version):
+# v5 (this version):
+#   - Fixed a real barcode-corrupting bug: pandas' automatic dtype inference
+#     silently stripped leading zeros off the barcode ("code") column at
+#     read time, before row_to_ingredient() ever ran — confirmed for both
+#     CSV and XLSX, including an XLSX cell where the barcode was genuinely
+#     stored as text. process_file() now forces that column to string dtype
+#     on read, and row_to_ingredient() no longer round-trips the value
+#     through float()/int() (which would have compounded the same damage).
+#     Caused real duplicate ingredient records in production (same product,
+#     two different-looking barcodes) that barcode-based duplicate
+#     detection couldn't catch. Source string updated to "...v5".
+# v4:
 #   - Macro fields nested under "macros": {} per variant (was flat on the
 #     variant) — matches the app's actual schema, fixes the root cause of
 #     the null-calorie bug found via a Supabase round-trip diff.
