@@ -129,7 +129,21 @@ export function JsonImportTab() {
 
     for (let i = 0; i < toImport.length; i++) {
       const item = toImport[i]
-      const target = findIngredientMatch(item, workingList, barcodeIndex)
+      // fuzzy: false — findSmartMatches()'s keyword-subset check treats any
+      // single/two-word name as a match for *any* existing name that merely
+      // contains those same words (e.g. "Lime" matches "Cilantro Lime Rice",
+      // "Key Lime Pie Filling", anything), and its edit-distance check can
+      // match unrelated short words purely by character coincidence (e.g.
+      // "Lime" vs "Rice", distance 2). Confirmed live: importing a 366-item
+      // generic USDA set against a large mixed catalog produced a 100%
+      // false-positive skip rate under fuzzy matching. brandedLibrary.ts
+      // already disabled fuzzy for the same root cause (documented false-
+      // positive rate importing 867 branded names against the tiny 101-item
+      // generic set) — this was the same bug, just never applied here.
+      // Barcode + exact name are precise enough to catch real duplicates
+      // (a re-run of the same import, an item already hand-added) without
+      // the false-positive risk.
+      const target = findIngredientMatch(item, workingList, barcodeIndex, { fuzzy: false })
 
       if (!target) {
         await saveIngredient(item)
