@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
-import { applyIngredientBatch, type IngredientBatchOp } from '@/db/ingredients'
-import { saveHouseholdItem } from '@/db/householdItems'
-import { saveProcessedReceipt } from '@/db/processedReceipts'
+import { applyReceiptSaveBatch, type IngredientBatchOp } from '@/db/ingredients'
 import { useSettings } from '@/context/SettingsContext'
 import { normalizeBrandName } from '@/utils/brandNormalization'
 import { normalizeUnit } from '@/utils/recipeCalculations'
@@ -314,7 +312,7 @@ export function ReceiptLineReview({
     setBatchError('')
 
     const ops: IngredientBatchOp[] = []
-    const householdSaves: { line: ReceiptLineDraft; item: HouseholdItem }[] = []
+    const householdSaves: HouseholdItem[] = []
     const pendingRowIds: string[] = []
 
     for (const line of validated) {
@@ -329,15 +327,12 @@ export function ReceiptLineReview({
 
       if (line.itemType === 'household') {
         householdSaves.push({
-          line,
-          item: {
-            id: newId(),
-            name: line.editableName.trim(),
-            category: line.newCategory || 'Household Items',
-            brand: line.newBrand.trim() || undefined,
-            price: packageCost > 0 ? packageCost : undefined,
-            createdAt: now(),
-          },
+          id: newId(),
+          name: line.editableName.trim(),
+          category: line.newCategory || 'Household Items',
+          brand: line.newBrand.trim() || undefined,
+          price: packageCost > 0 ? packageCost : undefined,
+          createdAt: now(),
         })
         continue
       }
@@ -403,23 +398,24 @@ export function ReceiptLineReview({
     }
 
     try {
-      // Every ingredient write for this batch happens in one transaction —
-      // either all of it lands or none of it does, so an error partway
-      // through can't leave some rows saved and others not. Household items
-      // are a separate, simpler store with no cross-references to repoint,
-      // so they're saved individually rather than folded into that batch.
-      await applyIngredientBatch(ops)
-      for (const { item } of householdSaves) {
-        await saveHouseholdItem(item)
-      }
-
-      await saveProcessedReceipt({
-        id: newId(),
-        store: storeName,
-        date: receiptDate,
-        total: receiptTotal,
-        photoDataUrl: photoDataUrl ?? undefined,
-        processedAt: now(),
+      // Every write for this batch — ingredient ops, household items, and
+      // the processed-receipt record — happens in one transaction spanning
+      // all three stores, so an error partway through can't leave some rows
+      // saved and others not (previously household items were saved
+      // individually in a separate loop after the ingredient transaction
+      // committed, which could leave ingredients saved but household items
+      // missing on a mid-loop failure).
+      await applyReceiptSaveBatch({
+        ingredientOps: ops,
+        householdItems: householdSaves,
+        processedReceipt: {
+          id: newId(),
+          store: storeName,
+          date: receiptDate,
+          total: receiptTotal,
+          photoDataUrl: photoDataUrl ?? undefined,
+          processedAt: now(),
+        },
       })
 
       setLines(ls => ls.map(l => (pendingRowIds.includes(l.id) ? { ...l, saved: true, error: '' } : l)))

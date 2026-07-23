@@ -2,7 +2,7 @@ import { getDB } from './schema'
 import { normalizeIngredient } from '@/utils/importNormalization'
 import { suggestCategory, getCategoryOverride, RECLASSIFIABLE_CATEGORIES } from '@/utils/categoryRules'
 import { now } from '@/utils/ids'
-import type { Ingredient, IngredientVariant } from '@/types'
+import type { Ingredient, IngredientVariant, HouseholdItem, ProcessedReceipt } from '@/types'
 
 export async function getAllIngredients(includeArchived = false): Promise<Ingredient[]> {
   const db = await getDB()
@@ -193,24 +193,38 @@ export type IngredientBatchOp =
   | { type: 'addVariant'; ingredientId: string; variant: IngredientVariant }
   | { type: 'createIngredient'; ingredient: Ingredient }
 
-// Applies a batch of writes as a single IndexedDB transaction — either every
-// op commits or none do. Used by the Receipt Scanner so a mid-batch failure
-// (a missing ingredient, a bad id) can't leave some rows saved and others not;
-// on any error the whole transaction is explicitly aborted, which rolls back
+export interface ReceiptSaveBatch {
+  ingredientOps: IngredientBatchOp[]
+  householdItems: HouseholdItem[]
+  processedReceipt: ProcessedReceipt
+}
+
+// Applies every write from a Receipt Scanner "Save All" — ingredient ops,
+// household items, and the processed-receipt record — as a single IndexedDB
+// transaction spanning all three stores. Either everything lands or nothing
+// does. This used to be two separate steps: ingredient ops went through one
+// transaction (the old applyIngredientBatch), then household items were
+// saved individually in a plain loop right after, with the processed-receipt
+// record written last, outside either. A failure partway through the
+// household-item loop could leave ingredients committed but household items
+// (and the receipt's processed-marker) missing — the exact gap this closes.
+// On any error the whole transaction is explicitly aborted, rolling back
 // every put already issued in this call, not just the one that failed.
-export async function applyIngredientBatch(ops: IngredientBatchOp[]): Promise<void> {
+export async function applyReceiptSaveBatch(batch: ReceiptSaveBatch): Promise<void> {
   const db = await getDB()
-  const tx = db.transaction('ingredients', 'readwrite')
-  const store = tx.objectStore('ingredients')
+  const tx = db.transaction(['ingredients', 'householdItems', 'processedReceipts'], 'readwrite')
+  const ingredientStore = tx.objectStore('ingredients')
+  const householdStore = tx.objectStore('householdItems')
+  const receiptStore = tx.objectStore('processedReceipts')
 
   try {
-    for (const op of ops) {
+    for (const op of batch.ingredientOps) {
       if (op.type === 'createIngredient') {
-        await store.put(op.ingredient)
+        await ingredientStore.put(op.ingredient)
         continue
       }
 
-      const ingredient = await store.get(op.ingredientId)
+      const ingredient = await ingredientStore.get(op.ingredientId)
       if (!ingredient) throw new Error(`Ingredient ${op.ingredientId} not found`)
 
       if (op.type === 'updatePrice') {
@@ -224,8 +238,16 @@ export async function applyIngredientBatch(ops: IngredientBatchOp[]): Promise<vo
         ingredient.variants.push(op.variant)
       }
       ingredient.updatedAt = now()
-      await store.put(ingredient)
+      await ingredientStore.put(ingredient)
     }
+
+    for (const item of batch.householdItems) {
+      item.updatedAt = now()
+      await householdStore.put(item)
+    }
+
+    await receiptStore.put(batch.processedReceipt)
+
     await tx.done
   } catch (err) {
     try { tx.abort() } catch { /* transaction already finished */ }
