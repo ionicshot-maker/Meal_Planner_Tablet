@@ -1,4 +1,4 @@
-import { findSmartMatches } from './smartDuplicate'
+import { findSmartMatches, findAllBarcodeMatches, findMatchingVariant } from './smartDuplicate'
 import { normalizeBrandName } from './brandNormalization'
 import { barcodeLookupCandidates, isValidBarcodeChecksum } from './barcodeValidation'
 import type { Ingredient, IngredientVariant } from '@/types'
@@ -102,16 +102,10 @@ function findVariantForBrand(ingredient: Ingredient, line: NormalizedLine): Ingr
   })
 }
 
-// Same exact-string comparison findBarcodeMatch uses (variant.barcode === code),
-// just not short-circuiting on the first hit — needed to detect the case where
-// more than one ingredient record carries the same barcode.
-function findAllBarcodeMatches(code: string, ingredients: Ingredient[]): Ingredient[] {
-  return ingredients.filter(ing => ing.variants.some(v => v.barcode === code))
-}
-
-// Reuses the app's existing duplicate-detection primitives (findBarcodeMatch /
-// findSmartMatches — the same ones ReviewScreen.tsx uses when saving a single
-// ingredient) rather than a separate scoring system, so the Receipt Scanner
+// Reuses the app's existing duplicate-detection primitives (findAllBarcodeMatches /
+// findMatchingVariant / findSmartMatches — the same shared barcode-matching
+// implementation ReviewScreen.tsx and findIngredientByBarcode use too, as of
+// 2026-07-24) rather than a separate scoring system, so the Receipt Scanner
 // can't drift out of sync with how "is this the same product" is decided
 // everywhere else in the app. The only new logic here is barcode-priority
 // sequencing and surfacing disagreement/multi-match cases for review.
@@ -145,7 +139,7 @@ export function matchLine(line: NormalizedLine, allIngredients: Ingredient[]): L
       }
 
       const ingredient = allMatches[0]
-      const variant = ingredient.variants.find(v => v.barcode === candidate)
+      const variant = findMatchingVariant(candidate, ingredient)
       const barcodeMatch: RankedCandidate = { ingredient, variant, source: 'barcode' }
       return {
         tier: 'high',

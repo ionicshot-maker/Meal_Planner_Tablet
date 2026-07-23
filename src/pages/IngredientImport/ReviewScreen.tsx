@@ -9,7 +9,7 @@ import { useSettings } from '@/context/SettingsContext'
 import { getAllIngredients, saveIngredient, calcCostPerServing } from '@/db/ingredients'
 import { newId, now } from '@/utils/ids'
 import { availableUnits } from '@/utils/units'
-import { findSmartMatches, findBarcodeMatch } from '@/utils/smartDuplicate'
+import { findSmartMatches, findBarcodeMatch, findMatchingVariant } from '@/utils/smartDuplicate'
 import { normalizeBrandName } from '@/utils/brandNormalization'
 import { NUTRISCORE_DESCRIPTIONS, NOVA_DESCRIPTIONS } from '@/utils/ingredientQuality'
 import { ScrollHint } from '@/components/ScrollHint'
@@ -82,6 +82,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
   const [barcodeMatch, setBarcodeMatch] = useState<Ingredient | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [draftSaved, setDraftSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   const handleSaveDraft = useCallback(() => {
@@ -127,6 +128,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
   async function handleSave() {
     if (!draft.name.trim()) return
     setSaving(true)
+    setSaveError('')
     try {
       const all = await getAllIngredients(true)
 
@@ -145,21 +147,20 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
         await commitSave(draft)
         return
       }
-      if (matches.length === 1) {
-        const parent = matches[0]
-        const draftBrand = normalizeBrandName(draft.variants[0]?.brand).toLowerCase()
-        const brandConflict = parent.variants.some(
-          v => (v.brand ?? '').trim().toLowerCase() === draftBrand
-        )
-        if (!brandConflict) {
-          await addAsVariantOf(parent, draft)
-          return
-        }
-      }
+      // A fuzzy match is never sufficient justification to merge
+      // automatically, even when there's only one candidate — a lone fuzzy
+      // match just means only one existing ingredient happened to satisfy a
+      // loose keyword-subset/edit-distance check, not that it's actually the
+      // same product. Confirmed real: "Turkey Bacon" fuzzy-matches "Bacon" in
+      // the live starter library and would previously have been silently
+      // merged in as a Bacon variant with zero confirmation (2026-07-24 audit
+      // finding, see MealPlannerApp_Reference.md). Always show the compare
+      // modal now and require an explicit pick, regardless of match count.
       setSmartMatches({ matches, draft })
       setSaving(false)
-    } catch {
+    } catch (err) {
       setSaving(false)
+      setSaveError(err instanceof Error ? err.message : 'Could not save this ingredient — please try again.')
     }
   }
 
@@ -186,7 +187,11 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
     if (!barcodeMatch) return
     setSaving(true)
     const draftVariant = draft.variants[0]
-    const matchedVariant = barcodeMatch.variants.find(v => v.barcode === draftVariant.barcode)
+    // findMatchingVariant, not a plain === check — barcodeMatch may have been
+    // found via the leading-zero-equivalent tier (findBarcodeMatch), in which
+    // case the stored variant's barcode string isn't literally identical to
+    // draftVariant.barcode even though they identify the same product.
+    const matchedVariant = findMatchingVariant(draftVariant.barcode, barcodeMatch)
     const updated: Ingredient = {
       ...barcodeMatch,
       variants: barcodeMatch.variants.map(v => v.id === matchedVariant?.id
@@ -245,10 +250,12 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
   async function handleSaveAsNew() {
     if (!smartMatches) return
     setSaving(true)
+    setSaveError('')
     try {
       await commitSave(smartMatches.draft)
-    } catch {
+    } catch (err) {
       setSaving(false)
+      setSaveError(err instanceof Error ? err.message : 'Could not save this ingredient — please try again.')
     }
   }
 
@@ -448,6 +455,8 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
 
       <ScrollHint targetRef={scrollAreaRef} className={styles.scrollHint} />
 
+      {saveError && <p className={styles.saveError}>⚠ {saveError}</p>}
+
       <div className={styles.footer}>
         <Button variant="secondary" onClick={onCancel}>Back</Button>
         <span className={styles.footerSpacer} />
@@ -484,7 +493,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
           open
           onClose={() => { setSmartMatches(null); setSaving(false) }}
           title={smartMatches.matches.length === 1 ? 'Similar Ingredient Found' : 'Similar Ingredients Found'}
-          size="sm"
+          size="md"
           footer={
             <>
               <Button variant="secondary" onClick={() => { setSmartMatches(null); setSaving(false) }}>Cancel</Button>
@@ -494,24 +503,27 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
         >
           <p className={styles.dupDesc}>
             {smartMatches.matches.length === 1
-              ? 'A similar ingredient already exists. Add this as a variant, or save it as a new ingredient.'
-              : 'These existing ingredients have similar names. Add this as a variant of one, or save it as a new ingredient.'}
+              ? "This name matched an existing ingredient, but a name match alone doesn't confirm it's the same product — compare the details below before deciding."
+              : 'These existing ingredients have similar names — compare the details below before deciding. Add this as a variant of one, or save it as a new ingredient.'}
           </p>
+
+          <div className={styles.dupCompareLabel}>You're saving:</div>
+          <IngredientCompareCard ingredient={smartMatches.draft} />
+
           {smartMatches.matches.map(m => {
             const draftBrand = normalizeBrandName(smartMatches.draft.variants[0]?.brand).toLowerCase()
             const brandExists = m.variants.some(v => (v.brand ?? '').trim().toLowerCase() === draftBrand)
             return (
               <div key={m.id} className={styles.dupMatch}>
-                <div>
-                  <div className={styles.dupMatchName}>{m.name}</div>
-                  {brandExists && (
-                    <div className={styles.dupMatchWarn}>
-                      Brand "{smartMatches.draft.variants[0]?.brand}" already exists on this ingredient
-                    </div>
-                  )}
-                </div>
+                <div className={styles.dupCompareLabel}>Existing ingredient:</div>
+                <IngredientCompareCard ingredient={m} />
+                {brandExists && (
+                  <div className={styles.dupMatchWarn}>
+                    Brand "{smartMatches.draft.variants[0]?.brand}" already exists on this ingredient
+                  </div>
+                )}
                 <Button size="sm" onClick={() => addAsVariantOf(m, smartMatches.draft)} disabled={saving}>
-                  Add as Variant
+                  Merge — Add as Variant of "{m.name}"
                 </Button>
               </div>
             )
@@ -563,6 +575,31 @@ function MacroField({ label, unit, value, onChange, warning }: {
         />
         <span className={styles.macroUnit}>{unit}</span>
       </div>
+    </div>
+  )
+}
+
+// Compact side-by-side comparison card — shows enough to actually judge
+// "is this the same product" (name, brand, category, key macros, barcode),
+// not just a bare name. Used for both the not-yet-saved draft and each
+// existing-ingredient candidate in the Similar Ingredient(s) Found modal, so
+// a fuzzy name match can be visually confirmed or rejected rather than
+// trusted on the strength of the name alone.
+function IngredientCompareCard({ ingredient }: { ingredient: Ingredient }) {
+  const variant = ingredient.variants[0]
+  const m = variant?.macros
+  return (
+    <div className={styles.dupCompareCard}>
+      <div className={styles.dupCompareName}>{ingredient.name}</div>
+      <div className={styles.dupCompareMeta}>
+        {variant?.brand || 'Generic'} · {ingredient.category}
+        {variant?.barcode ? ` · #${variant.barcode}` : ''}
+      </div>
+      {m && (
+        <div className={styles.dupCompareMacros}>
+          {Math.round(m.calories)} cal · {m.protein}g protein · {m.carbs}g carbs · {m.fat}g fat
+        </div>
+      )}
     </div>
   )
 }

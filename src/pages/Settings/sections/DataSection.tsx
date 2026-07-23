@@ -43,6 +43,8 @@ export function DataSection() {
   const [importPending, setImportPending] = useState<ImportPending | null>(null)
   const [importResult, setImportResult] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [resetError, setResetError] = useState<string | null>(null)
+  const [resetting, setResetting] = useState(false)
   const [counts, setCounts] = useState<LocalCounts | null>(null)
 
   useEffect(() => {
@@ -60,7 +62,9 @@ export function DataSection() {
     return () => { cancelled = true }
     // Re-run after import/reset so the counts reflect what just changed —
     // importResult/importError only ever flip after those actions complete.
-  }, [importResult, importError])
+    // resetError included defensively even though a failed reset (now atomic)
+    // shouldn't have changed anything.
+  }, [importResult, importError, resetError])
 
   function makeFilename(label: string) {
     const hn = settings.householdName.trim().replace(/\s+/g, '-')
@@ -225,8 +229,16 @@ export function DataSection() {
 
   type StoreName = 'ingredients' | 'recipes' | 'mealPlanDays' | 'mealPlanTemplates' | 'macroLogs' | 'groceryLists' | 'householdItems'
 
+  // Genuinely atomic (2026-07-24 fix) — every target store is cleared in one
+  // shared IndexedDB transaction, not N independent db.clear() calls. If any
+  // clear() in the loop throws, the transaction aborts and every store in
+  // it — including ones already cleared earlier in the loop — rolls back
+  // automatically; nothing is left partially reset. Previously this had zero
+  // error handling of any kind: a failure partway through could silently
+  // leave some stores cleared and others untouched, with no message shown
+  // (2026-07-24 audit finding). "Reset X" is genuinely all-or-nothing now,
+  // not just sequential-with-better-reporting.
   async function performReset(target: ResetTarget) {
-    const db = await getDB()
     const allStores: StoreName[] = ['ingredients', 'recipes', 'mealPlanDays', 'mealPlanTemplates', 'macroLogs', 'groceryLists', 'householdItems']
     const storeMap: Record<Exclude<ResetTarget, 'everything'>, StoreName[]> = {
       ingredients:    ['ingredients'],
@@ -236,9 +248,25 @@ export function DataSection() {
       groceryHistory: ['groceryLists'],
     }
     const stores = target === 'everything' ? allStores : storeMap[target]
-    for (const store of stores) await db.clear(store)
-    setConfirmTarget(null)
-    setImportResult(`${RESET_LABELS[target]} has been reset.`)
+
+    setResetting(true)
+    setResetError(null)
+    try {
+      const db = await getDB()
+      const tx = db.transaction(stores, 'readwrite')
+      for (const store of stores) await tx.objectStore(store).clear()
+      await tx.done
+      setConfirmTarget(null)
+      setImportResult(`${RESET_LABELS[target]} has been reset.`)
+    } catch (err) {
+      setConfirmTarget(null)
+      setResetError(
+        `Could not reset ${RESET_LABELS[target]}: ${err instanceof Error ? err.message : String(err)}. ` +
+        `Nothing was changed — this reset is all-or-nothing, so a failure partway through leaves your data exactly as it was before.`
+      )
+    } finally {
+      setResetting(false)
+    }
   }
 
   const RESET_OPTIONS: ResetTarget[] = ['ingredients', 'recipes', 'mealPlan', 'macroHistory', 'groceryHistory', 'everything']
@@ -307,6 +335,7 @@ export function DataSection() {
               key={target}
               variant={target === 'everything' ? 'danger' : 'secondary'}
               size="sm"
+              disabled={resetting}
               onClick={() => setConfirmTarget(target)}
             >
               Reset {RESET_LABELS[target]}
@@ -324,9 +353,9 @@ export function DataSection() {
           size="sm"
           footer={
             <>
-              <Button variant="secondary" onClick={() => setConfirmTarget(null)}>Cancel</Button>
-              <Button variant="danger" onClick={() => performReset(confirmTarget)}>
-                Reset {RESET_LABELS[confirmTarget]}
+              <Button variant="secondary" onClick={() => setConfirmTarget(null)} disabled={resetting}>Cancel</Button>
+              <Button variant="danger" onClick={() => performReset(confirmTarget)} disabled={resetting}>
+                {resetting ? 'Resetting…' : `Reset ${RESET_LABELS[confirmTarget]}`}
               </Button>
             </>
           }
@@ -379,21 +408,21 @@ export function DataSection() {
         </Modal>
       )}
 
-      {/* Result / error modal */}
-      {(importResult !== null || importError !== null) && (
+      {/* Result / error modal — shared by import and reset outcomes */}
+      {(importResult !== null || importError !== null || resetError !== null) && (
         <Modal
           open
-          onClose={() => { setImportResult(null); setImportError(null) }}
-          title={importError ? 'Import Failed' : 'Done'}
+          onClose={() => { setImportResult(null); setImportError(null); setResetError(null) }}
+          title={importError ? 'Import Failed' : resetError ? 'Reset Failed' : 'Done'}
           size="sm"
           footer={
-            <Button variant="secondary" onClick={() => { setImportResult(null); setImportError(null) }}>
+            <Button variant="secondary" onClick={() => { setImportResult(null); setImportError(null); setResetError(null) }}>
               OK
             </Button>
           }
         >
-          <p style={{ color: importError ? 'var(--color-danger)' : undefined }}>
-            {importResult ?? importError}
+          <p style={{ color: (importError || resetError) ? 'var(--color-danger)' : undefined }}>
+            {importResult ?? importError ?? resetError}
           </p>
         </Modal>
       )}

@@ -1,6 +1,7 @@
 import { getDB } from './schema'
 import { normalizeIngredient } from '@/utils/importNormalization'
 import { suggestCategory, getCategoryOverride, RECLASSIFIABLE_CATEGORIES } from '@/utils/categoryRules'
+import { findBarcodeMatch } from '@/utils/smartDuplicate'
 import { now } from '@/utils/ids'
 import type { Ingredient, IngredientVariant, HouseholdItem, ProcessedReceipt } from '@/types'
 
@@ -51,12 +52,15 @@ export async function addVariantToIngredient(ingredientId: string, variant: Ingr
 
 // In-memory scan — barcode lives on the nested variant, not a top-level indexed
 // field, and the ingredient count in this app is small enough that a full scan
-// is simpler than denormalizing a separate barcode index.
+// is simpler than denormalizing a separate barcode index. Uses the shared
+// findBarcodeMatch() (checksum-valid leading-zero equivalence, same as
+// Receipt Scanner and ReviewScreen.tsx, as of 2026-07-24) rather than a plain
+// exact-string comparison.
 export async function findIngredientByBarcode(barcode: string): Promise<Ingredient | undefined> {
   const code = barcode.trim()
   if (!code) return undefined
   const all = await getAllIngredients(true)
-  return all.find(i => i.variants.some(v => v.barcode === code))
+  return findBarcodeMatch(code, all)
 }
 
 export async function searchIngredients(query: string, includeArchived = false): Promise<Ingredient[]> {
