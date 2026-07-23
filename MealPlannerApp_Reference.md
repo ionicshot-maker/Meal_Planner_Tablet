@@ -1,6 +1,6 @@
 # Meal Planner App — Complete Reference
 
-**Version 2.2 — 2026-07-23**
+**Version 2.3 — 2026-07-23**
 
 > **Format change note:** This document was originally `MealPlannerApp_Reference.docx` (Version 1.0, June 2026), written before most of the app was built, as a design-intent spec. That file was never kept in sync with the actual build — most notably, it still listed Cloud Sync as "intentionally left for later" even though real Cloud Sync (including full per-user authentication) has been live for a while. This Version 2.0 is a full rewrite from a code-verified audit of the actual app as it exists today, reorganized to match the original document's section structure. The original `.docx` is left untouched at the repo root for history; **this file is the one to keep current going forward.**
 
@@ -232,6 +232,20 @@ Settings → Data → Cloud Sync has **two** "Show setup SQL" toggles: the origi
 ### Outstanding security note
 Every data-table RLS policy still includes a bridge clause (`household_code = the literal current code OR real membership`), so the pre-auth vulnerability (anon key + code = full read/write access) is **not yet closed** for the household actually running this app. Closing it ("Phase 3" — dropping the bridge clause) is a deliberate later step, only meant to run after the real household's owner has signed up and joined through the new Account UI themselves and confirmed it works.
 
+### Dev Tools access control (added 2026-07-23)
+
+`/dev-tools` (nav item + route, both gated) is the app's first feature to actually *consume* the owner/contributor/readonly role system for something beyond household-member management itself. Gate logic lives in `src/hooks/useIsHouseholdOwner.ts`, consumed by both `AppLayout.tsx` (hides the nav item) and `DevToolsPage.tsx` (redirects the route itself to `/ingredients` — the nav being hidden alone is not real access control, since the URL is still typeable).
+
+**Important distinction — there are two different "owner/contributor/readonly" concepts in this codebase, and Dev Tools deliberately uses only one of them:**
+- **Real household member role** (`household_members.role` in Supabase, read via `getMyHouseholds()` in `db/auth.ts`) — DB-backed, RLS-protected, settable only by an existing owner via the "Manage members" UI. **This is what gates Dev Tools.**
+- **`settings.familyShareRole`** — a plain local settings field, self-declared by whoever's using the device, used only for client-side Family Share push/pull gating (see above). Trivially editable by anyone in Settings. **Never used for Dev Tools** — using this instead would have been a real access-control hole.
+
+**Resolution logic:** signed in → fetch the user's households → find the one whose `code` matches this device's *active* `householdSyncCode` → true only if that specific membership's role is `'owner'`. Deliberately keyed to the *active* household, not "owner of any household this account belongs to" — a contributor of the household actually in use shouldn't get Dev Tools just because they happen to own some unrelated household elsewhere.
+
+**No fallback access path exists on purpose** — no local PIN, no device flag, no offline override. A household that has never set up Account/Cloud Sync at all gets the same "absent" outcome as a signed-in contributor: hidden nav item, and typing `/dev-tools` directly redirects away with no error message or explanation (not "locked," just not there). Verified both cases directly (fresh install with no Supabase configured; Supabase configured but not signed in) — nav item absent, direct navigation redirects, zero console errors, in both. The positive "real owner" path reuses `getMyHouseholds()`/role-checking code already exercised during the original Account/household build (disposable-account RLS test pass, see above) rather than being independently re-verified live in this pass.
+
+**What's in Dev Tools today:** one entry, the Ingredient Converter (`public/dev-tools/script.py`, downloadable, run locally in the household's own Python environment — the app only hosts the file, instructions, and warnings, it never executes anything). Built to be extensible — additional tools are meant to be added as sibling sections in the same page, not a rearchitecture.
+
 ---
 
 ## 12. Data Model — Quick Reference
@@ -279,5 +293,6 @@ Updated from the original "Intentionally Left for Later" list — Cloud Sync is 
 | 2026-07-22 | 2.0 | Full rewrite as `.md`, from a code-verified audit of the actual current app. Corrected stale claims (Cloud Sync moved out of "later," Macro Tracker's missing TDEE calculator flagged, etc.), added everything built since v1.0 that was never documented (Ingredient Import's 7 tabs including Receipt Scanner, Recipe Collections, Kitchen Reference, real Account sign-in + households, AI Provider vs. standalone Gemini key distinction). Logged the Settings-page layout fix and the modal click-outside-to-close feature as the two build changes landing alongside this rewrite. |
 | 2026-07-22 | 2.1 | Logged a direct Supabase data migration (744 variants: flat macro fields → nested `macros: {}`, no value changes) and flagged one unresolved data conflict (Dill Pickle sodium: 900 vs 290) in Section 4 for manual follow-up. |
 | 2026-07-23 | 2.2 | Added a second, fully independent starter ingredient pack (867 Great Value branded products, Open Food Facts sourced) alongside the original 101-item USDA set — documented in full in Section 2. New `brandedLibrarySeeded` settings flag, new `src/db/brandedLibrary.ts` seed module, new `public/data/great-value-starter.json` static data file. Extracted `findIngredientMatch()` out of JsonImportTab into the shared `importNormalization.ts` (now used by both JSON Import and the new branded pack) and added an opt-out `fuzzy` flag after testing showed fuzzy matching against the tiny generic set produced a high false-positive rate. |
+| 2026-07-23 | 2.3 | Added a Dev Tools section (`/dev-tools`), gated to the signed-in owner of the currently active household only — see Section 11's new "Dev Tools access control" subsection for the full model, including the deliberate distinction between the real DB-backed household role and the unrelated self-declared `familyShareRole` setting. First entry is the Ingredient Converter (downloadable `script.py`, run locally — the app only hosts the file/instructions, never executes it). New `src/hooks/useIsHouseholdOwner.ts`, new `src/pages/DevTools/`. |
 
 *A more granular, code-line-cited snapshot of the app (routes, exact field lists, live data checks) is also maintained as a published artifact for ad-hoc deep-dives — ask the current session for the link if needed. This document is the one meant for cross-session/cross-chat continuity and should stay the primary source of truth for "what's built."*

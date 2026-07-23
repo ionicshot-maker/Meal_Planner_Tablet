@@ -505,6 +505,7 @@ export default function HelpPage() {
               <li><strong>Join an existing household:</strong> If someone in your home already created one, tap "Join by Code" instead and enter the code they gave you.</li>
               <li><strong>Trouble signing up or creating a household?</strong> This usually means the Supabase project is missing a one-time setup step — see the "Show account/sign-in setup SQL" button right below the Account box in Settings, and the Supabase steps in <a href="#api-keys">Setting Up Free Services</a>.</li>
               <li><strong>The sign-in reminder popup:</strong> If you're not signed in, the app shows a one-time reminder about this when you open it. Check "Don't show this again" to dismiss it for good, or turn it back on any time via the toggle right below the Account box in Settings.</li>
+              <li><strong>Dev Tools:</strong> Whoever creates a household is automatically its Owner (the "Manage members" list in the Account box shows everyone's role). Owners get an extra "Dev Tools" item in the main menu — advanced, technical utilities like the bulk ingredient converter. Contributors and Read Only members never see it, and neither does anyone who hasn't signed in at all.</li>
             </ul>
 
             <h3 className={styles.subFeatureTitle}>2. Household Sync (sync between your own devices)</h3>

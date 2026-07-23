@@ -3,9 +3,10 @@ import { NavLink } from 'react-router-dom'
 import { useTheme } from '@/context/ThemeContext'
 import { useSettings } from '@/context/SettingsContext'
 import { useVisualViewportHeight } from '@/hooks/useVisualViewportHeight'
+import { useIsHouseholdOwner } from '@/hooks/useIsHouseholdOwner'
 import {
   Carrot, Download, BookOpen, Calendar, BarChart2, ShoppingCart,
-  Settings, HelpCircle, UtensilsCrossed, Sun, Moon, Monitor,
+  Settings, HelpCircle, UtensilsCrossed, Sun, Moon, Monitor, Wrench,
 } from 'lucide-react'
 import styles from './AppLayout.module.css'
 
@@ -20,9 +21,17 @@ const NAV_ITEMS: { to: string; label: string; icon: ReactNode }[] = [
   { to: '/help',               label: 'Help',               icon: <HelpCircle size={18} /> },
 ]
 
+// Absent entirely for anyone who isn't the signed-in owner of the currently
+// active household — not appended to NAV_ITEMS above, so there's no grayed-
+// out/locked state to accidentally leak that it exists. See useIsHouseholdOwner.ts.
+const DEV_TOOLS_ITEM: { to: string; label: string; icon: ReactNode } =
+  { to: '/dev-tools', label: 'Dev Tools', icon: <Wrench size={18} /> }
+
 export function AppLayout({ children }: { children: ReactNode }) {
   const { resolved, preference, setPreference } = useTheme()
   const { settings } = useSettings()
+  const { isOwner: showDevTools } = useIsHouseholdOwner()
+  const navItems = showDevTools ? [...NAV_ITEMS, DEV_TOOLS_ITEM] : NAV_ITEMS
   // 100dvh (the CSS fallback) only accounts for the browser's own toolbar —
   // it doesn't shrink for the on-screen keyboard, which can otherwise cover
   // a page's sticky footer (e.g. the ingredient-import review screen) while
@@ -54,7 +63,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <span className={styles.logoText}>{appTitle}</span>
           </div>
           <ul className={styles.navList} role="list">
-            {NAV_ITEMS.map(item => (
+            {navItems.map(item => (
               <li key={item.to}>
                 <NavLink
                   to={item.to}

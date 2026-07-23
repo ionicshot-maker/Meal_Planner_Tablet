@@ -19,6 +19,7 @@ const MacroTrackerPage      = lazy(() => import('@/pages/MacroTracker/MacroTrack
 const GroceryListPage       = lazy(() => import('@/pages/GroceryList/GroceryListPage'))
 const IngredientImportPage  = lazy(() => import('@/pages/IngredientImport/IngredientImportPage'))
 const HelpPage              = lazy(() => import('@/pages/Help/HelpPage'))
+const DevToolsPage          = lazy(() => import('@/pages/DevTools/DevToolsPage'))
 
 // Bump whenever fixMiscategorizedIngredients()'s rules change materially — forces
 // one more pass even for households where settings.miscategoryFixed is already true
@@ -132,6 +133,7 @@ function AppRoutes() {
               <Route path="/settings"           element={<SettingsPage />} />
               <Route path="/import-ingredients" element={<IngredientImportPage />} />
               <Route path="/help"               element={<HelpPage />} />
+              <Route path="/dev-tools"          element={<DevToolsPage />} />
             </Routes>
           </Suspense>
         </AppLayout>

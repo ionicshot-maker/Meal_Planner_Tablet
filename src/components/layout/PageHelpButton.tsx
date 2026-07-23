@@ -13,6 +13,7 @@ const PAGE_HELP: Record<string, string> = {
   '/grocery':            'Your shopping list page. Pick your shopping dates and the app builds your grocery list from your meal plan. Tap items to check them off as you shop.',
   '/settings':           'Customize the app here. Set up your household, add family members, connect free tools like USDA and Gemini, and set up Cloud Sync to keep devices in sync. Export your data for safekeeping.',
   '/help':               'You are on the Help page. Here you will find friendly guides for every feature, step-by-step instructions for optional free tools, and answers to common questions.',
+  '/dev-tools':          'Advanced, technical utilities for the household owner. Data produced here is not guaranteed accurate — always spot-check against real product labels before trusting it for nutrition tracking.',
 }
 
 /**
