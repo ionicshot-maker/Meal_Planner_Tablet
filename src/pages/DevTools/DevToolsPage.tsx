@@ -36,6 +36,13 @@ export default function DevToolsPage() {
   // normalizedBarcode. Falls back to defaultKeepEntry() when a group has no
   // explicit pick yet.
   const [keepPicks, setKeepPicks] = useState<Record<string, string>>({})
+  // Which category to keep per group, when entries in that group disagree —
+  // keyed by normalizedBarcode. Falls back to the current keep entry's own
+  // category when no explicit pick has been made. A category conflict is a
+  // real thing that's happened with these pairs (e.g. Beef Broth: Meat &
+  // Poultry vs. Soups & Broths) — without this, mergeIngredients() would
+  // silently keep whichever category the "keep" entry happened to have.
+  const [categoryChoices, setCategoryChoices] = useState<Record<string, string>>({})
   const [mergingId, setMergingId] = useState<string | null>(null)
   const [mergeResult, setMergeResult] = useState<{ keepName: string; counts: IngredientReferenceCounts } | null>(null)
   const [pendingDelete, setPendingDelete] = useState<BarcodeDupeEntry | null>(null)
@@ -55,11 +62,11 @@ export default function DevToolsPage() {
     setDismissedGroups(prev => new Set(prev).add(normalizedBarcode))
   }
 
-  async function handleMerge(keepEntry: BarcodeDupeEntry, mergeAwayEntry: BarcodeDupeEntry) {
+  async function handleMerge(keepEntry: BarcodeDupeEntry, mergeAwayEntry: BarcodeDupeEntry, category: string) {
     setMergingId(mergeAwayEntry.variantId)
     setActionError('')
     try {
-      const counts = await mergeIngredients(keepEntry.ingredientId, mergeAwayEntry.ingredientId)
+      const counts = await mergeIngredients(keepEntry.ingredientId, mergeAwayEntry.ingredientId, { category })
       setMergeResult({ keepName: keepEntry.ingredientName, counts })
       await runBarcodeDupeScan()
     } catch (e) {
@@ -285,6 +292,11 @@ export default function DevToolsPage() {
                         const defaultKeep = defaultKeepEntry(group.entries)
                         const keepIngredientId = keepPicks[group.normalizedBarcode] ?? defaultKeep.ingredientId
                         const keepEntry = group.entries.find(e => e.ingredientId === keepIngredientId) ?? defaultKeep
+                        const distinctCategories = [...new Set(group.entries.map(e => e.category))]
+                        const categoryConflict = distinctCategories.length > 1
+                        const categoryChoice = categoryConflict
+                          ? (categoryChoices[group.normalizedBarcode] ?? keepEntry.category)
+                          : keepEntry.category
                         return (
                           <div key={group.normalizedBarcode} className={styles.dupeGroup}>
                             <div className={styles.dupeGroupHeader}>
@@ -299,6 +311,20 @@ export default function DevToolsPage() {
                                 Skip this pair
                               </button>
                             </div>
+                            {categoryConflict && (
+                              <label className={styles.categoryChoice}>
+                                <span className={styles.categoryChoiceLabel}>
+                                  ⚠ These disagree on category — pick which one to keep:
+                                </span>
+                                <select
+                                  className={styles.categoryChoiceSelect}
+                                  value={categoryChoice}
+                                  onChange={e => setCategoryChoices(prev => ({ ...prev, [group.normalizedBarcode]: e.target.value }))}
+                                >
+                                  {distinctCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                              </label>
+                            )}
                             {group.entries.map(entry => {
                               const isKeep = entry.ingredientId === keepEntry.ingredientId
                               return (
@@ -328,7 +354,7 @@ export default function DevToolsPage() {
                                         size="sm"
                                         variant="secondary"
                                         disabled={mergingId === entry.variantId}
-                                        onClick={() => handleMerge(keepEntry, entry)}
+                                        onClick={() => handleMerge(keepEntry, entry, categoryChoice)}
                                       >
                                         {mergingId === entry.variantId ? 'Merging…' : `Merge into "${keepEntry.ingredientName}"`}
                                       </Button>

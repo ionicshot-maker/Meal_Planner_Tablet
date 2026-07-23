@@ -21,6 +21,7 @@ interface Props {
 export function MergeIngredientModal({ ingredient, onClose, onMerged }: Props) {
   const [target, setTarget] = useState<Ingredient | null>(null)
   const [keepId, setKeepId] = useState(ingredient.id)
+  const [categoryChoice, setCategoryChoice] = useState(ingredient.category)
   const [counts, setCounts] = useState<{ self: IngredientReferenceCounts; target: IngredientReferenceCounts } | null>(null)
   const [merging, setMerging] = useState(false)
   const [error, setError] = useState('')
@@ -34,6 +35,14 @@ export function MergeIngredientModal({ ingredient, onClose, onMerged }: Props) {
     })
     return () => { cancelled = true }
   }, [target, ingredient.id])
+
+  // Category defaults to whichever ingredient is currently picked as "keep"
+  // — re-defaults on a keep-flip so it doesn't silently carry over a choice
+  // that no longer matches which record survives, but a manual pick (via
+  // the dropdown below, when the two disagree) is respected until then.
+  useEffect(() => {
+    setCategoryChoice(keepId === ingredient.id ? ingredient.category : (target?.category ?? ingredient.category))
+  }, [keepId, target, ingredient.category])
 
   function handlePick(picked: PickedIngredient) {
     if (picked.ingredient.id === ingredient.id) {
@@ -51,7 +60,7 @@ export function MergeIngredientModal({ ingredient, onClose, onMerged }: Props) {
     setMerging(true)
     setError('')
     try {
-      const res = await mergeIngredients(keepId, mergeAwayId)
+      const res = await mergeIngredients(keepId, mergeAwayId, { category: categoryChoice })
       setResult(res)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Merge failed — nothing was changed.')
@@ -136,6 +145,22 @@ export function MergeIngredientModal({ ingredient, onClose, onMerged }: Props) {
               )}
             </div>
           </label>
+          {ingredient.category !== target.category && (
+            <label className={styles.categoryChoice}>
+              <span className={styles.categoryChoiceLabel}>
+                These disagree on category — pick which one to keep:
+              </span>
+              <select
+                className={styles.categoryChoiceSelect}
+                value={categoryChoice}
+                onChange={e => setCategoryChoice(e.target.value)}
+              >
+                <option value={ingredient.category}>{ingredient.category} ({ingredient.name})</option>
+                <option value={target.category}>{target.category} ({target.name})</option>
+              </select>
+            </label>
+          )}
+
           <p className={styles.warning}>
             <strong>{mergeAwayName}</strong> will be permanently deleted. Every recipe, grocery list, and macro log
             that referenced it will be repointed to <strong>{keepIngredient?.name}</strong> first. This cannot be

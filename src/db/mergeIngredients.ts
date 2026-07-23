@@ -1,5 +1,5 @@
 import { getDB } from './schema'
-import { getIngredient, deleteIngredient } from './ingredients'
+import { getIngredient, saveIngredient, deleteIngredient } from './ingredients'
 import { getAllRecipes, saveRecipe } from './recipes'
 
 // Every place an ingredient id (or one of its variant ids) can be referenced
@@ -54,6 +54,19 @@ export async function countIngredientReferences(ingredientId: string): Promise<I
   return { recipes: recipeCount, groceryLists: groceryCount, macroLogs: macroCount }
 }
 
+export interface MergeOptions {
+  // If provided and different from keep's current category, the surviving
+  // (kept) ingredient's category is updated to this value as the last step
+  // of the merge. Without this, a category disagreement between the two
+  // records was silently resolved by "whichever one was kept wins" with no
+  // review — found live merging real barcode-duplicate pairs (Beef Broth:
+  // Meat & Poultry vs. Soups & Broths). Only meaningful when it's one of
+  // the two ingredients' own categories — this isn't a general re-categorize
+  // knob, just a way to let the user pick between the two that already
+  // disagreed, so the merge doesn't silently discard whichever wasn't kept.
+  category?: string
+}
+
 // Re-points every reference to mergeAwayId (and any of its own variant ids)
 // onto keepId across every store above, then deletes mergeAwayId. Straight
 // one-for-one replacement — no parent/child or multi-variant merge: a
@@ -62,7 +75,11 @@ export async function countIngredientReferences(ingredientId: string): Promise<I
 // reliable way to know which of keep's variants corresponds to the one
 // going away without a real variant-matching feature (deliberately not
 // built here — see MealPlannerApp_Reference.md).
-export async function mergeIngredients(keepId: string, mergeAwayId: string): Promise<IngredientReferenceCounts> {
+export async function mergeIngredients(
+  keepId: string,
+  mergeAwayId: string,
+  options?: MergeOptions
+): Promise<IngredientReferenceCounts> {
   if (keepId === mergeAwayId) throw new Error('Cannot merge an ingredient with itself')
 
   const keep = await getIngredient(keepId)
@@ -125,6 +142,10 @@ export async function mergeIngredients(keepId: string, mergeAwayId: string): Pro
   }
 
   await deleteIngredient(mergeAwayId)
+
+  if (options?.category && options.category !== keep.category) {
+    await saveIngredient({ ...keep, category: options.category })
+  }
 
   return counts
 }
