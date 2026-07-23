@@ -6,6 +6,7 @@ import { Download, FileJson, Info, X, SlidersHorizontal } from 'lucide-react'
 import { getAllIngredients, getIngredient, saveIngredient, archiveIngredient, deleteIngredient, searchIngredients } from '@/db/ingredients'
 import { newId, now } from '@/utils/ids'
 import { IngredientForm } from './IngredientForm'
+import { MergeIngredientModal } from './MergeIngredientModal'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import { NutriscoreBadge, NovaBadge } from '@/components/QualityBadges'
 import { AllergenBadgeList, AllergenPicker } from '@/components/AllergenChips'
@@ -43,6 +44,7 @@ export default function IngredientsPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [editing, setEditing] = useState<Ingredient | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Ingredient | null>(null)
+  const [merging, setMerging] = useState<Ingredient | null>(null)
   const [loading, setLoading] = useState(true)
   const [bannerDismissed, setBannerDismissed] = useState(
     () => localStorage.getItem('starter_banner_dismissed') === '1'
@@ -250,6 +252,7 @@ export default function IngredientsPage() {
               onEdit={() => setEditing(ingredient)}
               onArchive={() => handleArchive(ingredient)}
               onDelete={() => setConfirmDelete(ingredient)}
+              onMerge={() => setMerging(ingredient)}
             />
           ))}
         </div>
@@ -282,17 +285,26 @@ export default function IngredientsPage() {
           </p>
         </Modal>
       )}
+
+      {merging && (
+        <MergeIngredientModal
+          ingredient={merging}
+          onClose={() => setMerging(null)}
+          onMerged={load}
+        />
+      )}
     </div>
   )
 }
 
 // ─── Ingredient card ──────────────────────────────────────────────────────────
-function IngredientCard({ ingredient, display, onEdit, onArchive, onDelete }: {
+function IngredientCard({ ingredient, display, onEdit, onArchive, onDelete, onMerge }: {
   ingredient: Ingredient
   display: IngredientDisplayToggles
   onEdit: () => void
   onArchive: () => void
   onDelete: () => void
+  onMerge: () => void
 }) {
   const defaultVariant = ingredient.variants.find(v => v.id === ingredient.defaultVariantId)
     ?? ingredient.variants[0]
@@ -336,6 +348,7 @@ function IngredientCard({ ingredient, display, onEdit, onArchive, onDelete }: {
           {!ingredient.archived && (
             <Button size="sm" variant="ghost" onClick={onArchive}>Archive</Button>
           )}
+          <Button size="sm" variant="ghost" onClick={onMerge}>Merge…</Button>
           <Button size="sm" variant="ghost" onClick={onDelete}>Delete</Button>
         </div>
       </div>

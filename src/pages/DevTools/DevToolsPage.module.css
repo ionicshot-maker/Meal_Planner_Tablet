@@ -199,10 +199,33 @@
   gap: var(--space-2);
 }
 
+.dupeGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
 .dupeGroupLabel {
   font-size: var(--text-sm);
   color: var(--color-text-muted);
   margin: 0 0 var(--space-1);
+}
+
+.skipBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+
+.skipBtn:hover {
+  color: var(--color-text);
+  text-decoration: underline;
 }
 
 .dupeGroupLabel code {
@@ -223,10 +246,33 @@
   flex-wrap: wrap;
 }
 
+.dupeEntryKeep {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.dupeEntryKeepLabel {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
 .dupeEntryInfo {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.dupeEntryActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .dupeEntryName {
@@ -252,4 +298,34 @@
   font-weight: 600;
   color: var(--color-accent);
   white-space: nowrap;
+}
+
+.actionError {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+}
+
+.mergeResultBanner {
+  margin-top: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-success) 40%, var(--color-border));
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.dismissBanner {
+  background: none;
+  border: none;
+  font-size: var(--text-lg);
+  line-height: 1;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
 }

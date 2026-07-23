@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Navigate, Link } from 'react-router-dom'
 import { AlertTriangle, Download, FileWarning, ScanSearch } from 'lucide-react'
 import { useIsHouseholdOwner } from '@/hooks/useIsHouseholdOwner'
-import { Card, Button } from '@/components/ui'
+import { Card, Button, Modal } from '@/components/ui'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
-import { findLeadingZeroBarcodeDupes, type BarcodeDupeGroup } from '@/utils/barcodeDuplicateScan'
+import { findLeadingZeroBarcodeDupes, type BarcodeDupeGroup, type BarcodeDupeEntry } from '@/utils/barcodeDuplicateScan'
+import { deleteIngredient } from '@/db/ingredients'
+import { mergeIngredients, countIngredientReferences, totalReferences, type IngredientReferenceCounts } from '@/db/mergeIngredients'
 import styles from './DevToolsPage.module.css'
 
 // Extensible by design: each tool is its own <ToolSection> below the shared
@@ -12,16 +14,83 @@ import styles from './DevToolsPage.module.css'
 // about the access-control gate above it needs to change.
 type ScanStatus = 'idle' | 'scanning' | 'done'
 
+// The default "keep" pick for a group — the entry with the longer raw
+// barcode string. This directly matches the bug's own signature: the
+// leading-zero-intact string (13 digits) is the more complete/original one,
+// the stripped string (12 digits) is the corrupted one. Ties keep the first
+// entry encountered.
+function defaultKeepEntry(entries: BarcodeDupeEntry[]): BarcodeDupeEntry {
+  return entries.reduce((longest, e) => (e.rawBarcode.length > longest.rawBarcode.length ? e : longest), entries[0])
+}
+
 export default function DevToolsPage() {
   const { isOwner, loading } = useIsHouseholdOwner()
   const [scanStatus, setScanStatus] = useState<ScanStatus>('idle')
   const [dupeGroups, setDupeGroups] = useState<BarcodeDupeGroup[]>([])
+  // Session-only dismissal — "Skip" hides a pair from the current results
+  // without changing any data; it reappears if the page is scanned again
+  // later (e.g. next visit), which is deliberate: nothing about a skip is
+  // persisted, so it can't silently suppress a real duplicate forever.
+  const [dismissedGroups, setDismissedGroups] = useState<Set<string>>(new Set())
+  // Which entry (by ingredientId) is picked as "keep" per group — keyed by
+  // normalizedBarcode. Falls back to defaultKeepEntry() when a group has no
+  // explicit pick yet.
+  const [keepPicks, setKeepPicks] = useState<Record<string, string>>({})
+  const [mergingId, setMergingId] = useState<string | null>(null)
+  const [mergeResult, setMergeResult] = useState<{ keepName: string; counts: IngredientReferenceCounts } | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<BarcodeDupeEntry | null>(null)
+  const [pendingDeleteCounts, setPendingDeleteCounts] = useState<IngredientReferenceCounts | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState('')
 
   async function runBarcodeDupeScan() {
     setScanStatus('scanning')
+    setActionError('')
     const groups = await findLeadingZeroBarcodeDupes()
     setDupeGroups(groups)
     setScanStatus('done')
+  }
+
+  function skipGroup(normalizedBarcode: string) {
+    setDismissedGroups(prev => new Set(prev).add(normalizedBarcode))
+  }
+
+  async function handleMerge(keepEntry: BarcodeDupeEntry, mergeAwayEntry: BarcodeDupeEntry) {
+    setMergingId(mergeAwayEntry.variantId)
+    setActionError('')
+    try {
+      const counts = await mergeIngredients(keepEntry.ingredientId, mergeAwayEntry.ingredientId)
+      setMergeResult({ keepName: keepEntry.ingredientName, counts })
+      await runBarcodeDupeScan()
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Merge failed — nothing was changed.')
+    } finally {
+      setMergingId(null)
+    }
+  }
+
+  async function openDeleteConfirm(entry: BarcodeDupeEntry) {
+    setPendingDelete(entry)
+    setPendingDeleteCounts(null)
+    setActionError('')
+    const counts = await countIngredientReferences(entry.ingredientId)
+    setPendingDeleteCounts(counts)
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    setDeletingId(pendingDelete.variantId)
+    setActionError('')
+    try {
+      await deleteIngredient(pendingDelete.ingredientId)
+      setPendingDelete(null)
+      setPendingDeleteCounts(null)
+      await runBarcodeDupeScan()
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Delete failed.')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   // While the owner check is in flight, render nothing rather than either the
@@ -183,45 +252,145 @@ export default function DevToolsPage() {
               {scanStatus === 'scanning' ? 'Scanning…' : 'Scan for Leading-Zero Barcode Duplicates'}
             </Button>
 
-            {scanStatus === 'done' && dupeGroups.length === 0 && (
+            {actionError && <p className={styles.actionError}>{actionError}</p>}
+
+            {mergeResult && (
+              <div className={styles.mergeResultBanner}>
+                <span>
+                  ✓ Merged into <strong>{mergeResult.keepName}</strong>. Updated {mergeResult.counts.recipes} recipe(s),{' '}
+                  {mergeResult.counts.groceryLists} grocery list(s), {mergeResult.counts.macroLogs} macro log entr(y/ies).
+                </span>
+                <button type="button" className={styles.dismissBanner} onClick={() => setMergeResult(null)} aria-label="Dismiss">×</button>
+              </div>
+            )}
+
+            {scanStatus === 'done' && dupeGroups.filter(g => !dismissedGroups.has(g.normalizedBarcode)).length === 0 && (
               <p className={styles.scanEmpty}>
-                ✓ No leading-zero barcode duplicates found.
+                ✓ No leading-zero barcode duplicates found{dismissedGroups.size > 0 ? ' (some were skipped this session)' : ''}.
               </p>
             )}
 
-            {scanStatus === 'done' && dupeGroups.length > 0 && (
+            {scanStatus === 'done' && dupeGroups.filter(g => !dismissedGroups.has(g.normalizedBarcode)).length > 0 && (
               <div className={styles.dupeResults}>
-                <p className={styles.dupeResultsSummary}>
-                  Found {dupeGroups.length} candidate pair{dupeGroups.length !== 1 ? 's' : ''} —
-                  review each below before merging anything.
-                </p>
-                {dupeGroups.map(group => (
-                  <div key={group.normalizedBarcode} className={styles.dupeGroup}>
-                    <p className={styles.dupeGroupLabel}>
-                      Barcodes matching digits: <code>{group.normalizedBarcode}</code>
-                    </p>
-                    {group.entries.map(entry => (
-                      <div key={entry.variantId} className={styles.dupeEntry}>
-                        <div className={styles.dupeEntryInfo}>
-                          <span className={styles.dupeEntryName}>{entry.ingredientName}</span>
-                          <span className={styles.dupeEntryMeta}>
-                            {entry.brand} · {entry.category} · barcode <code>{entry.rawBarcode}</code>
-                          </span>
-                        </div>
-                        <Link
-                          className={styles.dupeEntryLink}
-                          to={`/ingredients?edit=${entry.ingredientId}`}
-                        >
-                          Open in Ingredients →
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                ))}
+                {(() => {
+                  const visibleGroups = dupeGroups.filter(g => !dismissedGroups.has(g.normalizedBarcode))
+                  return (
+                    <>
+                      <p className={styles.dupeResultsSummary}>
+                        Found {visibleGroups.length} candidate pair{visibleGroups.length !== 1 ? 's' : ''} —
+                        review each below. The pre-selected "Keep" is whichever entry has the longer (more complete)
+                        barcode.
+                      </p>
+                      {visibleGroups.map(group => {
+                        const defaultKeep = defaultKeepEntry(group.entries)
+                        const keepIngredientId = keepPicks[group.normalizedBarcode] ?? defaultKeep.ingredientId
+                        const keepEntry = group.entries.find(e => e.ingredientId === keepIngredientId) ?? defaultKeep
+                        return (
+                          <div key={group.normalizedBarcode} className={styles.dupeGroup}>
+                            <div className={styles.dupeGroupHeader}>
+                              <p className={styles.dupeGroupLabel}>
+                                Barcodes matching digits: <code>{group.normalizedBarcode}</code>
+                              </p>
+                              <button
+                                type="button"
+                                className={styles.skipBtn}
+                                onClick={() => skipGroup(group.normalizedBarcode)}
+                              >
+                                Skip this pair
+                              </button>
+                            </div>
+                            {group.entries.map(entry => {
+                              const isKeep = entry.ingredientId === keepEntry.ingredientId
+                              return (
+                                <div key={entry.variantId} className={styles.dupeEntry}>
+                                  <label className={styles.dupeEntryKeep}>
+                                    <input
+                                      type="radio"
+                                      name={`keep-${group.normalizedBarcode}`}
+                                      checked={isKeep}
+                                      onChange={() => setKeepPicks(prev => ({ ...prev, [group.normalizedBarcode]: entry.ingredientId }))}
+                                    />
+                                    <span className={styles.dupeEntryKeepLabel}>Keep</span>
+                                  </label>
+                                  <div className={styles.dupeEntryInfo}>
+                                    <span className={styles.dupeEntryName}>{entry.ingredientName}</span>
+                                    <span className={styles.dupeEntryMeta}>
+                                      {entry.brand} · {entry.category} · barcode <code>{entry.rawBarcode}</code>
+                                      {entry.ingredientId === defaultKeep.ingredientId ? ' (longer barcode)' : ''}
+                                    </span>
+                                  </div>
+                                  <div className={styles.dupeEntryActions}>
+                                    <Link className={styles.dupeEntryLink} to={`/ingredients?edit=${entry.ingredientId}`}>
+                                      Open →
+                                    </Link>
+                                    {!isKeep && (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        disabled={mergingId === entry.variantId}
+                                        onClick={() => handleMerge(keepEntry, entry)}
+                                      >
+                                        {mergingId === entry.variantId ? 'Merging…' : `Merge into "${keepEntry.ingredientName}"`}
+                                      </Button>
+                                    )}
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      disabled={deletingId === entry.variantId}
+                                      onClick={() => openDeleteConfirm(entry)}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })}
+                    </>
+                  )
+                })()}
               </div>
             )}
           </Card>
         </section>
+
+        {pendingDelete && (
+          <Modal
+            open
+            onClose={() => { setPendingDelete(null); setPendingDeleteCounts(null) }}
+            title="Delete Ingredient"
+            size="sm"
+            footer={
+              <>
+                <Button variant="secondary" onClick={() => { setPendingDelete(null); setPendingDeleteCounts(null) }}>
+                  Cancel
+                </Button>
+                <Button variant="danger" onClick={confirmDelete} disabled={deletingId === pendingDelete.variantId}>
+                  {deletingId === pendingDelete.variantId ? 'Deleting…' : 'Delete Permanently'}
+                </Button>
+              </>
+            }
+          >
+            {pendingDeleteCounts === null ? (
+              <p>Checking for references…</p>
+            ) : totalReferences(pendingDeleteCounts) > 0 ? (
+              <p>
+                <strong>{pendingDelete.ingredientName}</strong> is referenced by {pendingDeleteCounts.recipes} recipe(s),{' '}
+                {pendingDeleteCounts.groceryLists} grocery list(s), and {pendingDeleteCounts.macroLogs} macro log entr(y/ies).
+                Deleting it (instead of merging) will leave those pointing at nothing — they won't crash, but will show
+                as unlinked/unresolved. Consider <strong>Merge</strong> instead if this is really a duplicate of another
+                ingredient. Delete anyway?
+              </p>
+            ) : (
+              <p>
+                Permanently delete <strong>{pendingDelete.ingredientName}</strong>? No recipes, grocery lists, or macro
+                logs currently reference it. This cannot be undone.
+              </p>
+            )}
+          </Modal>
+        )}
 
         {/* Add future Dev Tools entries as additional <section className={styles.toolSection}> blocks here. */}
       </div>
