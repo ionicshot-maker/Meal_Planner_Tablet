@@ -167,8 +167,21 @@ export function matchLine(line: NormalizedLine, allIngredients: Ingredient[]): L
   if (candidates.length === 0) {
     return { tier: 'none', candidates: [], barcodeTextDisagreement: false, barcodeMultiMatch: false, validBarcode: validBarcodeNoMatch }
   }
+  // A lone candidate only earns the same top tier as a barcode match when
+  // it's a genuine exact-name match. findSmartMatches also lumps in close
+  // edit-distance and one-directional keyword-subset matches (e.g. "Lime"
+  // matching "Key Lime Pie Filling") under the same pass/fail result, and
+  // those are real guesses, not confirmed identity — tier 'high' here drives
+  // real behavior upstream (auto-selected into mode:'match', eligible for
+  // "Save All" with no further click if the matched variant's price doesn't
+  // conflict), so a fuzzy-only guess landing there was a real risk of a
+  // wrong product getting silently saved, not just a labeling nitpick. A
+  // fuzzy-only lone match instead gets 'medium', the same human-review path
+  // (forced "Pick a match" list, nothing pre-selected) as any other
+  // ambiguous line.
+  const isExactNameMatch = candidates[0].ingredient.name.trim().toLowerCase() === line.parsedName.trim().toLowerCase()
   return {
-    tier: candidates.length === 1 ? 'high' : 'medium',
+    tier: candidates.length === 1 && isExactNameMatch ? 'high' : 'medium',
     candidates,
     barcodeTextDisagreement: false,
     barcodeMultiMatch: false,
