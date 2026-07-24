@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { getAllIngredients, saveIngredient } from './ingredients'
-import { getAllRecipes, saveRecipe, deleteRecipe } from './recipes'
+import { getAllRecipes, saveRecipe, repointRecipeReferences, EMPTY_RECIPE_REFERENCE_COUNTS, type RecipeReferenceCounts } from './recipes'
 import { getAllHouseholdItems, saveHouseholdItem } from './householdItems'
 import { getAllCollections, saveCollection } from './collections'
 import { getAllReferences, saveReference } from './references'
@@ -1201,42 +1201,6 @@ export async function runFamilyShareSync(
   return summary
 }
 
-// Same idea for recipes: repoints meal plan slots and recipe collections so a
-// discarded recipe id doesn't leave a meal plan or collection pointing at nothing.
-async function repointRecipeId(fromId: string, toId: string): Promise<void> {
-  const db = await getDB()
-  const days = await db.getAll('mealPlanDays') as MealPlanDay[]
-  for (const day of days) {
-    let changed = false
-    const slots = [day.meals.breakfast, day.meals.lunch, day.meals.dinner, day.meals.snacks, day.meals.drinks ?? []]
-    for (const slot of slots) {
-      for (const item of slot) {
-        if (item.recipeId === fromId) {
-          item.recipeId = toId
-          changed = true
-        }
-        if (item.individualAssignments) {
-          for (const personId of Object.keys(item.individualAssignments)) {
-            if (item.individualAssignments[personId] === fromId) {
-              item.individualAssignments[personId] = toId
-              changed = true
-            }
-          }
-        }
-      }
-    }
-    if (changed) await saveMealPlanDay(day)
-  }
-
-  const collections = await getAllCollections()
-  for (const c of collections) {
-    if (c.recipeIds.includes(fromId)) {
-      c.recipeIds = c.recipeIds.map(id => (id === fromId ? toId : id))
-      await saveCollection(c)
-    }
-  }
-}
-
 // Re-export helpers needed in CloudSyncSection
 //
 // `settings` is needed for keep-local: a duplicate can now be discovered
@@ -1353,21 +1317,66 @@ export async function resolveIngredientDuplicate(
   return counts
 }
 
+// Reference-integrity + atomicity fix (2026-07-24): previously only
+// repointed mealPlanDays and collections (via a private repointRecipeId()),
+// missing mealPlanTemplates (each holds its own independent day snapshot —
+// a stale id there silently reappears in a live meal plan on every future
+// "Apply Template", see the comment on repointRecipeReferences() in
+// recipes.ts for the full trace) and MacroLogEntry.recipeId, and ran as
+// separate sequential writes with no shared transaction — the exact same
+// incompleteness/non-atomicity class resolveIngredientDuplicate() was
+// fixed to close, confirmed by investigation rather than assumed to be
+// identical or assumed to be unrelated. Now reuses the same
+// repointRecipeReferences() helper both this function and any future
+// recipe-merge feature would need, and wraps the whole local resolution in
+// one shared transaction — the same precondition analysis from
+// resolveIngredientDuplicate() applies here too, confirmed via
+// syncRecipes(): the cloud-side record is never saved locally when a name
+// collision is flagged (identical invariant to syncIngredients()), keep-
+// cloud already saves it locally before repointing (satisfying the shared
+// helper's implicit precondition the same way), and keep-local's repoint-
+// from-cloud.id is a structural no-op since RecipePicker only ever offers
+// local recipes.
 export async function resolveRecipeDuplicate(
   action: 'keep-local' | 'keep-cloud' | 'keep-both',
   dup: SyncDuplicate & { type: 'recipe' },
   settings: AppSettings,
-): Promise<void> {
+): Promise<RecipeReferenceCounts> {
   const local = dup.localItem as Recipe
   const cloud = dup.cloudItem as Recipe
-  if (action === 'keep-cloud' || action === 'keep-both') {
+
+  if (action === 'keep-both') {
     await saveRecipe(cloud)
+    return EMPTY_RECIPE_REFERENCE_COUNTS
   }
-  if (action === 'keep-cloud') {
-    await repointRecipeId(local.id, cloud.id)
-    await deleteRecipe(local.id)
-  } else if (action === 'keep-local') {
-    await repointRecipeId(cloud.id, local.id)
+
+  const db = await getDB()
+  const tx = db.transaction(['recipes', 'mealPlanDays', 'mealPlanTemplates', 'collections', 'macroLogs'], 'readwrite')
+  const recipeStore = tx.objectStore('recipes')
+
+  let counts: RecipeReferenceCounts = EMPTY_RECIPE_REFERENCE_COUNTS
+
+  try {
+    if (action === 'keep-cloud') {
+      await recipeStore.put(cloud)
+      counts = await repointRecipeReferences(tx, local.id, cloud.id)
+      await recipeStore.delete(local.id)
+    } else {
+      // keep-local
+      counts = await repointRecipeReferences(tx, cloud.id, local.id)
+    }
+    await tx.done
+  } catch (err) {
+    try { tx.abort() } catch { /* transaction already finished */ }
+    tx.done.catch(() => {})
+    throw err
+  }
+
+  // Same platform constraint as resolveIngredientDuplicate(): a browser
+  // IndexedDB transaction cannot span a network call, so the cloud-side
+  // write is necessarily a separate step after the local state has already
+  // committed.
+  if (action === 'keep-local') {
     const supabase = getSupabaseClient(settings.supabaseUrl, settings.supabaseAnonKey)
     const code = settings.householdSyncCode?.trim()
     if (supabase && code) {
@@ -1375,4 +1384,6 @@ export async function resolveRecipeDuplicate(
       await deleteCloudRow(supabase, 'recipes', code, cloud.id)
     }
   }
+
+  return counts
 }
