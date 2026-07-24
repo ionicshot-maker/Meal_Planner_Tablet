@@ -1,6 +1,7 @@
 import { getDB } from './schema'
-import { getIngredient, saveIngredient, deleteIngredient } from './ingredients'
-import { getAllRecipes, saveRecipe } from './recipes'
+import { getIngredient } from './ingredients'
+import { getAllRecipes } from './recipes'
+import { now } from '@/utils/ids'
 
 // Every place an ingredient id (or one of its variant ids) can be referenced
 // elsewhere in the app, confirmed against the actual data model in
@@ -75,6 +76,30 @@ export interface MergeOptions {
 // reliable way to know which of keep's variants corresponds to the one
 // going away without a real variant-matching feature (deliberately not
 // built here — see MealPlannerApp_Reference.md).
+//
+// Genuinely atomic (2026-07-24 fix) — every read and write below runs
+// inside one shared IndexedDB transaction spanning ingredients/recipes/
+// groceryLists/macroLogs, using the same pattern as
+// applyReceiptSaveBatch() (ingredients.ts) and DataSection.tsx's
+// performReset(): a single db.transaction([...stores], 'readwrite'), all
+// reads/writes issued through tx.objectStore(...) rather than the normal
+// getDB()-per-call helpers, and an explicit tx.abort() + rethrow on any
+// error. If any step throws — a missing ingredient, an unexpected write
+// failure — the whole transaction aborts and IndexedDB rolls back every
+// put/delete already issued in this call, including recipe/grocery-list/
+// macro-log repoints that "succeeded" earlier in the same run. Either
+// every affected record commits together, or none of them do; there is no
+// partially-merged state to land in. This closes the previous gap where
+// an interruption after ingredient deletion but before category
+// reconciliation left the category permanently unreconciled (retrying
+// threw immediately since mergeAway no longer existed) — that can no
+// longer happen because deletion and category reconciliation are now
+// part of the same atomic unit as everything else.
+//
+// All four affected stores (ingredients, recipes, groceryLists, macroLogs)
+// live in the same IndexedDB database (MealPlannerDB), so a single
+// transaction spanning all of them is directly supported by the platform —
+// there is no store here that can't participate in one shared transaction.
 export async function mergeIngredients(
   keepId: string,
   mergeAwayId: string,
@@ -82,69 +107,95 @@ export async function mergeIngredients(
 ): Promise<IngredientReferenceCounts> {
   if (keepId === mergeAwayId) throw new Error('Cannot merge an ingredient with itself')
 
-  const keep = await getIngredient(keepId)
-  const mergeAway = await getIngredient(mergeAwayId)
-  if (!keep) throw new Error(`Ingredient ${keepId} not found`)
-  if (!mergeAway) throw new Error(`Ingredient ${mergeAwayId} not found`)
-
-  const mergeAwayVariantIds = new Set(mergeAway.variants.map(v => v.id))
-  const keepDefaultVariantId = keep.defaultVariantId || keep.variants[0]?.id
+  const db = await getDB()
+  const tx = db.transaction(['ingredients', 'recipes', 'groceryLists', 'macroLogs'], 'readwrite')
+  const ingredientStore = tx.objectStore('ingredients')
+  const recipeStore = tx.objectStore('recipes')
+  const groceryStore = tx.objectStore('groceryLists')
+  const macroStore = tx.objectStore('macroLogs')
 
   const counts: IngredientReferenceCounts = { recipes: 0, groceryLists: 0, macroLogs: 0 }
 
-  // Recipes
-  const recipes = await getAllRecipes(true)
-  for (const recipe of recipes) {
-    let changed = false
-    for (const ri of recipe.ingredients) {
-      if (ri.ingredientId === mergeAwayId) {
-        ri.ingredientId = keepId
-        if (ri.variantId && mergeAwayVariantIds.has(ri.variantId)) ri.variantId = keepDefaultVariantId
-        changed = true
-      }
-    }
-    if (changed) {
-      await saveRecipe(recipe)
-      counts.recipes++
-    }
-  }
+  try {
+    const keep = await ingredientStore.get(keepId)
+    const mergeAway = await ingredientStore.get(mergeAwayId)
+    if (!keep) throw new Error(`Ingredient ${keepId} not found`)
+    if (!mergeAway) throw new Error(`Ingredient ${mergeAwayId} not found`)
 
-  const db = await getDB()
+    const mergeAwayVariantIds = new Set(mergeAway.variants.map(v => v.id))
+    const keepDefaultVariantId = keep.defaultVariantId || keep.variants[0]?.id
 
-  // Grocery lists — every status (active/completed/archived), all three
-  // item buckets.
-  const groceryLists = await db.getAll('groceryLists')
-  for (const list of groceryLists) {
-    let changed = false
-    for (const bucket of [list.items, list.manualItems, list.remainderItems]) {
-      for (const item of bucket) {
-        if (item.ingredientId === mergeAwayId) {
-          item.ingredientId = keepId
-          if (item.variantId && mergeAwayVariantIds.has(item.variantId)) item.variantId = keepDefaultVariantId
+    // Recipes
+    const recipes = await recipeStore.getAll()
+    for (const recipe of recipes) {
+      let changed = false
+      for (const ri of recipe.ingredients) {
+        if (ri.ingredientId === mergeAwayId) {
+          ri.ingredientId = keepId
+          if (ri.variantId && mergeAwayVariantIds.has(ri.variantId)) ri.variantId = keepDefaultVariantId
           changed = true
         }
       }
+      if (changed) {
+        recipe.updatedAt = now()
+        await recipeStore.put(recipe)
+        counts.recipes++
+      }
     }
-    if (changed) {
-      await db.put('groceryLists', list)
-      counts.groceryLists++
+
+    // Grocery lists — every status (active/completed/archived), all three
+    // item buckets.
+    const groceryLists = await groceryStore.getAll()
+    for (const list of groceryLists) {
+      let changed = false
+      for (const bucket of [list.items, list.manualItems, list.remainderItems]) {
+        for (const item of bucket) {
+          if (item.ingredientId === mergeAwayId) {
+            item.ingredientId = keepId
+            if (item.variantId && mergeAwayVariantIds.has(item.variantId)) item.variantId = keepDefaultVariantId
+            changed = true
+          }
+        }
+      }
+      if (changed) {
+        await groceryStore.put(list)
+        counts.groceryLists++
+      }
     }
-  }
 
-  // Macro logs — variantId only, see the file-level note above.
-  const macroLogs = await db.getAll('macroLogs')
-  for (const entry of macroLogs) {
-    if (entry.variantId != null && mergeAwayVariantIds.has(entry.variantId)) {
-      entry.variantId = keepDefaultVariantId
-      await db.put('macroLogs', entry)
-      counts.macroLogs++
+    // Macro logs — variantId only, see the file-level note above.
+    const macroLogs = await macroStore.getAll()
+    for (const entry of macroLogs) {
+      if (entry.variantId != null && mergeAwayVariantIds.has(entry.variantId)) {
+        entry.variantId = keepDefaultVariantId
+        await macroStore.put(entry)
+        counts.macroLogs++
+      }
     }
-  }
 
-  await deleteIngredient(mergeAwayId)
+    // Category reconciliation now happens BEFORE deletion, in the same
+    // transaction, instead of as a separate put() after — so it can never
+    // land in a state where deletion committed but reconciliation didn't.
+    if (options?.category && options.category !== keep.category) {
+      keep.category = options.category
+      keep.updatedAt = now()
+      await ingredientStore.put(keep)
+    }
 
-  if (options?.category && options.category !== keep.category) {
-    await saveIngredient({ ...keep, category: options.category })
+    await ingredientStore.delete(mergeAwayId)
+
+    await tx.done
+  } catch (err) {
+    try { tx.abort() } catch { /* transaction already finished */ }
+    // A validation throw above (e.g. "not found") happens before tx.done is
+    // ever awaited; tx.abort() then rejects tx.done on its own, and with
+    // nothing else listening that becomes an unhandled rejection (surfaced
+    // empirically while writing this fix's verification script). Swallowing
+    // it here is safe either way: if tx.done was already being awaited when
+    // the error came from a genuine IDB request failure, this is a no-op on
+    // an already-settled promise.
+    tx.done.catch(() => {})
+    throw err
   }
 
   return counts
