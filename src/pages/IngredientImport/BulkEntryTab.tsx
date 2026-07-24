@@ -91,6 +91,7 @@ export function BulkEntryTab({ onSaved }: Props) {
   const [rows, setRows] = useState<BulkRow[]>(() => Array.from({ length: 5 }, () => blankRow(defaultCategory)))
   const [saving, setSaving] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   function updateRow(id: string, patch: Partial<BulkRow>) {
     setRows(r => r.map(row => row.id === id ? { ...row, ...patch, error: '' } : row))
@@ -123,9 +124,20 @@ export function BulkEntryTab({ onSaved }: Props) {
     if (pending.length === 0) return
 
     setSaving(true)
+    setSaveError('')
     const existingIngredients = await getAllIngredients(true)
     const savedNames: string[] = []
 
+    // Deliberately not wrapped in one shared transaction, even though
+    // nothing here yields the way JsonImportTab.tsx's progress-bar pacing
+    // does. Each saveIngredient() already commits independently, and each
+    // row is marked `saved: true` (locking its inputs, showing the saved
+    // style) the moment ITS OWN save actually lands — accurate, real
+    // per-row progress. Wrapping the whole batch in one transaction would
+    // make that misleading: rows would visually mark themselves "saved"
+    // while their writes were still only queued inside a transaction that
+    // could still roll back later in the same batch.
+    try {
     for (const row of pending) {
       const existing = existingIngredients.find(i =>
         i.name.toLowerCase() === row.name.trim().toLowerCase()
@@ -220,8 +232,22 @@ export function BulkEntryTab({ onSaved }: Props) {
       setRows(r => r.map(x => x.id === row.id ? { ...x, saved: true } : x))
       onSaved(row.name.trim())
     }
-
-    setSaving(false)
+    } catch (err) {
+      // Every row already marked `saved: true` above genuinely is saved —
+      // this isn't a rollback. Report exactly how many rows made it
+      // through before the failure; remaining rows stay editable and
+      // unsaved, so the user can just click Save All again once the
+      // problem's addressed — already-saved rows are skipped automatically
+      // (filtered out of `pending` above), not re-saved or duplicated.
+      const remaining = pending.length - savedNames.length
+      setSaveError(
+        `Save stopped partway through: ${savedNames.length} of ${pending.length} row${pending.length !== 1 ? 's' : ''} saved before an error occurred (${remaining} remaining). ` +
+        `Already-saved rows are safe — nothing was rolled back. ` +
+        `${err instanceof Error ? err.message : 'An unexpected error occurred.'} You can try Save All again; already-saved rows won't be duplicated.`
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
   const unsavedCount = rows.filter(r => !r.saved && r.name.trim()).length
@@ -327,6 +353,10 @@ export function BulkEntryTab({ onSaved }: Props) {
           </tbody>
         </table>
       </div>
+
+      {saveError && (
+        <p style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)', margin: '0 var(--space-4)' }}>⚠ {saveError}</p>
+      )}
 
       <div className={styles.footer}>
         <Button onClick={handleSaveAll} disabled={saving || unsavedCount === 0}>

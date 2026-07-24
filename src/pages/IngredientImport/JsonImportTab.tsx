@@ -44,6 +44,7 @@ export function JsonImportTab() {
   const [importing, setImporting] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [result, setResult] = useState<ImportResult | null>(null)
+  const [importError, setImportError] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -55,6 +56,7 @@ export function JsonImportTab() {
     setSelectedBrands(new Set())
     setMode('addNew')
     setResult(null)
+    setImportError('')
     setProgress({ done: 0, total: 0 })
   }
 
@@ -112,10 +114,25 @@ export function JsonImportTab() {
     ? ingredients
     : ingredients.filter(i => selectedBrands.has(i.variants[0]?.brand || 'Generic'))
 
+  // No wrapping transaction here — deliberately, not an oversight. Every 5
+  // items the loop below yields via `await setTimeout(r, 0)` so the
+  // progress bar actually repaints on a large file; empirically confirmed
+  // (fake-indexeddb) that an open IndexedDB transaction does NOT survive
+  // that yield — the next write throws TransactionInactiveError, since a
+  // setTimeout callback runs in a later task than the one that opened the
+  // transaction. Wrapping this loop in one transaction would either break
+  // on the very next yield or require removing the progress-bar
+  // responsiveness, a real regression on large imports. Each
+  // saveIngredient() call already commits independently, which is also
+  // what makes a mid-loop failure safe to retry: findIngredientMatch()
+  // dedups by barcode/exact-name, so re-running the import after a
+  // partial failure correctly skips everything already saved and picks up
+  // where it left off, rather than creating duplicates.
   async function handleImport() {
     if (!ingredients || toImport.length === 0) return
     setImporting(true)
     setResult(null)
+    setImportError('')
     setProgress({ done: 0, total: toImport.length })
 
     const existing = await getAllIngredients(true)
@@ -127,6 +144,7 @@ export function JsonImportTab() {
 
     let added = 0, updated = 0, skipped = 0
 
+    try {
     for (let i = 0; i < toImport.length; i++) {
       const item = toImport[i]
       // fuzzy: false — findSmartMatches()'s keyword-subset check treats any
@@ -196,7 +214,22 @@ export function JsonImportTab() {
     }
 
     setResult({ added, updated, skipped })
-    setImporting(false)
+    } catch (err) {
+      // Not a rollback — everything counted above is genuinely already
+      // saved (see the comment above this function for why this loop
+      // can't be wrapped in one transaction). Report exactly what
+      // completed rather than a blanket "import failed", and don't set
+      // `result` — that would read as a clean finish. Retrying is safe:
+      // findIngredientMatch()'s barcode/exact-name dedup means already-
+      // imported items are recognized and skipped, not duplicated.
+      setImportError(
+        `Import stopped partway through: ${added} added, ${updated} updated, ${skipped} skipped before an error occurred. ` +
+        `Everything counted above is already saved — nothing was rolled back. ` +
+        `${err instanceof Error ? err.message : 'An unexpected error occurred.'} You can retry; already-imported items will be skipped, not duplicated.`
+      )
+    } finally {
+      setImporting(false)
+    }
   }
 
   const displayedBrands = brandCounts.slice(0, BRAND_DISPLAY_LIMIT)
@@ -324,6 +357,8 @@ export function JsonImportTab() {
                 </div>
               </div>
             )}
+
+            {importError && <p className={styles.error}>⚠ {importError}</p>}
 
             {importing && (
               <div className={styles.progressWrap}>

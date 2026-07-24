@@ -151,79 +151,89 @@ export function DataSection() {
     }
   }
 
+  // Genuinely atomic (2026-07-24 fix) — every store's writes below run
+  // inside one shared db.transaction([...7 stores], 'readwrite'), the same
+  // pattern as mergeIngredients()/applyReceiptSaveBatch()/performReset().
+  // Previously each of the 7 data types was its own separate transaction:
+  // internally atomic per type, but with nothing tying the 7 together, so
+  // a failure on (say) the 4th type left the first 3 already committed
+  // while the outer catch reported a blanket "Import failed" — genuinely
+  // misleading, since real data had already changed. This function has no
+  // UI-yield between writes (unlike JsonImportTab.tsx's progress-bar
+  // pacing), so a single transaction is directly supported by the
+  // platform, and "restore this backup" is a case where all-or-nothing is
+  // the right semantics — a partially-applied backup restore is a worse
+  // outcome than either a clean success or a clean no-op, unlike starter-
+  // library seeding where a partial result is still useful. Reads (for the
+  // skip-strategy dedup check) now go through the SAME transaction's store
+  // handles instead of the separate getAllIngredients()/getAllRecipes()
+  // helpers, so the whole operation — reads included — is one consistent
+  // unit.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function executeImport(data: Record<string, any[]>, strategy: 'skip' | 'overwrite') {
     setImportPending(null)
-    try {
-      const db = await getDB()
-      const messages: string[] = []
+    setImportError(null)
 
+    const db = await getDB()
+    const stores: ('ingredients' | 'recipes' | 'mealPlanDays' | 'mealPlanTemplates' | 'macroLogs' | 'groceryLists' | 'householdItems')[] =
+      ['ingredients', 'recipes', 'mealPlanDays', 'mealPlanTemplates', 'macroLogs', 'groceryLists', 'householdItems']
+    const tx = db.transaction(stores, 'readwrite')
+    const messages: string[] = []
+
+    try {
       if (Array.isArray(data.ingredients) && data.ingredients.length > 0) {
-        const existing = await getAllIngredients(true)
-        const existingIds = new Set(existing.map(i => i.id))
+        const existingIds = new Set((await tx.objectStore('ingredients').getAllKeys()) as string[])
         const toAdd = strategy === 'skip'
           ? data.ingredients.filter((i: { id: string }) => !existingIds.has(i.id))
           : data.ingredients
-        if (toAdd.length > 0) {
-          const tx = db.transaction('ingredients', 'readwrite')
-          for (const item of toAdd) await tx.store.put(item)
-          await tx.done
-        }
+        for (const item of toAdd) await tx.objectStore('ingredients').put(item)
         messages.push(`${toAdd.length} ingredient${toAdd.length !== 1 ? 's' : ''} imported`)
       }
 
       if (Array.isArray(data.recipes) && data.recipes.length > 0) {
-        const existing = await getAllRecipes(true)
-        const existingIds = new Set(existing.map(r => r.id))
+        const existingIds = new Set((await tx.objectStore('recipes').getAllKeys()) as string[])
         const toAdd = strategy === 'skip'
           ? data.recipes.filter((r: { id: string }) => !existingIds.has(r.id))
           : data.recipes
-        if (toAdd.length > 0) {
-          const tx = db.transaction('recipes', 'readwrite')
-          for (const item of toAdd) await tx.store.put(item)
-          await tx.done
-        }
+        for (const item of toAdd) await tx.objectStore('recipes').put(item)
         messages.push(`${toAdd.length} recipe${toAdd.length !== 1 ? 's' : ''} imported`)
       }
 
       if (Array.isArray(data.mealPlanDays) && data.mealPlanDays.length > 0) {
-        const tx = db.transaction('mealPlanDays', 'readwrite')
-        for (const item of data.mealPlanDays) await tx.store.put(item)
-        await tx.done
+        for (const item of data.mealPlanDays) await tx.objectStore('mealPlanDays').put(item)
         messages.push(`${data.mealPlanDays.length} meal plan days imported`)
       }
       if (Array.isArray(data.mealPlanTemplates) && data.mealPlanTemplates.length > 0) {
-        const tx = db.transaction('mealPlanTemplates', 'readwrite')
-        for (const item of data.mealPlanTemplates) await tx.store.put(item)
-        await tx.done
+        for (const item of data.mealPlanTemplates) await tx.objectStore('mealPlanTemplates').put(item)
         messages.push(`${data.mealPlanTemplates.length} template${data.mealPlanTemplates.length !== 1 ? 's' : ''} imported`)
       }
       if (Array.isArray(data.macroLogs) && data.macroLogs.length > 0) {
-        const tx = db.transaction('macroLogs', 'readwrite')
-        for (const item of data.macroLogs) await tx.store.put(item)
-        await tx.done
+        for (const item of data.macroLogs) await tx.objectStore('macroLogs').put(item)
         messages.push(`${data.macroLogs.length} macro log entries imported`)
       }
       if (Array.isArray(data.groceryLists) && data.groceryLists.length > 0) {
-        const tx = db.transaction('groceryLists', 'readwrite')
-        for (const item of data.groceryLists) await tx.store.put(item)
-        await tx.done
+        for (const item of data.groceryLists) await tx.objectStore('groceryLists').put(item)
         messages.push(`${data.groceryLists.length} grocery list${data.groceryLists.length !== 1 ? 's' : ''} imported`)
       }
       if (Array.isArray(data.householdItems) && data.householdItems.length > 0) {
-        const tx = db.transaction('householdItems', 'readwrite')
-        for (const item of data.householdItems) await tx.store.put(item)
-        await tx.done
+        for (const item of data.householdItems) await tx.objectStore('householdItems').put(item)
         messages.push(`${data.householdItems.length} household item${data.householdItems.length !== 1 ? 's' : ''} imported`)
       }
+
+      await tx.done
 
       setImportResult(
         messages.length > 0
           ? messages.join(', ') + '.'
           : 'Nothing to import — the file may be empty or already up to date.'
       )
-    } catch {
-      setImportError('Import failed — could not write to the database. Please try again.')
+    } catch (err) {
+      try { tx.abort() } catch { /* transaction already finished */ }
+      tx.done.catch(() => {})
+      setImportError(
+        `Import failed before any changes were made — nothing was written. This is all-or-nothing: a failure partway through leaves your data exactly as it was before. ` +
+        `${err instanceof Error ? err.message : 'An unexpected error occurred.'} Please try again.`
+      )
     }
   }
 

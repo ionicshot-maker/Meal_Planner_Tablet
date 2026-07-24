@@ -7,7 +7,7 @@ import { seedStarterLibrary, migrateStarterLibrary, STARTER_INGREDIENT_COUNT, LE
 import { seedBrandedLibrary, BRANDED_LIBRARY_COUNT } from '@/db/brandedLibrary'
 import styles from './StarterLibraryPrompt.module.css'
 
-type Phase = 'idle' | 'prompt' | 'migrating' | 'migration-done'
+type Phase = 'idle' | 'prompt' | 'migrating' | 'migration-done' | 'auto-seed-error'
 
 // Bumped 2026-07-24: the USDA set grew from 101 to 440 items (339 new
 // entries merged in from a comprehensive USDA import — see
@@ -54,6 +54,7 @@ export function StarterLibraryPrompt() {
   const [brandedChecked, setBrandedChecked] = useState(false)
   const [working, setWorking] = useState(false)
   const [brandedError, setBrandedError] = useState('')
+  const [autoSeedError, setAutoSeedError] = useState('')
   const checked = useRef(false)
   const updateRef = useRef(updateSettings)
   useEffect(() => { updateRef.current = updateSettings })
@@ -67,6 +68,26 @@ export function StarterLibraryPrompt() {
     checked.current = true
 
     ;(async () => {
+      // Whole body wrapped in try/catch — previously this ran completely
+      // unguarded. Either sub-path here can throw (seedStarterLibrary()'s
+      // own per-item loop, migrateStarterLibrary()'s delete-then-reseed),
+      // and an unhandled rejection from this effect would silently strand
+      // the UI: most visibly for the migration branch, where
+      // setPhase('migrating') has already put the "Updating ingredient
+      // library…" toast on screen with nothing left to ever clear it. The
+      // plain-auto-seed branch (existing.length === 0) shows no UI at all
+      // either way, so a failure there is invisible in the moment, but
+      // still worth catching rather than leaving an unhandled rejection in
+      // the console — and it's naturally self-healing regardless: the
+      // version/seeded flags are only set AFTER seedStarterLibrary()
+      // resolves, so a failure partway through leaves them unset, meaning
+      // the next app load either retries the silent seed (if still
+      // nothing local) or falls through to the explicit prompt below
+      // (since some ingredients are now present) — either way the
+      // household isn't left silently short of default ingredients
+      // forever, and seedStarterLibrary() is dedup-safe by name so nothing
+      // gets duplicated on that retry.
+      try {
       let usdaNeedsPrompt = false
       let usdaGrowth = false
 
@@ -113,6 +134,13 @@ export function StarterLibraryPrompt() {
         setUsdaChecked(true)
         setBrandedChecked(false)
         setPhase('prompt')
+      }
+      } catch (err) {
+        setAutoSeedError(
+          `Couldn't finish updating your starter ingredient library: ${err instanceof Error ? err.message : 'an unexpected error occurred'}. ` +
+          `Nothing was lost — anything already loaded is safely saved, and you'll be offered this again next time you open the app.`
+        )
+        setPhase('auto-seed-error')
       }
     })()
   }, [isLoading, settings.starterLibraryVersion, settings.starterLibrarySeeded, settings.brandedLibrarySeeded])
@@ -310,6 +338,18 @@ export function StarterLibraryPrompt() {
         <div style={toastStyle}>
           <span style={{ color: 'var(--color-success)' }}>✓</span>
           Starter ingredient library updated — related ingredients are now grouped together.
+        </div>,
+        document.body
+      )}
+      {phase === 'auto-seed-error' && createPortal(
+        <div style={{ ...toastStyle, whiteSpace: 'normal', maxWidth: '480px', alignItems: 'flex-start' }}>
+          <span style={{ color: 'var(--color-danger)' }}>⚠</span>
+          <span style={{ flex: 1 }}>{autoSeedError}</span>
+          <button
+            onClick={() => { setPhase('idle'); setAutoSeedError('') }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', fontSize: 'var(--text-base)', padding: 0, flexShrink: 0 }}
+            aria-label="Dismiss"
+          >✕</button>
         </div>,
         document.body
       )}
