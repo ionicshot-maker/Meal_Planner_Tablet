@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import { getAllIngredients, saveIngredient, deleteIngredient } from './ingredients'
+import { getAllIngredients, saveIngredient } from './ingredients'
 import { getAllRecipes, saveRecipe, deleteRecipe } from './recipes'
 import { getAllHouseholdItems, saveHouseholdItem } from './householdItems'
 import { getAllCollections, saveCollection } from './collections'
@@ -8,6 +8,7 @@ import { saveMealPlanDay } from './mealPlan'
 import { saveGroceryList } from './groceryLists'
 import { loadSettings, saveSettingsWithTimestamp } from './settings'
 import { getDB } from './schema'
+import { repointIngredientReferences, EMPTY_REFERENCE_COUNTS, type IngredientReferenceCounts } from './mergeIngredients'
 import type {
   Ingredient, Recipe, AppSettings, MealPlanDay, GroceryList,
   HouseholdItem, RecipeCollection, KitchenReference, AIProvider,
@@ -1200,24 +1201,6 @@ export async function runFamilyShareSync(
   return summary
 }
 
-// Repoints every recipe's ingredient reference from a losing ingredient id to the
-// surviving one. Without this, resolving a duplicate (in either direction) leaves
-// existing recipes pointing at an id that's about to be discarded, which is exactly
-// how ingredients silently vanished from grocery lists (see consolidateIngredients).
-async function repointIngredientId(fromId: string, toId: string): Promise<void> {
-  const recipes = await getAllRecipes(true)
-  for (const recipe of recipes) {
-    let changed = false
-    for (const ri of recipe.ingredients) {
-      if (ri.ingredientId === fromId) {
-        ri.ingredientId = toId
-        changed = true
-      }
-    }
-    if (changed) await saveRecipe(recipe)
-  }
-}
-
 // Same idea for recipes: repoints meal plan slots and recipe collections so a
 // discarded recipe id doesn't leave a meal plan or collection pointing at nothing.
 async function repointRecipeId(fromId: string, toId: string): Promise<void> {
@@ -1265,21 +1248,100 @@ async function repointRecipeId(fromId: string, toId: string): Promise<void> {
 // item was never actually uploaded, and the cloud's competing row is still
 // sitting there — so "keep-local" has to push the local item and retire the
 // cloud's old row, or the same collision just gets flagged again next sync.
+//
+// Reference-integrity fix (2026-07-24): previously this only repointed
+// Recipe.ingredients[].ingredientId (via a private repointIngredientId()),
+// missing .variantId, every grocery-list bucket, and macro logs — the same
+// incompleteness class mergeIngredients() was built to fix, never
+// backported here. Now reuses mergeIngredients()'s own reference-discovery
+// logic directly (repointIngredientReferences(), src/db/mergeIngredients.ts)
+// rather than a second, parallel implementation, and wraps the whole local
+// resolution in one shared IndexedDB transaction — either everything local
+// commits together or nothing does, matching mergeIngredients()'s own
+// atomicity guarantee.
+//
+// Precondition investigated before writing this fix (see
+// MealPlannerApp_Reference.md and OPEN_ITEMS.md for the full write-up):
+// unlike mergeIngredients(), which requires BOTH ids to already exist as
+// local Ingredient records, dup.cloudItem here is NOT guaranteed to have
+// ever been saved locally — syncIngredients() deliberately withholds it
+// from saveIngredient() whenever a name collision is detected (both on the
+// push path and the pull path), specifically so the collision can be routed
+// through manual resolution instead of silently duplicating. The two
+// resolution directions are affected differently by this:
+//   - keep-cloud: `cloud` is saved locally FIRST (line below), so by the
+//     time repointIngredientReferences() runs, both `local.id` and
+//     `cloud.id` genuinely exist as local records — mergeIngredients()'s own
+//     precondition is fully satisfied here, just established one statement
+//     earlier than in a plain merge. Real references (recipes/grocery
+//     lists/macro logs pinned to `local`) exist and get correctly repointed.
+//   - keep-local: `cloud.id` is NEVER saved locally in this flow. But a
+//     local reference to it is structurally impossible regardless: every
+//     place an ingredient id gets attached to a recipe/grocery item/macro
+//     log is set via IngredientPicker, which sources its options exclusively
+//     from getAllIngredients() (local records only) — there is no UI path
+//     that could ever link something locally to an id that was never a
+//     local Ingredient. repointIngredientReferences() is still called for
+//     this direction (not skipped) as a defensive no-op: if that invariant
+//     is ever violated by a future change, this closes the gap instead of
+//     silently assuming it can't happen; today it always finds zero matches.
+//     Because repointIngredientReferences() only needs `fromId` and its
+//     variant-id set (both available directly from `dup.cloudItem` already
+//     held in memory) — never a DB lookup of the "from" record — it works
+//     correctly here without requiring `cloud.id` to exist locally at all.
 export async function resolveIngredientDuplicate(
   action: 'keep-local' | 'keep-cloud' | 'keep-both',
   dup: SyncDuplicate & { type: 'ingredient' },
   settings: AppSettings,
-): Promise<void> {
+): Promise<IngredientReferenceCounts> {
   const local = dup.localItem as Ingredient
   const cloud = dup.cloudItem as Ingredient
-  if (action === 'keep-cloud' || action === 'keep-both') {
+
+  if (action === 'keep-both') {
+    // Nothing is being discarded, so no id becomes invalid — no repointing
+    // needed, matching the existing behavior.
     await saveIngredient(cloud)
+    return EMPTY_REFERENCE_COUNTS
   }
-  if (action === 'keep-cloud') {
-    await repointIngredientId(local.id, cloud.id)
-    await deleteIngredient(local.id)
-  } else if (action === 'keep-local') {
-    await repointIngredientId(cloud.id, local.id)
+
+  const db = await getDB()
+  const tx = db.transaction(['ingredients', 'recipes', 'groceryLists', 'macroLogs'], 'readwrite')
+  const ingredientStore = tx.objectStore('ingredients')
+
+  let counts: IngredientReferenceCounts = EMPTY_REFERENCE_COUNTS
+
+  try {
+    if (action === 'keep-cloud') {
+      const localVariantIds = new Set(local.variants.map(v => v.id))
+      const cloudDefaultVariantId = cloud.defaultVariantId || cloud.variants[0]?.id
+      await ingredientStore.put(cloud)
+      counts = await repointIngredientReferences(
+        tx, local.id, localVariantIds, cloud.id, cloudDefaultVariantId
+      )
+      await ingredientStore.delete(local.id)
+    } else {
+      // keep-local
+      const cloudVariantIds = new Set(cloud.variants.map(v => v.id))
+      const localDefaultVariantId = local.defaultVariantId || local.variants[0]?.id
+      counts = await repointIngredientReferences(
+        tx, cloud.id, cloudVariantIds, local.id, localDefaultVariantId
+      )
+    }
+    await tx.done
+  } catch (err) {
+    try { tx.abort() } catch { /* transaction already finished */ }
+    tx.done.catch(() => {})
+    throw err
+  }
+
+  // The cloud-side write can't participate in the IndexedDB transaction
+  // above — a browser transaction cannot span a network call, so this is
+  // necessarily a separate step after the local state has already
+  // committed, same as every other push in this file. If this fails, the
+  // local resolution has already succeeded; the household-code/cloud row
+  // will simply be reconciled again on the next sync rather than being
+  // silently lost, since the local data is now the source of truth.
+  if (action === 'keep-local') {
     const supabase = getSupabaseClient(settings.supabaseUrl, settings.supabaseAnonKey)
     const code = settings.householdSyncCode?.trim()
     if (supabase && code) {
@@ -1287,6 +1349,8 @@ export async function resolveIngredientDuplicate(
       await deleteCloudRow(supabase, 'ingredients', code, cloud.id)
     }
   }
+
+  return counts
 }
 
 export async function resolveRecipeDuplicate(

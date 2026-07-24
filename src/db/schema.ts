@@ -4,7 +4,7 @@ import type { AppSettings, Ingredient, Recipe, MealPlanDay, MealPlanWeekTemplate
 const DB_NAME = 'MealPlannerDB'
 const DB_VERSION = 5
 
-interface MealPlannerDB extends DBSchema {
+export interface MealPlannerDB extends DBSchema {
   settings: {
     key: 'app'
     value: AppSettings

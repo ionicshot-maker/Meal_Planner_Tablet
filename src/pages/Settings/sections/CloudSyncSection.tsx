@@ -35,6 +35,8 @@ export function CloudSyncSection() {
   const [showSQL, setShowSQL] = useState(false)
   const [showAuthSQL, setShowAuthSQL] = useState(false)
   const [dupToResolve, setDupToResolve] = useState<SyncDuplicate | null>(null)
+  const [resolving, setResolving] = useState(false)
+  const [resolveError, setResolveError] = useState('')
 
   // "X ago" only recomputes on render — tick every minute so it doesn't read
   // "just now" for the whole time this section happens to stay open.
@@ -92,21 +94,37 @@ export function CloudSyncSection() {
     updateSettings({ familyShareCode: code })
   }
 
+  // resolveIngredientDuplicate() is now a genuinely atomic IndexedDB
+  // transaction (2026-07-24 fix) — it can throw (e.g. a real transaction
+  // failure) instead of silently doing nothing, so this needs real error
+  // handling now, not just a bare await. Previously there was NO catch here
+  // at all: a throw would have surfaced as an unhandled promise rejection
+  // with zero user-visible feedback. On failure the modal stays open
+  // (dupToResolve is not cleared) so the user can see the error and retry
+  // or Skip, rather than the dialog silently vanishing either way.
   async function handleResolveDuplicate(action: 'keep-local' | 'keep-cloud' | 'keep-both') {
     if (!dupToResolve) return
-    if (dupToResolve.type === 'ingredient') {
-      await resolveIngredientDuplicate(action, dupToResolve as SyncDuplicate & { type: 'ingredient' }, settings)
-    } else {
-      await resolveRecipeDuplicate(action, dupToResolve as SyncDuplicate & { type: 'recipe' }, settings)
+    setResolving(true)
+    setResolveError('')
+    try {
+      if (dupToResolve.type === 'ingredient') {
+        await resolveIngredientDuplicate(action, dupToResolve as SyncDuplicate & { type: 'ingredient' }, settings)
+      } else {
+        await resolveRecipeDuplicate(action, dupToResolve as SyncDuplicate & { type: 'recipe' }, settings)
+      }
+      // Remove from the pending list
+      if (summary) {
+        setSummary({
+          ...summary,
+          duplicatesForReview: summary.duplicatesForReview.filter(d => d !== dupToResolve),
+        })
+      }
+      setDupToResolve(null)
+    } catch (e) {
+      setResolveError(e instanceof Error ? e.message : 'Could not resolve this duplicate — nothing was changed. Please try again.')
+    } finally {
+      setResolving(false)
     }
-    // Remove from the pending list
-    if (summary) {
-      setSummary({
-        ...summary,
-        duplicatesForReview: summary.duplicatesForReview.filter(d => d !== dupToResolve),
-      })
-    }
-    setDupToResolve(null)
   }
 
   async function resolveOne(dup: SyncDuplicate, action: 'keep-local' | 'keep-cloud' | 'keep-newer'): Promise<'keep-local' | 'keep-cloud'> {
@@ -128,15 +146,31 @@ export function CloudSyncSection() {
     ): Promise<{ keptLocal: number; keptCloud: number }> {
       let keptLocal = 0
       let keptCloud = 0
+      // Each item gets its own try/catch — a genuine transaction failure on
+      // one duplicate must not abort resolving the rest of the batch, and
+      // must not be silently swallowed either. Failed items stay in
+      // duplicatesForReview (so they're visibly still pending, not lost)
+      // and their errors are appended to the existing summary.errors list,
+      // reusing the mechanism SyncResultDisplay already renders errors
+      // through rather than adding a second, parallel error surface.
+      const resolvedDups: SyncDuplicate[] = []
+      const errors: string[] = []
       for (const dup of dups) {
-        const resolvedAction = await resolveOne(dup, action)
-        if (resolvedAction === 'keep-local') keptLocal++
-        else keptCloud++
+        try {
+          const resolvedAction = await resolveOne(dup, action)
+          if (resolvedAction === 'keep-local') keptLocal++
+          else keptCloud++
+          resolvedDups.push(dup)
+        } catch (e) {
+          const name = (dup.localItem as { name?: string }).name ?? dup.type
+          errors.push(`Could not resolve duplicate "${name}": ${e instanceof Error ? e.message : String(e)}`)
+        }
       }
-      const resolvedSet = new Set(dups)
+      const resolvedSet = new Set(resolvedDups)
       setSummaryState(prev => prev && {
         ...prev,
         duplicatesForReview: prev.duplicatesForReview.filter(d => !resolvedSet.has(d)),
+        errors: errors.length > 0 ? [...prev.errors, ...errors] : prev.errors,
       })
       return { keptLocal, keptCloud }
     }
@@ -319,15 +353,15 @@ export function CloudSyncSection() {
       {dupToResolve && (
         <Modal
           open
-          onClose={() => setDupToResolve(null)}
+          onClose={() => { if (!resolving) { setDupToResolve(null); setResolveError('') } }}
           title="Duplicate Found"
           size="sm"
           footer={
             <>
-              <Button variant="secondary" onClick={() => setDupToResolve(null)}>Skip</Button>
-              <Button variant="secondary" onClick={() => handleResolveDuplicate('keep-local')}>Keep Mine</Button>
-              <Button variant="secondary" onClick={() => handleResolveDuplicate('keep-both')}>Keep Both</Button>
-              <Button onClick={() => handleResolveDuplicate('keep-cloud')}>Keep Theirs</Button>
+              <Button variant="secondary" disabled={resolving} onClick={() => { setDupToResolve(null); setResolveError('') }}>Skip</Button>
+              <Button variant="secondary" disabled={resolving} onClick={() => handleResolveDuplicate('keep-local')}>{resolving ? 'Resolving…' : 'Keep Mine'}</Button>
+              <Button variant="secondary" disabled={resolving} onClick={() => handleResolveDuplicate('keep-both')}>{resolving ? 'Resolving…' : 'Keep Both'}</Button>
+              <Button disabled={resolving} onClick={() => handleResolveDuplicate('keep-cloud')}>{resolving ? 'Resolving…' : 'Keep Theirs'}</Button>
             </>
           }
         >
@@ -340,6 +374,11 @@ export function CloudSyncSection() {
             <strong>Keep Both</strong> — save both (cloud version added with its own ID).<br />
             <strong>Keep Theirs</strong> — replace your local version with the cloud version.
           </p>
+          {resolveError && (
+            <p style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-sm)', color: 'var(--color-danger)' }}>
+              ⚠ {resolveError}
+            </p>
+          )}
         </Modal>
       )}
 

@@ -1,7 +1,9 @@
+import type { IDBPTransaction } from 'idb'
 import { getDB } from './schema'
 import { getIngredient } from './ingredients'
 import { getAllRecipes } from './recipes'
 import { now } from '@/utils/ids'
+import type { MealPlannerDB } from './schema'
 
 // Every place an ingredient id (or one of its variant ids) can be referenced
 // elsewhere in the app, confirmed against the actual data model in
@@ -110,11 +112,8 @@ export async function mergeIngredients(
   const db = await getDB()
   const tx = db.transaction(['ingredients', 'recipes', 'groceryLists', 'macroLogs'], 'readwrite')
   const ingredientStore = tx.objectStore('ingredients')
-  const recipeStore = tx.objectStore('recipes')
-  const groceryStore = tx.objectStore('groceryLists')
-  const macroStore = tx.objectStore('macroLogs')
 
-  const counts: IngredientReferenceCounts = { recipes: 0, groceryLists: 0, macroLogs: 0 }
+  let counts: IngredientReferenceCounts = EMPTY_REFERENCE_COUNTS
 
   try {
     const keep = await ingredientStore.get(keepId)
@@ -125,53 +124,9 @@ export async function mergeIngredients(
     const mergeAwayVariantIds = new Set(mergeAway.variants.map(v => v.id))
     const keepDefaultVariantId = keep.defaultVariantId || keep.variants[0]?.id
 
-    // Recipes
-    const recipes = await recipeStore.getAll()
-    for (const recipe of recipes) {
-      let changed = false
-      for (const ri of recipe.ingredients) {
-        if (ri.ingredientId === mergeAwayId) {
-          ri.ingredientId = keepId
-          if (ri.variantId && mergeAwayVariantIds.has(ri.variantId)) ri.variantId = keepDefaultVariantId
-          changed = true
-        }
-      }
-      if (changed) {
-        recipe.updatedAt = now()
-        await recipeStore.put(recipe)
-        counts.recipes++
-      }
-    }
-
-    // Grocery lists — every status (active/completed/archived), all three
-    // item buckets.
-    const groceryLists = await groceryStore.getAll()
-    for (const list of groceryLists) {
-      let changed = false
-      for (const bucket of [list.items, list.manualItems, list.remainderItems]) {
-        for (const item of bucket) {
-          if (item.ingredientId === mergeAwayId) {
-            item.ingredientId = keepId
-            if (item.variantId && mergeAwayVariantIds.has(item.variantId)) item.variantId = keepDefaultVariantId
-            changed = true
-          }
-        }
-      }
-      if (changed) {
-        await groceryStore.put(list)
-        counts.groceryLists++
-      }
-    }
-
-    // Macro logs — variantId only, see the file-level note above.
-    const macroLogs = await macroStore.getAll()
-    for (const entry of macroLogs) {
-      if (entry.variantId != null && mergeAwayVariantIds.has(entry.variantId)) {
-        entry.variantId = keepDefaultVariantId
-        await macroStore.put(entry)
-        counts.macroLogs++
-      }
-    }
+    counts = await repointIngredientReferences(
+      tx, mergeAwayId, mergeAwayVariantIds, keepId, keepDefaultVariantId
+    )
 
     // Category reconciliation now happens BEFORE deletion, in the same
     // transaction, instead of as a separate put() after — so it can never
@@ -196,6 +151,90 @@ export async function mergeIngredients(
     // an already-settled promise.
     tx.done.catch(() => {})
     throw err
+  }
+
+  return counts
+}
+
+// The shared store-list type both mergeIngredients() and Cloud Sync's
+// resolveIngredientDuplicate() (src/db/supabase.ts) open their transaction
+// with — kept as one alias so the two stay structurally interchangeable
+// rather than silently drifting apart.
+type MergeTx = IDBPTransaction<MealPlannerDB, ['ingredients', 'recipes', 'groceryLists', 'macroLogs'], 'readwrite'>
+
+// The actual reference-discovery/repointing logic, extracted so it has
+// exactly one implementation used by both mergeIngredients() (this file)
+// and Cloud Sync's resolveIngredientDuplicate() (src/db/supabase.ts) — the
+// two places in the app that ever need to retire one ingredient id in favor
+// of another. Operates purely on an already-open transaction's store
+// handles and the two ids/variant-id-sets involved; it does NOT require
+// `fromId` to itself be a record present in the ingredients store — recipe/
+// grocery/macro-log rows are matched by the literal id value stored on
+// them, not by looking the id up. This matters for Cloud Sync's "keep
+// local" resolution: the cloud-side id being discarded there is, by
+// construction, never saved as a local Ingredient record at all (see the
+// comment on resolveIngredientDuplicate() in supabase.ts) — repointing
+// FROM an id that was never itself persisted locally is still well-defined
+// and safe, it just always finds zero matches in practice.
+export async function repointIngredientReferences(
+  tx: MergeTx,
+  fromId: string,
+  fromVariantIds: Set<string>,
+  toId: string,
+  toDefaultVariantId: string | undefined,
+): Promise<IngredientReferenceCounts> {
+  const recipeStore = tx.objectStore('recipes')
+  const groceryStore = tx.objectStore('groceryLists')
+  const macroStore = tx.objectStore('macroLogs')
+
+  const counts: IngredientReferenceCounts = { recipes: 0, groceryLists: 0, macroLogs: 0 }
+
+  // Recipes
+  const recipes = await recipeStore.getAll()
+  for (const recipe of recipes) {
+    let changed = false
+    for (const ri of recipe.ingredients) {
+      if (ri.ingredientId === fromId) {
+        ri.ingredientId = toId
+        if (ri.variantId && fromVariantIds.has(ri.variantId)) ri.variantId = toDefaultVariantId
+        changed = true
+      }
+    }
+    if (changed) {
+      recipe.updatedAt = now()
+      await recipeStore.put(recipe)
+      counts.recipes++
+    }
+  }
+
+  // Grocery lists — every status (active/completed/archived), all three
+  // item buckets.
+  const groceryLists = await groceryStore.getAll()
+  for (const list of groceryLists) {
+    let changed = false
+    for (const bucket of [list.items, list.manualItems, list.remainderItems]) {
+      for (const item of bucket) {
+        if (item.ingredientId === fromId) {
+          item.ingredientId = toId
+          if (item.variantId && fromVariantIds.has(item.variantId)) item.variantId = toDefaultVariantId
+          changed = true
+        }
+      }
+    }
+    if (changed) {
+      await groceryStore.put(list)
+      counts.groceryLists++
+    }
+  }
+
+  // Macro logs — variantId only, see the file-level note above.
+  const macroLogs = await macroStore.getAll()
+  for (const entry of macroLogs) {
+    if (entry.variantId != null && fromVariantIds.has(entry.variantId)) {
+      entry.variantId = toDefaultVariantId
+      await macroStore.put(entry)
+      counts.macroLogs++
+    }
   }
 
   return counts
