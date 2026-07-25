@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { Button, Card, Input, Select, Modal, Toggle } from '@/components/ui'
+import { Button, Card, Input, Select, Modal, Toggle, OperationStatus } from '@/components/ui'
+import type { OperationState, OperationProgress } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import {
   runSync, runFamilyShareSync, generateSyncCode,
@@ -28,10 +29,15 @@ const AUTH_SETUP_SQL_COMBINED = [
 
 export function CloudSyncSection() {
   const { settings, updateSettings, reloadSettings } = useSettings()
-  const [syncing, setSyncing] = useState(false)
   const [familySyncing, setFamilySyncing] = useState(false)
   const [summary, setSummary] = useState<SyncSummary | null>(null)
   const [familySummary, setFamilySummary] = useState<SyncSummary | null>(null)
+  // Household Sync's shared status/progress surface — see OPERATION_FEEDBACK_STANDARD.md
+  // and OperationStatus (src/components/ui). Family Share sync is deliberately
+  // untouched in this phase; it keeps its own simpler syncing/summary state below.
+  const [syncState, setSyncState] = useState<OperationState>('idle')
+  const [syncProgress, setSyncProgress] = useState<OperationProgress | undefined>(undefined)
+  const syncing = syncState === 'working'
   const [showSQL, setShowSQL] = useState(false)
   const [showAuthSQL, setShowAuthSQL] = useState(false)
   const [dupToResolve, setDupToResolve] = useState<SyncDuplicate | null>(null)
@@ -49,23 +55,53 @@ export function CloudSyncSection() {
   const configured = isSupabaseConfigured(settings)
 
   async function handleSync(direction: SyncDirection) {
-    setSyncing(true)
+    // Flips synchronously, before the first `await` — the status region
+    // appears on the very next paint, well inside the 200-300ms bar
+    // OPERATION_FEEDBACK_STANDARD.md sets for "did my click register."
+    setSyncState('working')
+    setSyncProgress(undefined)
     setSummary(null)
     try {
-      const result = await runSync(settings, direction)
+      const result = await runSync(settings, direction, update => setSyncProgress(update))
       setSummary(result)
       // Only stamp "last synced" on a clean run — a sync that errored didn't
       // actually reconcile anything, so it shouldn't read as up to date.
       if (result.errors.length === 0) {
+        setSyncState('done')
         await updateSettings({ lastHouseholdSyncAt: new Date().toISOString() })
+      } else {
+        setSyncState('failed')
       }
       // Settings may have been written directly to IndexedDB during sync — refresh context state
       await reloadSettings()
     } catch (e) {
-      setSummary({ addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0, duplicatesForReview: [], errors: [String(e)] })
-    } finally {
-      setSyncing(false)
+      setSummary({ addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0, duplicatesForReview: [], errors: [e instanceof Error ? e.message : String(e)] })
+      setSyncState('failed')
     }
+  }
+
+  // OperationStatus's success text is real numbers per the standard's
+  // success-state rule, not a bare "Done!" — matches the wording this app
+  // already used before this component existed, so a returning user sees
+  // the same familiar phrasing, just inside the new shared surface.
+  function buildSyncDoneMessage(s: SyncSummary): string {
+    const hasActivity = s.addedLocally + s.uploadedToCloud + s.updatedToNewer > 0
+    const hasDups = s.duplicatesForReview.length > 0
+    const base = `${s.addedLocally} new ${s.addedLocally === 1 ? 'item' : 'items'} added from cloud, ` +
+      `${s.uploadedToCloud} ${s.uploadedToCloud === 1 ? 'item' : 'items'} uploaded, ` +
+      `${s.updatedToNewer} updated to newer version.`
+    return !hasActivity && !hasDups ? `${base} Everything is already up to date.` : base
+  }
+
+  // Error-state minimum bar per the standard: what happened, how much
+  // succeeded first, one plain-language next step — runSync's per-store
+  // try/catch means "failed" here can still mean several stores succeeded
+  // before/around the ones that errored, so that's surfaced explicitly
+  // rather than implying nothing happened.
+  function buildSyncErrorMessage(s: SyncSummary): string {
+    const succeeded = s.addedLocally + s.uploadedToCloud + s.updatedToNewer
+    const succeededNote = succeeded > 0 ? ` ${succeeded} item${succeeded === 1 ? '' : 's'} synced successfully despite this.` : ''
+    return `${s.errors.join(' ')}${succeededNote} You can retry — already-synced items won't be duplicated.`
   }
 
   async function handleFamilySync(direction: SyncDirection) {
@@ -287,7 +323,15 @@ export function CloudSyncSection() {
           Last synced on this device: {formatRelativeTime(settings.lastHouseholdSyncAt)}
         </p>
 
-        {summary && <SyncResultDisplay summary={summary} onReviewDuplicate={setDupToResolve} onBulkResolve={bulkResolveHousehold} />}
+        <OperationStatus
+          state={syncState}
+          progress={syncProgress}
+          doneMessage={summary ? buildSyncDoneMessage(summary) : undefined}
+          errorMessage={summary ? buildSyncErrorMessage(summary) : undefined}
+          onDismiss={() => setSyncState('idle')}
+          reassuranceMessage="Large syncs can take several minutes — you can close this tab and check back, or wait here."
+        />
+        {summary && <SyncResultDisplay summary={summary} onReviewDuplicate={setDupToResolve} onBulkResolve={bulkResolveHousehold} showSummary={false} />}
       </Card>
 
       {/* ── Family Share ───────────────────────────────────────────── */}
@@ -410,10 +454,18 @@ function SyncResultDisplay({
   summary,
   onReviewDuplicate,
   onBulkResolve,
+  showSummary = true,
 }: {
   summary: SyncSummary
   onReviewDuplicate: (d: SyncDuplicate) => void
   onBulkResolve: (dups: SyncDuplicate[], action: 'keep-local' | 'keep-cloud' | 'keep-newer') => Promise<{ keptLocal: number; keptCloud: number }>
+  // False for Household Sync, whose success/error text is now owned by the
+  // shared OperationStatus component (see the "Household Sync" render
+  // block above) — showing it twice would duplicate the same information
+  // in two different visual styles. Family Share doesn't use OperationStatus
+  // in this phase, so its call site leaves this at the default (true),
+  // completely unchanged from before.
+  showSummary?: boolean
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [resolving, setResolving] = useState(false)
@@ -424,6 +476,8 @@ function SyncResultDisplay({
   const dups        = summary.duplicatesForReview
   const hasDups     = dups.length > 0
   const allSelected = hasDups && selected.size === dups.length
+
+  if (!showSummary && !hasDups && !bulkResult) return null
 
   function toggleSelectAll() {
     setSelected(allSelected ? new Set() : new Set(dups.map(d => d.localItem.id)))
@@ -453,10 +507,10 @@ function SyncResultDisplay({
 
   return (
     <div className={`${styles.syncResult} ${!hasErrors ? styles.syncResultOk : ''}`}>
-      {hasErrors && summary.errors.map((err, i) => (
+      {showSummary && hasErrors && summary.errors.map((err, i) => (
         <p key={i} className={styles.syncError}>{err}</p>
       ))}
-      {!hasErrors && (
+      {showSummary && !hasErrors && (
         <p className={styles.syncSuccess}>
           ✓ Sync complete —{' '}
           {summary.addedLocally} new {summary.addedLocally === 1 ? 'item' : 'items'} added from cloud,{' '}

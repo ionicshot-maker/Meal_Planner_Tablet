@@ -30,6 +30,21 @@ export interface SyncSummary {
   errors: string[]
 }
 
+// Feeds the shared OperationStatus component (src/components/ui) per
+// OPERATION_FEEDBACK_STANDARD.md — item counts + current step are the two
+// highest-ranked indicators there, and runSync's per-store structure maps
+// onto them directly: each store reports its own "step" label plus a
+// current/total pair once it knows its own item count, separately for the
+// push phase and the pull phase (the two are sequential within a store, not
+// summed, so the count a user sees always corresponds to real requests
+// actually in flight — never a combined/misleading total).
+export interface SyncProgressUpdate {
+  step: string
+  current?: number
+  total?: number | null
+}
+export type SyncProgressCallback = (update: SyncProgressUpdate) => void
+
 type CloudRow = { id: string; household_code: string; data: unknown; updated_at: string }
 
 // ─── Client Factory ─────────────────────────────────────────────────────────
@@ -719,25 +734,34 @@ async function syncStore<T>(
   getKey: (item: T) => string | undefined,
   getUpdatedAt: (item: T) => string | undefined,
   saveItem: (item: T) => Promise<void>,
+  storeLabel?: string,
+  onProgress?: SyncProgressCallback,
 ): Promise<Pick<SyncSummary, 'addedLocally' | 'uploadedToCloud' | 'updatedToNewer'>> {
   const result = { addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0 }
   const localMap = new Map(localItems.map(i => [getKey(i), i]))
+  const label = storeLabel ?? table
 
   if (direction !== 'pull') {
+    onProgress?.({ step: `Uploading ${label}`, current: 0, total: localItems.length })
+    let i = 0
     for (const item of localItems) {
       const key = getKey(item)
       if (!key) continue
       await upsertCloudRow(supabase, table, code, key, item, getUpdatedAt(item) || new Date().toISOString())
       result.uploadedToCloud++
+      onProgress?.({ step: `Uploading ${label}`, current: ++i, total: localItems.length })
     }
   }
 
   if (direction !== 'push') {
+    onProgress?.({ step: `Checking ${label} for updates`, total: null })
     const cloudRows = await fetchCloudRows(supabase, table, code)
+    let i = 0
+    onProgress?.({ step: `Downloading ${label}`, current: 0, total: cloudRows.length })
     for (const row of cloudRows) {
       const cloudItem = row.data as T
       const key = getKey(cloudItem)
-      if (!key) continue
+      if (!key) { onProgress?.({ step: `Downloading ${label}`, current: ++i, total: cloudRows.length }); continue }
 
       const local = localMap.get(key)
       if (!local) {
@@ -751,6 +775,7 @@ async function syncStore<T>(
           result.updatedToNewer++
         }
       }
+      onProgress?.({ step: `Downloading ${label}`, current: ++i, total: cloudRows.length })
     }
   }
 
@@ -764,9 +789,11 @@ export async function syncIngredients(
   code: string,
   direction: 'both' | 'push' | 'pull',
   familyShare = false,
+  onProgress?: SyncProgressCallback,
 ): Promise<Pick<SyncSummary, 'addedLocally' | 'uploadedToCloud' | 'updatedToNewer' | 'duplicatesForReview'>> {
   const result = { addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0, duplicatesForReview: [] as SyncDuplicate[] }
 
+  onProgress?.({ step: 'Checking ingredients', total: null })
   const localItems = await getAllIngredients(true)
   const localMap = new Map(localItems.map(i => [i.id, i]))
   const localNameMap = new Map(localItems.map(i => [i.name.toLowerCase().trim(), i]))
@@ -792,6 +819,8 @@ export async function syncIngredients(
 
   if (direction !== 'pull') {
     // Push local → cloud
+    onProgress?.({ step: 'Uploading ingredients', current: 0, total: localItems.length })
+    let pushed = 0
     for (const item of localItems) {
       if (!cloudIdSet.has(item.id)) {
         const nameMatch = cloudNameMap.get(item.name.toLowerCase().trim())
@@ -803,20 +832,24 @@ export async function syncIngredients(
           // references) rather than silently duplicating.
           result.duplicatesForReview.push({ type: 'ingredient', localItem: item, cloudItem: nameMatch.data as Ingredient })
           flaggedLocalIds.add(item.id)
+          onProgress?.({ step: 'Uploading ingredients', current: ++pushed, total: localItems.length })
           continue
         }
       }
       const toUpload = familyShare ? stripCostData(item) : item
       await upsertCloudRow(supabase, 'ingredients', code, item.id, toUpload, item.updatedAt)
       result.uploadedToCloud++
+      onProgress?.({ step: 'Uploading ingredients', current: ++pushed, total: localItems.length })
     }
   }
 
   if (direction !== 'push') {
     // Pull cloud → local
+    onProgress?.({ step: 'Downloading ingredients', current: 0, total: cloudRows.length })
+    let pulled = 0
     for (const row of cloudRows) {
       const cloudItem = row.data as Ingredient
-      if (!cloudItem?.id) continue
+      if (!cloudItem?.id) { onProgress?.({ step: 'Downloading ingredients', current: ++pulled, total: cloudRows.length }); continue }
 
       const local = localMap.get(cloudItem.id)
       if (!local) {
@@ -839,6 +872,7 @@ export async function syncIngredients(
           result.updatedToNewer++
         }
       }
+      onProgress?.({ step: 'Downloading ingredients', current: ++pulled, total: cloudRows.length })
     }
   }
 
@@ -849,9 +883,11 @@ export async function syncRecipes(
   supabase: SupabaseClient,
   code: string,
   direction: 'both' | 'push' | 'pull',
+  onProgress?: SyncProgressCallback,
 ): Promise<Pick<SyncSummary, 'addedLocally' | 'uploadedToCloud' | 'updatedToNewer' | 'duplicatesForReview'>> {
   const result = { addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0, duplicatesForReview: [] as SyncDuplicate[] }
 
+  onProgress?.({ step: 'Checking recipes', total: null })
   const localItems = await getAllRecipes(true)
   const localMap = new Map(localItems.map(r => [r.id, r]))
   const localNameMap = new Map(localItems.map(r => [r.name.toLowerCase().trim(), r]))
@@ -869,24 +905,30 @@ export async function syncRecipes(
   const flaggedLocalIds = new Set<string>()
 
   if (direction !== 'pull') {
+    onProgress?.({ step: 'Uploading recipes', current: 0, total: localItems.length })
+    let pushed = 0
     for (const item of localItems) {
       if (!cloudIdSet.has(item.id)) {
         const nameMatch = cloudNameMap.get(item.name.toLowerCase().trim())
         if (nameMatch && nameMatch.id !== item.id) {
           result.duplicatesForReview.push({ type: 'recipe', localItem: item, cloudItem: nameMatch.data as Recipe })
           flaggedLocalIds.add(item.id)
+          onProgress?.({ step: 'Uploading recipes', current: ++pushed, total: localItems.length })
           continue
         }
       }
       await upsertCloudRow(supabase, 'recipes', code, item.id, item, item.updatedAt)
       result.uploadedToCloud++
+      onProgress?.({ step: 'Uploading recipes', current: ++pushed, total: localItems.length })
     }
   }
 
   if (direction !== 'push') {
+    onProgress?.({ step: 'Downloading recipes', current: 0, total: cloudRows.length })
+    let pulled = 0
     for (const row of cloudRows) {
       const cloudItem = row.data as Recipe
-      if (!cloudItem?.id) continue
+      if (!cloudItem?.id) { onProgress?.({ step: 'Downloading recipes', current: ++pulled, total: cloudRows.length }); continue }
 
       const local = localMap.get(cloudItem.id)
       if (!local) {
@@ -908,6 +950,7 @@ export async function syncRecipes(
           result.updatedToNewer++
         }
       }
+      onProgress?.({ step: 'Downloading recipes', current: ++pulled, total: cloudRows.length })
     }
   }
 
@@ -918,6 +961,7 @@ async function syncMealPlans(
   supabase: SupabaseClient,
   code: string,
   direction: 'both' | 'push' | 'pull',
+  onProgress?: SyncProgressCallback,
 ) {
   const db = await getDB()
   const localDays = await db.getAll('mealPlanDays') as MealPlanDay[]
@@ -926,6 +970,8 @@ async function syncMealPlans(
     day => day.date,
     day => day.updatedAt,
     saveMealPlanDay,
+    'meal plans',
+    onProgress,
   )
 }
 
@@ -933,6 +979,7 @@ async function syncGroceryLists(
   supabase: SupabaseClient,
   code: string,
   direction: 'both' | 'push' | 'pull',
+  onProgress?: SyncProgressCallback,
 ) {
   const db = await getDB()
   const localLists = await db.getAll('groceryLists') as GroceryList[]
@@ -941,6 +988,8 @@ async function syncGroceryLists(
     list => list.id,
     list => list.updatedAt || list.generatedAt,
     saveGroceryList,
+    'grocery lists',
+    onProgress,
   )
 }
 
@@ -948,6 +997,7 @@ async function syncHouseholdItems(
   supabase: SupabaseClient,
   code: string,
   direction: 'both' | 'push' | 'pull',
+  onProgress?: SyncProgressCallback,
 ) {
   const localItems = await getAllHouseholdItems()
   return syncStore<HouseholdItem>(
@@ -955,6 +1005,8 @@ async function syncHouseholdItems(
     item => item.id,
     item => item.updatedAt || item.createdAt,
     saveHouseholdItem,
+    'household items',
+    onProgress,
   )
 }
 
@@ -962,6 +1014,7 @@ async function syncCollections(
   supabase: SupabaseClient,
   code: string,
   direction: 'both' | 'push' | 'pull',
+  onProgress?: SyncProgressCallback,
 ) {
   const localItems = await getAllCollections()
   return syncStore<RecipeCollection>(
@@ -969,6 +1022,8 @@ async function syncCollections(
     c => c.id,
     c => c.updatedAt,
     saveCollection,
+    'collections',
+    onProgress,
   )
 }
 
@@ -976,6 +1031,7 @@ async function syncReferences(
   supabase: SupabaseClient,
   code: string,
   direction: 'both' | 'push' | 'pull',
+  onProgress?: SyncProgressCallback,
 ) {
   const localItems = await getAllReferences()
   return syncStore<KitchenReference>(
@@ -983,6 +1039,8 @@ async function syncReferences(
     r => r.id,
     r => r.updatedAt,
     saveReference,
+    'kitchen references',
+    onProgress,
   )
 }
 
@@ -1006,7 +1064,9 @@ async function syncSettings(
   supabase: SupabaseClient,
   code: string,
   direction: 'both' | 'push' | 'pull',
+  onProgress?: SyncProgressCallback,
 ): Promise<{ uploaded: number; downloaded: number }> {
+  onProgress?.({ step: 'Syncing settings', total: null })
   let uploaded = 0
   let downloaded = 0
   const local = await loadSettings()
@@ -1047,6 +1107,7 @@ async function syncSettings(
 export async function runSync(
   settings: AppSettings,
   direction: 'both' | 'push' | 'pull',
+  onProgress?: SyncProgressCallback,
 ): Promise<SyncSummary> {
   const summary: SyncSummary = {
     addedLocally: 0,
@@ -1069,7 +1130,7 @@ export async function runSync(
   }
 
   try {
-    const ing = await syncIngredients(supabase, code, direction)
+    const ing = await syncIngredients(supabase, code, direction, false, onProgress)
     summary.addedLocally    += ing.addedLocally
     summary.uploadedToCloud += ing.uploadedToCloud
     summary.updatedToNewer  += ing.updatedToNewer
@@ -1079,7 +1140,7 @@ export async function runSync(
   }
 
   try {
-    const rec = await syncRecipes(supabase, code, direction)
+    const rec = await syncRecipes(supabase, code, direction, onProgress)
     summary.addedLocally    += rec.addedLocally
     summary.uploadedToCloud += rec.uploadedToCloud
     summary.updatedToNewer  += rec.updatedToNewer
@@ -1089,7 +1150,7 @@ export async function runSync(
   }
 
   try {
-    const col = await syncCollections(supabase, code, direction)
+    const col = await syncCollections(supabase, code, direction, onProgress)
     summary.addedLocally    += col.addedLocally
     summary.uploadedToCloud += col.uploadedToCloud
     summary.updatedToNewer  += col.updatedToNewer
@@ -1098,7 +1159,7 @@ export async function runSync(
   }
 
   try {
-    const refs = await syncReferences(supabase, code, direction)
+    const refs = await syncReferences(supabase, code, direction, onProgress)
     summary.addedLocally    += refs.addedLocally
     summary.uploadedToCloud += refs.uploadedToCloud
     summary.updatedToNewer  += refs.updatedToNewer
@@ -1107,7 +1168,7 @@ export async function runSync(
   }
 
   try {
-    const mp = await syncMealPlans(supabase, code, direction)
+    const mp = await syncMealPlans(supabase, code, direction, onProgress)
     summary.addedLocally    += mp.addedLocally
     summary.uploadedToCloud += mp.uploadedToCloud
     summary.updatedToNewer  += mp.updatedToNewer
@@ -1116,7 +1177,7 @@ export async function runSync(
   }
 
   try {
-    const gl = await syncGroceryLists(supabase, code, direction)
+    const gl = await syncGroceryLists(supabase, code, direction, onProgress)
     summary.addedLocally    += gl.addedLocally
     summary.uploadedToCloud += gl.uploadedToCloud
     summary.updatedToNewer  += gl.updatedToNewer
@@ -1125,7 +1186,7 @@ export async function runSync(
   }
 
   try {
-    const hi = await syncHouseholdItems(supabase, code, direction)
+    const hi = await syncHouseholdItems(supabase, code, direction, onProgress)
     summary.addedLocally    += hi.addedLocally
     summary.uploadedToCloud += hi.uploadedToCloud
     summary.updatedToNewer  += hi.updatedToNewer
@@ -1134,7 +1195,7 @@ export async function runSync(
   }
 
   try {
-    const st = await syncSettings(supabase, code, direction)
+    const st = await syncSettings(supabase, code, direction, onProgress)
     summary.uploadedToCloud += st.uploaded
     summary.updatedToNewer  += st.downloaded
   } catch (e) {
