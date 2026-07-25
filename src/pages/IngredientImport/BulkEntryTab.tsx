@@ -121,8 +121,14 @@ export function BulkEntryTab({ onSaved }: Props) {
   }
 
   async function handleSaveAll() {
-    // Validate
-    const validated = rows.map(row => ({ ...row, error: validateRow(row) }))
+    // Validate only rows that would actually be saved below — the exact same
+    // `!row.saved && row.name.trim()` predicate `pending` uses. Previously
+    // this ran against every row unconditionally, so the tab's 5 default
+    // blank rows failed "Name is required" and blocked the whole save even
+    // when the user had only filled in 1-2 of them.
+    const validated = rows.map(row =>
+      !row.saved && row.name.trim() ? { ...row, error: validateRow(row) } : { ...row, error: '' }
+    )
     const hasErrors = validated.some(r => r.error)
     if (hasErrors) {
       setRows(validated)
