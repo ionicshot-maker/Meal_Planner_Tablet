@@ -1,5 +1,6 @@
 import { useState, useEffect, ChangeEvent } from 'react'
-import { Button, Card, Modal } from '@/components/ui'
+import { Button, Card, Modal, OperationStatus } from '@/components/ui'
+import type { OperationState, OperationProgress } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { getAllIngredients, getAllRecipes } from '@/db'
 import { CloudSyncSection } from './CloudSyncSection'
@@ -41,9 +42,24 @@ export function DataSection() {
   const [confirmTarget, setConfirmTarget] = useState<ResetTarget | null>(null)
   const [exporting, setExporting] = useState(false)
   const [importPending, setImportPending] = useState<ImportPending | null>(null)
+  // importResult/importError now only ever come from two places, neither of
+  // them the restore operation itself: performReset()'s own success message
+  // (reused here rather than a 4th message state), and importData()'s
+  // pre-flight file-validation rejections (bad format / invalid JSON) before
+  // any restore operation has actually begun — those are instant synchronous
+  // checks, not a long-running operation, so they stay on the existing
+  // modal rather than OperationStatus. executeImport() itself — the actual
+  // restore — reports through the dedicated importOp* state below instead.
   const [importResult, setImportResult] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [resetError, setResetError] = useState<string | null>(null)
+  // Backup Import's shared status/progress surface — Phase 2 of
+  // OPERATION_FEEDBACK_STANDARD.md. Reuses OperationStatus exactly as built
+  // for Cloud Sync in Phase 1, no changes to that component.
+  const [importOpState, setImportOpState] = useState<OperationState>('idle')
+  const [importOpProgress, setImportOpProgress] = useState<OperationProgress | undefined>(undefined)
+  const [importOpDoneMessage, setImportOpDoneMessage] = useState('')
+  const [importOpErrorMessage, setImportOpErrorMessage] = useState('')
   const [resetting, setResetting] = useState(false)
   const [counts, setCounts] = useState<LocalCounts | null>(null)
 
@@ -63,8 +79,10 @@ export function DataSection() {
     // Re-run after import/reset so the counts reflect what just changed —
     // importResult/importError only ever flip after those actions complete.
     // resetError included defensively even though a failed reset (now atomic)
-    // shouldn't have changed anything.
-  }, [importResult, importError, resetError])
+    // shouldn't have changed anything. importOpState covers executeImport()
+    // itself, which no longer touches importResult/importError (see above) —
+    // re-runs on both 'done' and 'failed' for the same defensive reason.
+  }, [importResult, importError, resetError, importOpState])
 
   function makeFilename(label: string) {
     const hn = settings.householdName.trim().replace(/\s+/g, '-')
@@ -173,6 +191,10 @@ export function DataSection() {
   async function executeImport(data: Record<string, any[]>, strategy: 'skip' | 'overwrite') {
     setImportPending(null)
     setImportError(null)
+    // Flips synchronously, before the first await — same 200-300ms
+    // immediate-feedback requirement as Cloud Sync's Phase 1 wiring.
+    setImportOpState('working')
+    setImportOpProgress(undefined)
 
     const db = await getDB()
     const stores: ('ingredients' | 'recipes' | 'mealPlanDays' | 'mealPlanTemplates' | 'macroLogs' | 'groceryLists' | 'householdItems')[] =
@@ -180,13 +202,25 @@ export function DataSection() {
     const tx = db.transaction(stores, 'readwrite')
     const messages: string[] = []
 
+    // Progress reporting is a plain synchronous callback (no await inside) —
+    // empirically verified via fake-indexeddb before this was wired in that
+    // this does NOT break the open transaction the way an `await
+    // setTimeout(0)` yield does (the exact mechanism that ruled out a shared
+    // transaction for JsonImportTab.tsx's loop). Reported per-item across
+    // all 7 stores, uniformly, mirroring runSync()'s Phase 1 pattern.
+    function report(step: string, current: number, total: number) {
+      setImportOpProgress({ step, current, total })
+    }
+
     try {
       if (Array.isArray(data.ingredients) && data.ingredients.length > 0) {
         const existingIds = new Set((await tx.objectStore('ingredients').getAllKeys()) as string[])
         const toAdd = strategy === 'skip'
           ? data.ingredients.filter((i: { id: string }) => !existingIds.has(i.id))
           : data.ingredients
-        for (const item of toAdd) await tx.objectStore('ingredients').put(item)
+        report('Importing ingredients', 0, toAdd.length)
+        let i = 0
+        for (const item of toAdd) { await tx.objectStore('ingredients').put(item); report('Importing ingredients', ++i, toAdd.length) }
         messages.push(`${toAdd.length} ingredient${toAdd.length !== 1 ? 's' : ''} imported`)
       }
 
@@ -195,45 +229,59 @@ export function DataSection() {
         const toAdd = strategy === 'skip'
           ? data.recipes.filter((r: { id: string }) => !existingIds.has(r.id))
           : data.recipes
-        for (const item of toAdd) await tx.objectStore('recipes').put(item)
+        report('Importing recipes', 0, toAdd.length)
+        let i = 0
+        for (const item of toAdd) { await tx.objectStore('recipes').put(item); report('Importing recipes', ++i, toAdd.length) }
         messages.push(`${toAdd.length} recipe${toAdd.length !== 1 ? 's' : ''} imported`)
       }
 
       if (Array.isArray(data.mealPlanDays) && data.mealPlanDays.length > 0) {
-        for (const item of data.mealPlanDays) await tx.objectStore('mealPlanDays').put(item)
+        report('Importing meal plan days', 0, data.mealPlanDays.length)
+        let i = 0
+        for (const item of data.mealPlanDays) { await tx.objectStore('mealPlanDays').put(item); report('Importing meal plan days', ++i, data.mealPlanDays.length) }
         messages.push(`${data.mealPlanDays.length} meal plan days imported`)
       }
       if (Array.isArray(data.mealPlanTemplates) && data.mealPlanTemplates.length > 0) {
-        for (const item of data.mealPlanTemplates) await tx.objectStore('mealPlanTemplates').put(item)
+        report('Importing meal plan templates', 0, data.mealPlanTemplates.length)
+        let i = 0
+        for (const item of data.mealPlanTemplates) { await tx.objectStore('mealPlanTemplates').put(item); report('Importing meal plan templates', ++i, data.mealPlanTemplates.length) }
         messages.push(`${data.mealPlanTemplates.length} template${data.mealPlanTemplates.length !== 1 ? 's' : ''} imported`)
       }
       if (Array.isArray(data.macroLogs) && data.macroLogs.length > 0) {
-        for (const item of data.macroLogs) await tx.objectStore('macroLogs').put(item)
+        report('Importing macro log entries', 0, data.macroLogs.length)
+        let i = 0
+        for (const item of data.macroLogs) { await tx.objectStore('macroLogs').put(item); report('Importing macro log entries', ++i, data.macroLogs.length) }
         messages.push(`${data.macroLogs.length} macro log entries imported`)
       }
       if (Array.isArray(data.groceryLists) && data.groceryLists.length > 0) {
-        for (const item of data.groceryLists) await tx.objectStore('groceryLists').put(item)
+        report('Importing grocery lists', 0, data.groceryLists.length)
+        let i = 0
+        for (const item of data.groceryLists) { await tx.objectStore('groceryLists').put(item); report('Importing grocery lists', ++i, data.groceryLists.length) }
         messages.push(`${data.groceryLists.length} grocery list${data.groceryLists.length !== 1 ? 's' : ''} imported`)
       }
       if (Array.isArray(data.householdItems) && data.householdItems.length > 0) {
-        for (const item of data.householdItems) await tx.objectStore('householdItems').put(item)
+        report('Importing household items', 0, data.householdItems.length)
+        let i = 0
+        for (const item of data.householdItems) { await tx.objectStore('householdItems').put(item); report('Importing household items', ++i, data.householdItems.length) }
         messages.push(`${data.householdItems.length} household item${data.householdItems.length !== 1 ? 's' : ''} imported`)
       }
 
       await tx.done
 
-      setImportResult(
+      setImportOpDoneMessage(
         messages.length > 0
           ? messages.join(', ') + '.'
           : 'Nothing to import — the file may be empty or already up to date.'
       )
+      setImportOpState('done')
     } catch (err) {
       try { tx.abort() } catch { /* transaction already finished */ }
       tx.done.catch(() => {})
-      setImportError(
+      setImportOpErrorMessage(
         `Import failed before any changes were made — nothing was written. This is all-or-nothing: a failure partway through leaves your data exactly as it was before. ` +
         `${err instanceof Error ? err.message : 'An unexpected error occurred.'} Please try again.`
       )
+      setImportOpState('failed')
     }
   }
 
@@ -329,10 +377,19 @@ export function DataSection() {
           history are merged automatically. For ingredients and recipes you will be asked how to
           handle any duplicates.
         </p>
-        <label className={styles.importLabel}>
+        <label className={`${styles.importLabel} ${importOpState === 'working' ? styles.importLabelDisabled : ''}`}>
           <span className={styles.importBtn}>Choose File</span>
-          <input type="file" accept=".json" onChange={importData} className={styles.fileInput} />
+          <input type="file" accept=".json" onChange={importData} className={styles.fileInput} disabled={importOpState === 'working'} />
         </label>
+
+        <OperationStatus
+          state={importOpState}
+          progress={importOpProgress}
+          doneMessage={importOpDoneMessage}
+          errorMessage={importOpErrorMessage}
+          onDismiss={() => setImportOpState('idle')}
+          reassuranceMessage="Large backups can take a little while to restore — this won't interrupt itself partway through."
+        />
       </Card>
 
       {/* Reset */}

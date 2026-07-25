@@ -24,3 +24,5 @@
 }
 .importBtn:hover { background-color: var(--color-border); }
 .fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.importLabelDisabled { cursor: not-allowed; opacity: 0.6; }
+.importLabelDisabled .importBtn { cursor: not-allowed; pointer-events: none; }
