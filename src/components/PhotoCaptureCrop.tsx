@@ -26,8 +26,21 @@ interface Props {
   primaryLabel: string
   tipsTitle: string
   tips: string[]
-  /** Fires once with the final (possibly cropped) photo as a data URL. */
-  onComplete: (dataUrl: string) => void
+  /**
+   * Fires once with the final (possibly cropped) photo as a data URL, plus
+   * the original, un-cropped acquisition — callers that only need the
+   * result (the common case) can ignore the second argument.
+   */
+  onComplete: (dataUrl: string, originalPhotoDataUrl: string) => void
+  /**
+   * Pre-seeds the pipeline with an already-acquired photo and starts
+   * directly at the crop stage, skipping Take Photo/Choose Photo entirely —
+   * lets a caller re-enter cropping against a photo it already has (e.g.
+   * cropping a second recipe from the same source photo) without asking the
+   * user to re-acquire it. Omitted/undefined reproduces today's exact
+   * stage: 'select' / photoDataUrl: null starting behavior.
+   */
+  initialPhotoDataUrl?: string
 }
 
 /**
@@ -36,9 +49,9 @@ interface Props {
  * paste, followed by a react-image-crop editor. Used by both the recipe photo
  * import tab and the ingredient label scanner so the two stay in sync.
  */
-export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete }: Props) {
-  const [stage, setStage] = useState<Stage>('select')
-  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
+export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, initialPhotoDataUrl }: Props) {
+  const [stage, setStage] = useState<Stage>(initialPhotoDataUrl ? 'crop' : 'select')
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(initialPhotoDataUrl ?? null)
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false)
   const [webcamError, setWebcamError] = useState('')
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -188,18 +201,18 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete }: 
   }
 
   function handleUseFullPhoto() {
-    if (photoDataUrl) onComplete(photoDataUrl)
+    if (photoDataUrl) onComplete(photoDataUrl, photoDataUrl)
   }
 
   async function handleApplyCrop() {
     const img = imgRef.current
     if (!img || !completedCrop || completedCrop.width < 1 || completedCrop.height < 1) {
-      if (photoDataUrl) onComplete(photoDataUrl)
+      if (photoDataUrl) onComplete(photoDataUrl, photoDataUrl)
       return
     }
     const canvas = document.createElement('canvas')
     await cropToCanvas(img, canvas, completedCrop)
-    onComplete(canvas.toDataURL('image/jpeg', 0.92))
+    if (photoDataUrl) onComplete(canvas.toDataURL('image/jpeg', 0.92), photoDataUrl)
   }
 
   function handleBackFromCrop() {

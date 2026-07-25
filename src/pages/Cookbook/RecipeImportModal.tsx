@@ -26,16 +26,24 @@ const PHOTO_TIPS = [
 ]
 
 interface Props {
-  onImported: (result: AIRecipeResult, notice?: ImportNotice, uncertainFields?: UncertainField[]) => void
+  onImported: (result: AIRecipeResult, notice?: ImportNotice, uncertainFields?: UncertainField[], sourcePhotoDataUrl?: string) => void
   onManualWithReference: (text: string) => void
   onManualEntry: () => void
   onClose: () => void
+  /**
+   * Pre-seeds the Photo tab with an already-acquired photo (Phase 2A —
+   * "crop another recipe from this same photo") — selects the Photo tab by
+   * default and skips straight to cropping, via PhotoCaptureCrop's own
+   * initialPhotoDataUrl. Omitted/undefined reproduces today's exact
+   * defaults (URL tab, empty capture flow).
+   */
+  initialPhotoDataUrl?: string
 }
 
-export function RecipeImportModal({ onImported, onManualWithReference, onManualEntry, onClose }: Props) {
+export function RecipeImportModal({ onImported, onManualWithReference, onManualEntry, onClose, initialPhotoDataUrl }: Props) {
   const { settings } = useSettings()
   const navigate = useNavigate()
-  const [tab, setTab] = useState<Tab>('url')
+  const [tab, setTab] = useState<Tab>(initialPhotoDataUrl ? 'photo' : 'url')
   const [url, setUrl] = useState('')
   const [pasteText, setPasteText] = useState('')
   const [loading, setLoading] = useState(false)
@@ -44,6 +52,11 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
   // Photo tab state
   const [photoStage, setPhotoStage] = useState<PhotoStage>('capture')
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
+  // The original, un-cropped acquisition behind `photoDataUrl` (which may be
+  // a cropped sub-region) — held separately so "crop another recipe from
+  // this same photo" (Phase 2A) can hand the *original* back up, not
+  // whatever region happened to be cropped for this particular recipe.
+  const [sourcePhotoDataUrl, setSourcePhotoDataUrl] = useState<string | null>(null)
   const [lowConfidenceReason, setLowConfidenceReason] = useState('')
 
   // Anything typed/pasted, or a photo already captured, counts as unsaved
@@ -100,13 +113,15 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
 
   // ── Photo tab ──────────────────────────────────────────────────────────────
 
-  function handlePhotoCaptured(dataUrl: string) {
+  function handlePhotoCaptured(dataUrl: string, originalPhotoDataUrl: string) {
     setPhotoDataUrl(dataUrl)
+    setSourcePhotoDataUrl(originalPhotoDataUrl)
     setPhotoStage('preview')
   }
 
   function resetPhoto() {
     setPhotoDataUrl(null)
+    setSourcePhotoDataUrl(null)
     setPhotoStage('capture')
     setLowConfidenceReason('')
     setError('')
@@ -139,7 +154,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
             message: 'Some fields could not be read clearly from the photo — highlighted fields below need your attention before saving.',
             subMessage: 'Always verify ingredient quantities carefully — measurement errors in recipes can significantly affect results.',
           }
-      onImported(outcome.result, notice, outcome.uncertainFields)
+      onImported(outcome.result, notice, outcome.uncertainFields, sourcePhotoDataUrl ?? undefined)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Could not read the recipe photo. Try again.')
     } finally {
@@ -311,6 +326,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
                   tipsTitle="📸 Tips for best results:"
                   tips={PHOTO_TIPS}
                   onComplete={handlePhotoCaptured}
+                  initialPhotoDataUrl={initialPhotoDataUrl}
                 />
               )}
 
