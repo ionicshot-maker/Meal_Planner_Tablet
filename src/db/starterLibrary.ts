@@ -2,6 +2,12 @@ import { getAllIngredients, saveIngredient, deleteIngredient } from './ingredien
 import { newId, now } from '@/utils/ids'
 import type { Ingredient, IngredientUnit } from '@/types'
 
+// Structurally identical to OperationProgress (src/components/ui) — kept as
+// a local type rather than importing it, so the db layer doesn't depend on
+// the UI layer (same precedent as SyncProgressCallback in db/supabase.ts).
+export interface SeedProgressUpdate { step: string; current?: number; total?: number | null }
+export type SeedProgressCallback = (update: SeedProgressUpdate) => void
+
 interface VDef {
   brand: string
   sz: number; su: string; du: string
@@ -608,20 +614,21 @@ function build(d: IDef): Ingredient {
   }
 }
 
-export async function seedStarterLibrary(): Promise<number> {
+export async function seedStarterLibrary(onProgress?: SeedProgressCallback): Promise<number> {
   const existing = await getAllIngredients(true)
   const existingNames = new Set(existing.map(i => i.name.toLowerCase()))
+  const toAdd = DEFS.filter(def => !existingNames.has(def.name.toLowerCase()))
   let count = 0
-  for (const def of DEFS) {
-    if (!existingNames.has(def.name.toLowerCase())) {
-      await saveIngredient(build(def))
-      count++
-    }
+  onProgress?.({ step: 'Loading USDA basics', current: 0, total: toAdd.length })
+  for (const def of toAdd) {
+    await saveIngredient(build(def))
+    count++
+    onProgress?.({ step: 'Loading USDA basics', current: count, total: toAdd.length })
   }
   return count
 }
 
-export async function migrateStarterLibrary(): Promise<number> {
+export async function migrateStarterLibrary(onProgress?: SeedProgressCallback): Promise<number> {
   const existing = await getAllIngredients(true)
   const legacySet = new Set(LEGACY_FLAT_NAMES.map(n => n.toLowerCase()))
   const toDelete = existing.filter(ing =>
@@ -629,8 +636,11 @@ export async function migrateStarterLibrary(): Promise<number> {
     ing.variants.length === 1 &&
     ing.variants[0].brand.toLowerCase() === 'generic'
   )
+  onProgress?.({ step: 'Regrouping existing ingredients', current: 0, total: toDelete.length })
+  let deleted = 0
   for (const ing of toDelete) {
     await deleteIngredient(ing.id)
+    onProgress?.({ step: 'Regrouping existing ingredients', current: ++deleted, total: toDelete.length })
   }
-  return seedStarterLibrary()
+  return seedStarterLibrary(onProgress)
 }

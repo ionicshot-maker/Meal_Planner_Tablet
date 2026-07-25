@@ -48,10 +48,3 @@
   accent-color: var(--color-accent);
   flex-shrink: 0;
 }
-
-.error {
-  font-size: var(--text-xs);
-  color: var(--color-danger);
-  line-height: 1.5;
-  margin: 0;
-}

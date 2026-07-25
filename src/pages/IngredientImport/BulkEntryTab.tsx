@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Button } from '@/components/ui'
+import { Button, OperationStatus } from '@/components/ui'
+import type { OperationState, OperationProgress } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { saveIngredient, getAllIngredients } from '@/db/ingredients'
 import { parseFraction } from '@/utils/fractionInput'
@@ -91,7 +92,16 @@ export function BulkEntryTab({ onSaved }: Props) {
   const [rows, setRows] = useState<BulkRow[]>(() => Array.from({ length: 5 }, () => blankRow(defaultCategory)))
   const [saving, setSaving] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
-  const [saveError, setSaveError] = useState('')
+  // Bulk Entry's shared status/progress surface — Phase 3 of
+  // OPERATION_FEEDBACK_STANDARD.md. The per-row `saved` checkmarks already
+  // give accurate incremental progress on their own — this adds the piece
+  // that was genuinely missing: a real success confirmation (previously
+  // there was none at all for a normal completion) and a consistent home
+  // for the error message, replacing the old bespoke saveError paragraph.
+  const [opState, setOpState] = useState<OperationState>('idle')
+  const [opProgress, setOpProgress] = useState<OperationProgress | undefined>(undefined)
+  const [opDoneMessage, setOpDoneMessage] = useState('')
+  const [opErrorMessage, setOpErrorMessage] = useState('')
 
   function updateRow(id: string, patch: Partial<BulkRow>) {
     setRows(r => r.map(row => row.id === id ? { ...row, ...patch, error: '' } : row))
@@ -124,7 +134,8 @@ export function BulkEntryTab({ onSaved }: Props) {
     if (pending.length === 0) return
 
     setSaving(true)
-    setSaveError('')
+    setOpState('working')
+    setOpProgress({ step: 'Saving ingredients', current: 0, total: pending.length })
     const existingIngredients = await getAllIngredients(true)
     const savedNames: string[] = []
 
@@ -230,8 +241,11 @@ export function BulkEntryTab({ onSaved }: Props) {
 
       savedNames.push(row.name.trim())
       setRows(r => r.map(x => x.id === row.id ? { ...x, saved: true } : x))
+      setOpProgress({ step: 'Saving ingredients', current: savedNames.length, total: pending.length })
       onSaved(row.name.trim())
     }
+      setOpDoneMessage(`${savedNames.length} ingredient${savedNames.length !== 1 ? 's' : ''} saved.`)
+      setOpState('done')
     } catch (err) {
       // Every row already marked `saved: true` above genuinely is saved —
       // this isn't a rollback. Report exactly how many rows made it
@@ -240,11 +254,12 @@ export function BulkEntryTab({ onSaved }: Props) {
       // problem's addressed — already-saved rows are skipped automatically
       // (filtered out of `pending` above), not re-saved or duplicated.
       const remaining = pending.length - savedNames.length
-      setSaveError(
+      setOpErrorMessage(
         `Save stopped partway through: ${savedNames.length} of ${pending.length} row${pending.length !== 1 ? 's' : ''} saved before an error occurred (${remaining} remaining). ` +
         `Already-saved rows are safe — nothing was rolled back. ` +
         `${err instanceof Error ? err.message : 'An unexpected error occurred.'} You can try Save All again; already-saved rows won't be duplicated.`
       )
+      setOpState('failed')
     } finally {
       setSaving(false)
     }
@@ -354,9 +369,15 @@ export function BulkEntryTab({ onSaved }: Props) {
         </table>
       </div>
 
-      {saveError && (
-        <p style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)', margin: '0 var(--space-4)' }}>⚠ {saveError}</p>
-      )}
+      <div style={{ margin: '0 var(--space-4)' }}>
+        <OperationStatus
+          state={opState}
+          progress={opProgress}
+          doneMessage={opDoneMessage || undefined}
+          errorMessage={opErrorMessage || undefined}
+          onDismiss={() => setOpState('idle')}
+        />
+      </div>
 
       <div className={styles.footer}>
         <Button onClick={handleSaveAll} disabled={saving || unsavedCount === 0}>

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { FileJson, Upload } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button, OperationStatus } from '@/components/ui'
+import type { OperationState } from '@/components/ui'
 import { getAllIngredients, saveIngredient } from '@/db/ingredients'
 import { normalizeIngredient, extractRawIngredients, findIngredientMatch } from '@/utils/importNormalization'
 import { now } from '@/utils/ids'
@@ -232,6 +233,11 @@ export function JsonImportTab() {
     }
   }
 
+  // Derived, not separate state — importing/result/importError already fully
+  // capture the lifecycle (result and importError already reset together at
+  // the top of handleImport(), so they're never both set at once).
+  const opState: OperationState = importing ? 'working' : result ? 'done' : importError ? 'failed' : 'idle'
+
   const displayedBrands = brandCounts.slice(0, BRAND_DISPLAY_LIMIT)
   const hiddenBrandCount = brandCounts.length - displayedBrands.length
   const previewItems = ingredients?.slice(0, PREVIEW_ITEM_LIMIT) ?? []
@@ -358,32 +364,13 @@ export function JsonImportTab() {
               </div>
             )}
 
-            {importError && <p className={styles.error}>⚠ {importError}</p>}
-
-            {importing && (
-              <div className={styles.progressWrap}>
-                <span className={styles.progressLabel}>
-                  Importing… {progress.done} / {progress.total}
-                </span>
-                <div className={styles.progressTrack}>
-                  <div
-                    className={styles.progressFill}
-                    style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {result && (
-              <div className={styles.resultCard}>
-                <span className={styles.resultTitle}>Import complete</span>
-                <span className={styles.resultStats}>
-                  {result.added} ingredient{result.added !== 1 ? 's' : ''} added,{' '}
-                  {result.updated} updated,{' '}
-                  {result.skipped} skipped as duplicates
-                </span>
-              </div>
-            )}
+            <OperationStatus
+              state={opState}
+              progress={{ step: 'Importing ingredients', current: progress.done, total: progress.total }}
+              doneMessage={result ? `${result.added} ingredient${result.added !== 1 ? 's' : ''} added, ${result.updated} updated, ${result.skipped} skipped as duplicates.` : undefined}
+              errorMessage={importError || undefined}
+              onDismiss={() => { if (importError) setImportError('') }}
+            />
           </>
         )}
       </div>

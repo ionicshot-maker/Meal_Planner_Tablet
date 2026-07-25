@@ -1,6 +1,7 @@
 import { getAllIngredients, saveIngredient } from './ingredients'
 import { normalizeIngredient, extractRawIngredients, findIngredientMatch } from '@/utils/importNormalization'
 import type { Ingredient } from '@/types'
+import type { SeedProgressCallback } from './starterLibrary'
 
 // Served as a static file rather than bundled into the JS build — at ~1.1MB
 // for 867 items, importing it as a module would bloat every page's initial
@@ -29,7 +30,8 @@ export interface BrandedSeedResult {
 // Always "add new only": an existing match is left completely alone, never
 // updated/overwritten — loading this pack can only ever add ingredients,
 // never change ones you already have.
-export async function seedBrandedLibrary(): Promise<BrandedSeedResult> {
+export async function seedBrandedLibrary(onProgress?: SeedProgressCallback): Promise<BrandedSeedResult> {
+  onProgress?.({ step: 'Downloading branded pack', total: null })
   const res = await fetch(DATA_URL)
   if (!res.ok) throw new Error(`Could not load the branded ingredient pack (${res.status}).`)
   const raw = extractRawIngredients(await res.json())
@@ -43,16 +45,20 @@ export async function seedBrandedLibrary(): Promise<BrandedSeedResult> {
   }
 
   let added = 0, skipped = 0
+  let i = 0
+  onProgress?.({ step: 'Loading branded products', current: 0, total: items.length })
   for (const item of items) {
     const target = findIngredientMatch(item, workingList, barcodeIndex, { fuzzy: false })
     if (target) {
       skipped++
+      onProgress?.({ step: 'Loading branded products', current: ++i, total: items.length })
       continue
     }
     await saveIngredient(item)
     added++
     workingList.push(item)
     for (const v of item.variants) if (v.barcode) barcodeIndex.set(v.barcode, item)
+    onProgress?.({ step: 'Loading branded products', current: ++i, total: items.length })
   }
 
   return { added, skipped }

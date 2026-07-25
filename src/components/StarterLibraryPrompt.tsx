@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useSettings } from '@/context/SettingsContext'
-import { Modal, Button } from '@/components/ui'
+import { Modal, Button, OperationStatus } from '@/components/ui'
+import type { OperationState, OperationProgress } from '@/components/ui'
 import { getAllIngredients } from '@/db/ingredients'
 import { seedStarterLibrary, migrateStarterLibrary, STARTER_INGREDIENT_COUNT, LEGACY_FLAT_NAMES } from '@/db/starterLibrary'
 import { seedBrandedLibrary, BRANDED_LIBRARY_COUNT } from '@/db/brandedLibrary'
@@ -52,8 +53,11 @@ export function StarterLibraryPrompt() {
   const [showBrandedOption, setShowBrandedOption] = useState(false)
   const [usdaChecked, setUsdaChecked] = useState(true)
   const [brandedChecked, setBrandedChecked] = useState(false)
-  const [working, setWorking] = useState(false)
-  const [brandedError, setBrandedError] = useState('')
+  const [opState, setOpState] = useState<OperationState>('idle')
+  const [opProgress, setOpProgress] = useState<OperationProgress | undefined>(undefined)
+  const [opDoneMessage, setOpDoneMessage] = useState('')
+  const [opErrorMessage, setOpErrorMessage] = useState('')
+  const [migrateProgress, setMigrateProgress] = useState<OperationProgress | undefined>(undefined)
   const [autoSeedError, setAutoSeedError] = useState('')
   const checked = useRef(false)
   const updateRef = useRef(updateSettings)
@@ -104,11 +108,10 @@ export function StarterLibraryPrompt() {
 
         if (legacyMatches.length > 0) {
           setPhase('migrating')
-          await migrateStarterLibrary()
+          setMigrateProgress(undefined)
+          await migrateStarterLibrary(update => setMigrateProgress({ step: update.step, current: update.current, total: update.total }))
           await updateRef.current({ starterLibraryVersion: CURRENT_STARTER_VERSION, starterLibrarySeeded: true })
           setPhase('migration-done')
-          await new Promise(r => setTimeout(r, 5000))
-          setPhase('idle')
         } else if (existing.length === 0) {
           await seedStarterLibrary()
           await updateRef.current({ starterLibraryVersion: CURRENT_STARTER_VERSION, starterLibrarySeeded: true })
@@ -153,24 +156,33 @@ export function StarterLibraryPrompt() {
     const doUsda = showUsdaOption && (!bothShown || usdaChecked)
     const doBranded = showBrandedOption && (!bothShown || brandedChecked)
 
-    setWorking(true)
-    setBrandedError('')
+    setOpState('working')
+    setOpProgress(undefined)
+    setOpErrorMessage('')
     try {
+      let usdaAdded = 0
+      let brandedAdded = 0
+
       if (doUsda) {
-        await seedStarterLibrary()
+        usdaAdded = await seedStarterLibrary(update => setOpProgress({ step: update.step, current: update.current, total: update.total }))
       }
       if (showUsdaOption) {
         await updateRef.current({ starterLibraryVersion: CURRENT_STARTER_VERSION, starterLibrarySeeded: true })
       }
 
       if (doBranded) {
-        await seedBrandedLibrary()
+        const result = await seedBrandedLibrary(update => setOpProgress({ step: update.step, current: update.current, total: update.total }))
+        brandedAdded = result.added
       }
       if (showBrandedOption) {
         await updateRef.current({ brandedLibrarySeeded: true })
       }
 
-      setPhase('idle')
+      const parts: string[] = []
+      if (doUsda) parts.push(`${usdaAdded} USDA ingredient${usdaAdded !== 1 ? 's' : ''}`)
+      if (doBranded) parts.push(`${brandedAdded} branded product${brandedAdded !== 1 ? 's' : ''}`)
+      setOpDoneMessage(parts.length > 0 ? `Added ${parts.join(' and ')}.` : 'Nothing new to add — you already have everything up to date.')
+      setOpState('done')
     } catch (e) {
       // USDA (if any) already succeeded and its flag is already set above —
       // only the branded step can fail here (a fetch of the 867-item file).
@@ -179,9 +191,8 @@ export function StarterLibraryPrompt() {
       // above so the modal's content doesn't visibly shift mid-operation on
       // the (much more common) success path, where it's about to close anyway.
       if (showUsdaOption) setShowUsdaOption(false)
-      setBrandedError(e instanceof Error ? e.message : 'Could not load the branded pack. You can try again, or skip it for now.')
-    } finally {
-      setWorking(false)
+      setOpErrorMessage(e instanceof Error ? e.message : 'Could not load the branded pack. You can try again, or skip it for now.')
+      setOpState('failed')
     }
   }
 
@@ -193,20 +204,18 @@ export function StarterLibraryPrompt() {
     setPhase('idle')
   }
 
-  const toastStyle: React.CSSProperties = {
+  // Positioning only — OperationStatus supplies its own card styling
+  // (background/border/shadow), so the fixed-position toasts below just
+  // need to be placed on screen, not restyled.
+  const toastWrapStyle: React.CSSProperties = {
     position: 'fixed', bottom: 'var(--space-4)', left: '50%', transform: 'translateX(-50%)',
-    background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)',
-    boxShadow: '0 4px 16px rgba(0,0,0,0.16)', fontSize: 'var(--text-sm)',
-    color: 'var(--color-text)', zIndex: 9999,
-    display: 'flex', alignItems: 'center', gap: 'var(--space-2)', maxWidth: '420px',
-    whiteSpace: 'nowrap',
+    zIndex: 9999, width: 'calc(100vw - var(--space-6))', maxWidth: '420px',
   }
 
   const bothShown = showUsdaOption && showBrandedOption
   const selectedCount = (showUsdaOption && usdaChecked ? STARTER_INGREDIENT_COUNT : 0)
     + (showBrandedOption && brandedChecked ? BRANDED_LIBRARY_COUNT : 0)
-  const loadLabel = working
+  const loadLabel = opState === 'working'
     ? 'Loading…'
     : bothShown
       ? (selectedCount > 0 ? `Load Selected (${selectedCount})` : 'Continue')
@@ -229,10 +238,12 @@ export function StarterLibraryPrompt() {
           }
           size="sm"
           footer={
-            <>
-              <Button variant="secondary" onClick={handleSkip} disabled={working}>Skip</Button>
-              <Button onClick={handleLoadSelected} disabled={working}>{loadLabel}</Button>
-            </>
+            opState === 'done' ? undefined : (
+              <>
+                <Button variant="secondary" onClick={handleSkip} disabled={opState === 'working'}>Skip</Button>
+                <Button onClick={handleLoadSelected} disabled={opState === 'working'}>{loadLabel}</Button>
+              </>
+            )
           }
         >
           <div className={styles.body}>
@@ -285,7 +296,6 @@ export function StarterLibraryPrompt() {
                   products match your household's actual shopping. Only products not already in your
                   database will be added (matched by barcode where possible, then by name).
                 </p>
-                {brandedError && <p className={styles.error}>{brandedError}</p>}
               </>
             )}
 
@@ -322,34 +332,54 @@ export function StarterLibraryPrompt() {
                   Only items not already in your database will be added, either way. You can edit or
                   delete any of them after loading.
                 </p>
-                {brandedError && <p className={styles.error}>{brandedError}</p>}
               </>
             )}
+
+            <OperationStatus
+              state={opState}
+              progress={opProgress}
+              doneMessage={opDoneMessage || undefined}
+              errorMessage={opErrorMessage || undefined}
+              onDismiss={() => {
+                // Done means the operation is genuinely finished — close the
+                // modal (matching the pre-Phase-3 behavior of closing on
+                // success), rather than reverting to the load prompt, which
+                // is what happened here before this check existed: dismissing
+                // (or the 5s auto-dismiss) just cleared opState back to
+                // 'idle' while `phase` stayed 'prompt', so the Skip/Load
+                // buttons silently reappeared as if nothing had happened.
+                // Failed stays on 'idle' so the modal stays open for a retry.
+                if (opState === 'done') setPhase('idle')
+                setOpState('idle')
+                setOpErrorMessage('')
+              }}
+            />
           </div>
         </Modal>
       )}
       {phase === 'migrating' && createPortal(
-        <div style={toastStyle}>
-          <span>Updating ingredient library…</span>
+        <div style={toastWrapStyle}>
+          <OperationStatus state="working" progress={migrateProgress ?? { step: 'Updating ingredient library' }} />
         </div>,
         document.body
       )}
       {phase === 'migration-done' && createPortal(
-        <div style={toastStyle}>
-          <span style={{ color: 'var(--color-success)' }}>✓</span>
-          Starter ingredient library updated — related ingredients are now grouped together.
+        <div style={toastWrapStyle}>
+          <OperationStatus
+            state="done"
+            doneMessage="Starter ingredient library updated — related ingredients are now grouped together."
+            onDismiss={() => setPhase('idle')}
+          />
         </div>,
         document.body
       )}
       {phase === 'auto-seed-error' && createPortal(
-        <div style={{ ...toastStyle, whiteSpace: 'normal', maxWidth: '480px', alignItems: 'flex-start' }}>
-          <span style={{ color: 'var(--color-danger)' }}>⚠</span>
-          <span style={{ flex: 1 }}>{autoSeedError}</span>
-          <button
-            onClick={() => { setPhase('idle'); setAutoSeedError('') }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', fontSize: 'var(--text-base)', padding: 0, flexShrink: 0 }}
-            aria-label="Dismiss"
-          >✕</button>
+        <div style={toastWrapStyle}>
+          <OperationStatus
+            state="failed"
+            errorMessage={autoSeedError}
+            onDismiss={() => { setPhase('idle'); setAutoSeedError('') }}
+          />
         </div>,
         document.body
       )}
