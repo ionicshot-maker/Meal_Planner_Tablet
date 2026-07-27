@@ -6,6 +6,14 @@ import styles from './PhotoCaptureCrop.module.css'
 
 type Stage = 'select' | 'webcam' | 'crop'
 
+/** A crop region expressed as percentages (0-100) of the full photo's width/height. */
+export interface CropBoxPercent {
+  leftPct: number
+  topPct: number
+  widthPct: number
+  heightPct: number
+}
+
 type AspectPreset = { label: string; value: number | undefined }
 const CROP_PRESETS: AspectPreset[] = [
   { label: 'Free', value: undefined },
@@ -41,6 +49,30 @@ interface Props {
    * stage: 'select' / photoDataUrl: null starting behavior.
    */
   initialPhotoDataUrl?: string
+  /**
+   * Pre-seeds the crop stage's starting selection (Phase 2C-1 — AI-detected
+   * recipe boundaries) instead of today's default centered selection.
+   * Consumed once, inside the same rendered-dimensions callback that already
+   * computes the default crop (`onCropImageLoad`) — a plain useState default
+   * won't work here the way `initialPhotoDataUrl` does, since converting a
+   * percent box to a pixel crop needs the <img>'s *rendered* size, which
+   * only exists after it mounts and loads. Omitted/undefined reproduces
+   * today's exact default-crop behavior, unchanged.
+   */
+  initialCropBox?: CropBoxPercent
+}
+
+// Gemini's suggested box is a starting point, not guaranteed to land neatly
+// inside the photo — clamp so the seeded selection is always fully visible
+// and never degenerates to an unusably thin sliver.
+const MIN_BOX_PCT = 5
+
+function clampCropBox(box: CropBoxPercent): { x: number; y: number; width: number; height: number } {
+  const x = Math.min(Math.max(box.leftPct, 0), 100 - MIN_BOX_PCT)
+  const y = Math.min(Math.max(box.topPct, 0), 100 - MIN_BOX_PCT)
+  const width = Math.min(Math.max(box.widthPct, MIN_BOX_PCT), 100 - x)
+  const height = Math.min(Math.max(box.heightPct, MIN_BOX_PCT), 100 - y)
+  return { x, y, width, height }
 }
 
 /**
@@ -49,7 +81,7 @@ interface Props {
  * paste, followed by a react-image-crop editor. Used by both the recipe photo
  * import tab and the ingredient label scanner so the two stay in sync.
  */
-export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, initialPhotoDataUrl }: Props) {
+export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, initialPhotoDataUrl, initialCropBox }: Props) {
   const [stage, setStage] = useState<Stage>(initialPhotoDataUrl ? 'crop' : 'select')
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(initialPhotoDataUrl ?? null)
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false)
@@ -184,6 +216,13 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, in
 
   function onCropImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
     const { width, height } = e.currentTarget
+    if (initialCropBox) {
+      const { x, y, width: boxWidth, height: boxHeight } = clampCropBox(initialCropBox)
+      const pixelCrop = convertToPixelCrop({ unit: '%', x, y, width: boxWidth, height: boxHeight }, width, height)
+      setCrop(pixelCrop)
+      setCompletedCrop(pixelCrop)
+      return
+    }
     applyCropAspect(cropAspect, width, height)
   }
 

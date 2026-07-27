@@ -3,6 +3,7 @@ import { normalizeUnit } from './recipeCalculations'
 import { parseTimeToMinutes } from './units'
 import { parseFraction } from './fractionInput'
 import { fetchPageAsText } from './recipeParse'
+import type { CropBoxPercent } from '@/components/PhotoCaptureCrop'
 
 export interface AIRecipeResult {
   name: string
@@ -286,6 +287,36 @@ export async function importRecipeFromPhoto(
   }
 
   return { lowConfidence: false, result, uncertainFields }
+}
+
+// ─── Recipe boundary detection (Phase 2C-1) ──────────────────────────────────
+// Best-effort suggestion feature layered on top of Phase 2A's "crop another
+// recipe from this same photo" — never a required step. Every failure mode
+// (no key, network error, low confidence, bad JSON) resolves to an empty
+// array rather than throwing, so callers can fire-and-forget this without
+// try/catch and the existing "no preset crop" default is always the safe
+// landing spot.
+export type DetectedRecipeBox = CropBoxPercent
+
+export async function detectRecipeBoxes(
+  base64Image: string,
+  mimeType: string,
+  geminiApiKey: string,
+  geminiModel?: string,
+): Promise<DetectedRecipeBox[]> {
+  if (!geminiApiKey) return []
+  try {
+    const res = await fetch('/api/gemini-detect-recipe-boxes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: base64Image, mimeType, apiKey: geminiApiKey, model: geminiModel || 'gemini-3.1-flash-lite' }),
+    })
+    if (!res.ok) return []
+    const json = await res.json() as { boxes?: DetectedRecipeBox[] }
+    return Array.isArray(json.boxes) ? json.boxes : []
+  } catch {
+    return []
+  }
 }
 
 export function normalizeTimeMinutes(value: number | string | undefined): number {

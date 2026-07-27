@@ -4,7 +4,7 @@ import { Camera } from 'lucide-react'
 import { useSettings } from '@/context/SettingsContext'
 import { ConfirmDiscardDialog } from '@/components/ui'
 import { useConfirmClose } from '@/hooks/useConfirmClose'
-import { PhotoCaptureCrop } from '@/components/PhotoCaptureCrop'
+import { PhotoCaptureCrop, type CropBoxPercent } from '@/components/PhotoCaptureCrop'
 import {
   importRecipeFromUrl, importRecipeFromText, importRecipeFromPhoto,
   isRecipeImportAvailable, effectiveRecipeAI, recipeAILabel,
@@ -38,9 +38,17 @@ interface Props {
    * defaults (URL tab, empty capture flow).
    */
   initialPhotoDataUrl?: string
+  /**
+   * Pre-seeds the Photo tab's crop stage with an AI-suggested starting
+   * selection (Phase 2C-1) — passed straight through to PhotoCaptureCrop's
+   * own initialCropBox. Only ever supplied alongside initialPhotoDataUrl
+   * (a "crop another" re-entry); omitted/undefined reproduces today's
+   * exact default-crop behavior.
+   */
+  initialCropBox?: CropBoxPercent
 }
 
-export function RecipeImportModal({ onImported, onManualWithReference, onManualEntry, onClose, initialPhotoDataUrl }: Props) {
+export function RecipeImportModal({ onImported, onManualWithReference, onManualEntry, onClose, initialPhotoDataUrl, initialCropBox }: Props) {
   const { settings } = useSettings()
   const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>(initialPhotoDataUrl ? 'photo' : 'url')
@@ -327,6 +335,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
                   tips={PHOTO_TIPS}
                   onComplete={handlePhotoCaptured}
                   initialPhotoDataUrl={initialPhotoDataUrl}
+                  initialCropBox={initialCropBox}
                 />
               )}
 

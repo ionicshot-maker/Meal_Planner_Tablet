@@ -21,6 +21,10 @@
 [functions."gemini-reference-scan"]
   timeout = 30
 
+# Increase timeout for recipe boundary-box detection: same Gemini vision call profile
+[functions."gemini-detect-recipe-boxes"]
+  timeout = 30
+
 # Increase timeout for receipt scanning: same Gemini vision call profile
 [functions."gemini-receipt-scan"]
   timeout = 30

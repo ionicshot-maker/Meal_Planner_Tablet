@@ -8,7 +8,8 @@ import { getAllCollections, createCollection, addRecipeToCollection, saveCollect
 import { getAllReferences, saveReference, deleteReference } from '@/db/references'
 import { attachRecipeMacros, buildIngredientMap } from '@/utils/recipeCalculations'
 import type { Recipe, Ingredient, RecipeCollection, KitchenReference } from '@/types'
-import type { AIRecipeResult, UncertainField } from '@/utils/aiImport'
+import type { AIRecipeResult, UncertainField, DetectedRecipeBox } from '@/utils/aiImport'
+import { detectRecipeBoxes, effectivePhotoGeminiKey } from '@/utils/aiImport'
 import { RecipeCard } from './RecipeCard'
 import { RecipeEditor, type ImportNotice } from './RecipeEditor'
 import { RecipeDetail } from './RecipeDetail'
@@ -20,7 +21,7 @@ import { ReferenceEditor } from './ReferenceEditor'
 import { ReferenceDetail } from './ReferenceDetail'
 import { Modal, Button } from '@/components/ui'
 import { ConversionCalculator } from '@/components/ConversionCalculator'
-import { useHouseholdTitle } from '@/context/SettingsContext'
+import { useHouseholdTitle, useSettings } from '@/context/SettingsContext'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
 import styles from './CookbookPage.module.css'
 
@@ -28,6 +29,7 @@ type FilterMode = 'all' | 'favorites' | 'templates' | 'collections' | 'reference
 
 export default function CookbookPage() {
   const pageTitle = useHouseholdTitle('Cookbook')
+  const { settings } = useSettings()
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [allIngredients, setAllIngredients] = useState<Ingredient[]>([])
   const [collections, setCollections] = useState<RecipeCollection[]>([])
@@ -55,6 +57,15 @@ export default function CookbookPage() {
   // import path, and is the single condition that gates the offer below.
   const [importSourcePhoto, setImportSourcePhoto] = useState<string | null>(null)
   const [showCropAnotherOffer, setShowCropAnotherOffer] = useState(false)
+  // Phase 2C-1 — AI-suggested crop boxes for recipe #2+ on the same photo.
+  // Populated once per photo (fired from handleImported, the instant recipe
+  // #1's OCR succeeds — see comment there for why this timing, not earlier,
+  // is correct). Consumed one at a time by handleCropAnother into
+  // activeCropBox as the user cycles through "Crop Another"; an empty or
+  // exhausted array is indistinguishable from "detection never ran" to every
+  // consumer, so the fallback to today's default crop is automatic.
+  const [detectedBoxes, setDetectedBoxes] = useState<DetectedRecipeBox[]>([])
+  const [activeCropBox, setActiveCropBox] = useState<DetectedRecipeBox | undefined>(undefined)
 
   // Kitchen Reference state
   const [editingReference, setEditingReference] = useState<KitchenReference | null | 'new'>(null)
@@ -146,9 +157,42 @@ export default function CookbookPage() {
     // Unconditional (not `if (sourcePhotoDataUrl) ...`) so a non-photo import
     // never leaves a stale photo behind from an earlier photo-sourced one —
     // URL/paste imports always resolve this to null.
+    // This box, if any, has now been consumed by the recipe just extracted —
+    // clear it regardless of path so a stale suggestion can't leak into some
+    // unrelated later crop.
+    setActiveCropBox(undefined)
+    // handleImported fires once per recipe, not once per photo — every "Crop
+    // Another" cycle re-enters here too. Only (re)run detection the first
+    // time this exact photo is seen; a later cycle on the *same* photo must
+    // leave detectedBoxes (the still-unconsumed queue) untouched, or the
+    // in-progress "one box per cycle" consumption would be silently reset.
+    const isSamePhotoAsBefore = sourcePhotoDataUrl != null && sourcePhotoDataUrl === importSourcePhoto
+    if (!isSamePhotoAsBefore) {
+      setDetectedBoxes([])
+      if (sourcePhotoDataUrl) void runBoundaryDetection(sourcePhotoDataUrl)
+    }
     setImportSourcePhoto(sourcePhotoDataUrl ?? null)
     setShowCropAnotherOffer(false)
     setEditingRecipe('new')
+  }
+
+  // Phase 2C-1 — fires exactly once per new source photo, right when recipe
+  // #1's OCR succeeds (not before crop #1, which is explicitly out of scope;
+  // not from inside RecipeImportModal, which unmounts the instant OCR
+  // succeeds — well before this detection call would resolve — so CookbookPage,
+  // the component whose lifetime already spans the whole review+save+"crop
+  // another" cycle, is the only place that can safely own it). A silent,
+  // best-effort suggestion: any failure already resolves to an empty array
+  // inside detectRecipeBoxes, so there's nothing to catch or surface here.
+  async function runBoundaryDetection(sourcePhotoDataUrl: string) {
+    const geminiKey = effectivePhotoGeminiKey(settings)
+    if (!geminiKey) return
+    const commaIdx = sourcePhotoDataUrl.indexOf(',')
+    const base64 = sourcePhotoDataUrl.slice(commaIdx + 1)
+    const mimeMatch = sourcePhotoDataUrl.slice(0, commaIdx).match(/data:(.*);base64/)
+    const mimeType = mimeMatch?.[1] || 'image/jpeg'
+    const boxes = await detectRecipeBoxes(base64, mimeType, geminiKey, settings.geminiModel)
+    setDetectedBoxes(boxes)
   }
 
   function handleManualWithReference(text: string) {
@@ -158,6 +202,8 @@ export default function CookbookPage() {
     setImportNotice(undefined)
     setImportUncertainFields(undefined)
     setImportSourcePhoto(null)
+    setDetectedBoxes([])
+    setActiveCropBox(undefined)
     setEditingRecipe('new')
   }
 
@@ -167,17 +213,28 @@ export default function CookbookPage() {
     setImportNotice(undefined)
     setImportUncertainFields(undefined)
     setImportSourcePhoto(null)
+    setDetectedBoxes([])
+    setActiveCropBox(undefined)
     setEditingRecipe('new')
   }
 
   function handleCropAnother() {
     setShowCropAnotherOffer(false)
+    // Hand the next unused suggested box (if any) to the reopened modal, and
+    // consume it from the queue so it isn't offered again on a later cycle.
+    // `detectedBoxes` may still be empty here (detection hasn't resolved yet,
+    // or never found anything) — activeCropBox then stays undefined, which
+    // is exactly "no preset crop," today's existing default.
+    setActiveCropBox(detectedBoxes[0])
+    setDetectedBoxes(boxes => boxes.slice(1))
     setShowImport(true) // importSourcePhoto stays set — passed back in as initialPhotoDataUrl below
   }
 
   function handleDoneWithPhoto() {
     setShowCropAnotherOffer(false)
     setImportSourcePhoto(null)
+    setDetectedBoxes([])
+    setActiveCropBox(undefined)
   }
 
   function openEdit(recipe: Recipe) {
@@ -380,8 +437,11 @@ export default function CookbookPage() {
             // crop-another photo rather than letting it silently reappear
             // pre-seeded into some unrelated later import.
             setImportSourcePhoto(null)
+            setDetectedBoxes([])
+            setActiveCropBox(undefined)
           }}
           initialPhotoDataUrl={importSourcePhoto ?? undefined}
+          initialCropBox={activeCropBox}
         />
       )}
 
@@ -405,6 +465,8 @@ export default function CookbookPage() {
             // photo-sourced import's source photo too — the offer only
             // ever follows a successful save.
             setImportSourcePhoto(null)
+            setDetectedBoxes([])
+            setActiveCropBox(undefined)
           }}
         />
       )}
