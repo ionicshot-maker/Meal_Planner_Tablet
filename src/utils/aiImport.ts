@@ -311,10 +311,14 @@ export async function detectRecipeBoxes(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: base64Image, mimeType, apiKey: geminiApiKey, model: geminiModel || 'gemini-3.1-flash-lite' }),
     })
-    if (!res.ok) return []
+    if (!res.ok) {
+      console.error('[detectRecipeBoxes] non-ok response:', res.status, await res.text().catch(() => ''))
+      return []
+    }
     const json = await res.json() as { boxes?: DetectedRecipeBox[] }
     return Array.isArray(json.boxes) ? json.boxes : []
-  } catch {
+  } catch (err) {
+    console.error('[detectRecipeBoxes] threw:', err)
     return []
   }
 }
