@@ -21,3 +21,8 @@ Thumbs.db
 
 # Logs
 npm-debug.log*
+
+# Local-only cookbook reference/testing assets (Claude Code investigations,
+# Recipe Import / continuation-detection research, OCR validation) — not
+# permanent repository content
+CookbookReference/Part*_FIXED_OCR.pdf

@@ -1,0 +1,35 @@
+{
+  "corpus_version": "1.0",
+  "created": "2026-07-27",
+  "purpose": "Permanent regression test asset for Recipe Import continuation-detection (Phase 3). Synthetic content, not sourced from Heavenly Delights.",
+  "pairs": [
+    {
+      "id": "pair_A_positive_continuation",
+      "pages": [1, 2],
+      "expected_verdict": "continuation",
+      "category": "positive_continuation",
+      "notes": "Ingredient list and method genuinely split across a page break; page 2 has no title."
+    },
+    {
+      "id": "pair_B_ambiguous",
+      "pages": [3, 4],
+      "expected_verdict": "independent",
+      "category": "ambiguous_high_similarity",
+      "notes": "Different authors, near-duplicate dish concept, both recipes fully self-contained. Tests against false-positive merge on topical similarity alone."
+    },
+    {
+      "id": "pair_C_shared_author_trap",
+      "pages": [5, 6],
+      "expected_verdict": "independent",
+      "category": "shared_author_trap",
+      "notes": "Same author (Carol Wyzard), completely unrelated dishes. Tests against false-positive merge on shared attribution alone."
+    },
+    {
+      "id": "pair_D_clean_control",
+      "pages": [7, 8],
+      "expected_verdict": "independent",
+      "category": "clean_control",
+      "notes": "Different authors, unrelated dishes, no ambiguity. Baseline negative case."
+    }
+  ]
+}
