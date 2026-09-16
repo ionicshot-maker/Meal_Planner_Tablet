@@ -164,14 +164,29 @@ export default function HelpPage() {
             </div>
             <p className={styles.apiCardBody}>
               Google's AI, used any time this app needs to "read" a photo or understand a product name.
-              Free — Google gives every account a daily allowance that resets every day (the app defaults
-              to the model with the highest free allowance, currently 500 requests/day). <strong>If you skip
+              Free — Google gives every account a daily allowance that resets every day, and the app comes
+              with a sensible default model already selected for a generous free allowance. Google's exact
+              quotas and pricing change over time and vary by model, so rather than restate a number here
+              that could go stale, see{' '}
+              <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noreferrer">
+                Google's own current Gemini rate limits and pricing page
+              </a>. <strong>If you skip
               this:</strong> Scan Label, Receipt Scanner, Kitchen Reference photo-scan, and recipe photo import
               won't work at all — those specifically require this key. Gemini Lookup (packaged products) works
               better with it, but has a manual fallback without it. Recipe import (URL or pasted text) needs
               an AI key from <em>somewhere</em> — this Gemini key, or a different provider set in the AI Provider
               box above, either works. Pasted text still opens as a handy manual-reference without any AI key
               configured; URL import has no non-AI fallback and simply won't work without one.
+            </p>
+            <p className={styles.apiCardBody}>
+              <strong>Choosing a model:</strong> In Settings → Integrations, under Google Gemini, you'll see a
+              row of suggested models — the default is already picked for you, so most people can leave this
+              alone. Tap <strong>"Check available models"</strong> to confirm live, right now, which of these
+              are actually enabled for your account (a green checkmark appears next to each one that is). Tap
+              {' '}<strong>"Browse all models"</strong> to see Google's complete current model list and pick any
+              of them directly, not just the suggested ones — useful if Google releases something new you want
+              to try. Both buttons check live with Google and need your Gemini key entered above first, since
+              what's available can change over time and differs by account.
             </p>
             <div className={styles.apiSteps}>
               {[
@@ -243,7 +258,7 @@ export default function HelpPage() {
                 'Copy the "Project URL" (starts with https://). Paste it into Settings → Integrations → Supabase Project URL.',
                 'Copy the "anon public" key (the long one under Project API keys). Paste it into Settings → Integrations → Supabase Anon Key.',
                 'Go to Settings → Data → Cloud Sync. Tap "Show database setup SQL", copy the whole thing, and run it in Supabase under Database → SQL Editor → New Query → Run. This creates the tables your data lives in.',
-                'Still in Settings → Data → Cloud Sync, tap "Show account/sign-in setup SQL" and run that too, the same way — this is what lets you actually sign in and create/join a household in the next step. It\'s four scripts run back-to-back; paste and run each one in order, waiting for each to finish before running the next.',
+                'Still in Settings → Data → Cloud Sync, tap "Show Full Setup SQL" and run that too, the same way — this is what lets you actually sign in and create/join a household in the next step. It\'s one combined block covering everything needed; copy the whole thing and run it as a single script, just like the database setup SQL above.',
                 'Now go to Settings → Data → Cloud Sync → Account and create your account (email + password) — see Cloud Sync & Sign In below for what to do next.',
               ].map((step, i) => (
                 <div key={i} className={styles.apiStep}>
@@ -355,7 +370,7 @@ export default function HelpPage() {
               <li><strong>Preview before importing:</strong> After choosing a file, you'll see how many ingredients were found, a brand breakdown, and a preview of the first several items with their name, brand, and calories.</li>
               <li><strong>Filter by brand:</strong> Tap brand chips in the breakdown to import only specific brands from the file — handy when a file has products you don't want.</li>
               <li><strong>Import mode:</strong> Choose <em>Add New Only</em> to skip anything that already exists, <em>Add + Update Existing</em> to also refresh existing ingredients when the imported data is newer, or <em>Replace Existing</em> to overwrite matches unconditionally. This is especially useful when re-importing an updated Open Food Facts file for a brand you've already added.</li>
-              <li><strong>Duplicate detection:</strong> Uses the same smart matching as the rest of the app — barcode match first, then exact name and brand, then fuzzy name matching — so re-imports and near-duplicate names merge in instead of creating copies.</li>
+              <li><strong>Duplicate detection:</strong> Checks barcode match first, then exact name and brand — so re-imports merge in instead of creating copies. Fuzzy near-duplicate matching is intentionally turned off for this import path, to avoid false-positive skips on large files.</li>
               <li><strong>Progress and summary:</strong> A progress bar shows import status on large files, and a final summary reports how many were added, updated, and skipped as duplicates.</li>
             </ul>
           </div>
@@ -423,7 +438,7 @@ export default function HelpPage() {
               <li><strong>Yellow day header:</strong> A yellow dot means you have not planned all meals for that day yet. Once all slots are filled, it turns green.</li>
               <li><strong>Shared vs. individual meals:</strong> When adding a meal, you can mark it as shared (everyone eats it) or assign it to specific people.</li>
               <li><strong>Side dishes and desserts:</strong> You can add multiple recipes to a single meal slot. The first is the main dish; others are sides or desserts.</li>
-              <li><strong>Leftovers:</strong> Tap any recipe in a day and choose "Mark as Leftovers from…" to link it back to an earlier meal so the grocery list does not add duplicate ingredients.</li>
+              <li><strong>Leftovers:</strong> Tap the + Leftover button in any meal slot to add a quick "Leftover" placeholder — it's a standalone label, not linked to any specific earlier meal, and the grocery list automatically skips it since it has no ingredients of its own to add.</li>
               <li><strong>Templates:</strong> Tap the template button to save the current week as a template you can apply to future weeks.</li>
               <li><strong>Dollar icons:</strong> The $ icon on a day shows the estimated food cost for that day based on your ingredient prices.</li>
             </ul>
@@ -507,7 +522,7 @@ export default function HelpPage() {
               <li><strong>Create an account:</strong> Once your Supabase Project URL and Anon Key are entered in Settings → Integrations, an Account box appears here. Tap Sign Up, enter an email and a password (6+ characters), and tap Create Account. Check your email for a confirmation link if asked for one.</li>
               <li><strong>Create your household:</strong> After signing in, tap "+ Create a Household," give it a name (like "Smith Family"), and leave the code blank to have one generated for you automatically — or type your own. This is the same kind of code as the Household Sync Code below; creating a household here sets it for you automatically.</li>
               <li><strong>Join an existing household:</strong> If someone in your home already created one, tap "Join by Code" instead and enter the code they gave you.</li>
-              <li><strong>Trouble signing up or creating a household?</strong> This usually means the Supabase project is missing a one-time setup step — see the "Show account/sign-in setup SQL" button right below the Account box in Settings, and the Supabase steps in <a href="#api-keys">Setting Up Free Services</a>.</li>
+              <li><strong>Trouble signing up or creating a household?</strong> This usually means the Supabase project is missing a one-time setup step — see the "Show Full Setup SQL" button right below the Account box in Settings, and the Supabase steps in <a href="#api-keys">Setting Up Free Services</a>.</li>
               <li><strong>The sign-in reminder popup:</strong> If you're not signed in, the app shows a one-time reminder about this when you open it. Check "Don't show this again" to dismiss it for good, or turn it back on any time via the toggle right below the Account box in Settings.</li>
               <li><strong>Dev Tools:</strong> Whoever creates a household is automatically its Owner (the "Manage members" list in the Account box shows everyone's role). Owners get an extra "Dev Tools" item in the main menu — advanced, technical utilities like the bulk ingredient converter and the Barcode Duplicate Finder. Contributors and Read Only members never see it, and neither does anyone who hasn't signed in at all.</li>
             </ul>
@@ -527,9 +542,9 @@ export default function HelpPage() {
             <ul className={styles.featureList}>
               <li><strong>What it shares:</strong> Recipes and ingredient nutrition info — but no prices, package costs, or store names. Family members fill in their own prices locally.</li>
               <li><strong>Why prices are not included:</strong> Prices vary by location and store. Your grocery store prices are private to your household. Family in another state uses their own local prices.</li>
-              <li><strong>How to share:</strong> In Settings → Data → Cloud Sync, create a Family Share Code. Give this code to your family member. They enter it on their device and tap "Pull from Family" to get your recipes.</li>
-              <li><strong>Read Only vs. Contributor:</strong> Read Only family members can only pull (receive) your recipes. Contributors can both pull and push, so they can also share their own recipes back to you.</li>
-              <li><strong>Disconnect a family member:</strong> Tap "Regenerate" next to the Family Share Code to create a new code. Anyone using the old code will no longer receive future syncs.</li>
+              <li><strong>How to share:</strong> Sign in first — Family Share requires an account, unlike some other features in this app. In Settings → Data → Cloud Sync, create a Family Share invite and choose the role for the person you're inviting (Contributor or Read Only — see below). Send the invite to your family member. They sign in on their own device and use the invite to join. Once joined, syncing happens the same way as any other cloud sync in this app.</li>
+              <li><strong>Read Only vs. Contributor:</strong> You choose your family member's role when you create their invite. Read Only members can pull your shared recipes and ingredients but cannot push any changes back — if they try, they'll see a clear message explaining why. Contributors can both pull and push, so changes they make can be shared back to you the same way.</li>
+              <li><strong>Disconnect a family member:</strong> In Settings → Data → Cloud Sync, open your Family Share card and expand the Members list. Next to their name, tap Remove. This takes effect immediately — they'll no longer be able to sync with you.</li>
             </ul>
           </div>
         </section>
@@ -630,7 +645,7 @@ export default function HelpPage() {
               },
               {
                 q: 'Can I use this app without internet?',
-                a: 'Yes — everything works offline except barcode lookup, USDA search, Gemini lookup, and cloud sync. Your data is saved on your device.',
+                a: 'Yes — everything works offline except barcode lookup, USDA search, anything that needs Gemini (Gemini Lookup, Scan Label, Receipt Scanner, Kitchen Reference photo-extraction, and recipe photo import), and cloud sync. Your data is saved on your device.',
               },
               {
                 q: 'How do I log a drink in my macros?',
@@ -654,7 +669,7 @@ export default function HelpPage() {
               },
               {
                 q: 'How do I disconnect a family member from Family Share?',
-                a: 'Go to Settings → Data → Cloud Sync and tap "Regenerate" next to the Family Share Code. Anyone using the old code will no longer receive your future syncs.',
+                a: 'Go to Settings → Data → Cloud Sync, open your Family Share card, and expand the Members list. Tap Remove next to their name. This takes effect right away, and only affects that one person — everyone else you\'ve shared with keeps their access.',
               },
             ].map(({ q, a }, i) => (
               <div key={i} className={styles.faqItem}>
@@ -708,15 +723,15 @@ export default function HelpPage() {
                 steps: [
                   'Make sure both devices have the same Supabase URL and Anon Key in Settings → Integrations.',
                   'Make sure both devices have the same Household Sync Code in Settings → Data → Cloud Sync (or, if using sign-in, that both are signed into the same household).',
-                  'Check that you ran the database setup SQL in your Supabase project (Database → SQL Editor). If you use the Account sign-in feature, the separate "account/sign-in setup SQL" needs to be run too — both buttons are in Settings → Data → Cloud Sync.',
+                  'Check that you ran the database setup SQL in your Supabase project (Database → SQL Editor). If you use the Account sign-in feature, the separate "Full Setup SQL" needs to be run too — both buttons are in Settings → Data → Cloud Sync.',
                   'Try tapping "Pull from Cloud" on one device first to see if connection works before doing a full sync.',
                 ],
               },
               {
                 title: 'Signing up or creating a household gives a database error',
                 steps: [
-                  'This means the Supabase project is missing the one-time setup for accounts/households — go to Settings → Data → Cloud Sync and tap "Show account/sign-in setup SQL".',
-                  'Copy the whole thing and run it in Supabase under Database → SQL Editor → New Query → Run. It\'s actually four scripts back-to-back — run each one, wait for it to finish, then run the next.',
+                  'This means the Supabase project is missing the one-time setup for accounts/households — go to Settings → Data → Cloud Sync and tap "Show Full Setup SQL".',
+                  'Copy the whole thing and run it in Supabase under Database → SQL Editor → New Query → Run — it\'s one combined block, so a single copy, paste, and run is all it takes.',
                   'Come back and try signing up / creating a household again.',
                   'You do not need to do any of this to use Household Sync with just a code — signing in is an optional extra layer on top of it.',
                 ],
@@ -744,6 +759,15 @@ export default function HelpPage() {
                   'No — the whole app works fully offline with no account at all. The Account box in Settings → Data → Cloud Sync, and the occasional popup reminding you about it, are both entirely optional.',
                   'It only exists to support Cloud Sync — accessing your data from more than one device — see Cloud Sync & Sign In above.',
                   'To stop the reminder popup, check "Don\'t show this again" on it once, or turn off "Show the sign-in reminder on launch" in Settings → Data → Cloud Sync.',
+                ],
+              },
+              {
+                title: 'Family Share sync isn\'t working',
+                steps: [
+                  'If a Family Share sync doesn\'t complete, you\'ll see a clear message explaining what happened — not raw technical text. Common reasons:',
+                  '"You are a read-only member" — you were invited as a Read Only participant, so you can pull shared content but can\'t push changes back. This is expected, not an error with your account.',
+                  'Any other error — the message will tell you what happened and let you know you can safely retry; nothing is lost if a sync doesn\'t finish.',
+                  'If you\'re not sure what to do, check that you\'re signed in, and that the person who invited you hasn\'t changed your Family Share access.',
                 ],
               },
             ].map(({ title, steps }, i) => (

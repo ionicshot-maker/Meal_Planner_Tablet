@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import { getAllIngredients, saveIngredient } from './ingredients'
-import { getAllRecipes, saveRecipe, repointRecipeReferences, EMPTY_RECIPE_REFERENCE_COUNTS, type RecipeReferenceCounts } from './recipes'
+import { getAllIngredients, saveIngredient, deleteIngredient } from './ingredients'
+import { getAllRecipes, saveRecipe, deleteRecipe, repointRecipeReferences, EMPTY_RECIPE_REFERENCE_COUNTS, type RecipeReferenceCounts } from './recipes'
 import { getAllHouseholdItems, saveHouseholdItem } from './householdItems'
 import { getAllCollections, saveCollection } from './collections'
 import { getAllReferences, saveReference } from './references'
@@ -8,7 +8,9 @@ import { saveMealPlanDay } from './mealPlan'
 import { saveGroceryList } from './groceryLists'
 import { loadSettings, saveSettingsWithTimestamp } from './settings'
 import { getDB } from './schema'
+import { getMyHouseholds } from './auth'
 import { repointIngredientReferences, EMPTY_REFERENCE_COUNTS, type IngredientReferenceCounts } from './mergeIngredients'
+import { newId } from '@/utils/ids'
 import type {
   Ingredient, Recipe, AppSettings, MealPlanDay, GroceryList,
   HouseholdItem, RecipeCollection, KitchenReference, AIProvider,
@@ -22,11 +24,21 @@ export interface SyncDuplicate {
   cloudItem: Ingredient | Recipe
 }
 
+// Distinct from SyncDuplicate, deliberately no cloudItem field — the
+// colliding row belongs to a different household and is never readable via
+// RLS from here, so there is nothing to show a "cloud version" of.
+export interface SyncCollision {
+  type: 'ingredient' | 'recipe'
+  localItem: Ingredient | Recipe
+  attemptedHouseholdCode: string
+}
+
 export interface SyncSummary {
   addedLocally: number
   uploadedToCloud: number
   updatedToNewer: number
   duplicatesForReview: SyncDuplicate[]
+  collisionsForReview: SyncCollision[]
   errors: string[]
 }
 
@@ -334,6 +346,13 @@ grant execute on function join_household_by_code(text, text) to authenticated;
 -- from insert/update/delete but still allowed to select — a single FOR ALL
 -- policy can't distinguish that correctly for DELETE (which has no WITH
 -- CHECK clause to gate on).
+-- The household_code = 'Angelo-family-2026' bridge clause described in the
+-- header comment above was a one-time transitional mechanism for this
+-- household's original migration off the pre-auth model — it has since been
+-- removed from the policies below and retired from this script entirely.
+-- Older documentation (audit write-ups, MealPlannerApp_Reference.md Section
+-- 11) may still describe the bridge-inclusive shape this script used to
+-- produce; that description no longer matches what runs from here on.
 ${['ingredients', 'recipes', 'meal_plans', 'grocery_lists', 'household_items', 'collections', 'kitchen_references', 'sync_settings'].map(table => `
 -- ${table}
 drop policy if exists "Public access" on ${table};
@@ -344,8 +363,7 @@ drop policy if exists "delete: legacy code or writable member" on ${table};
 
 create policy "select: legacy code or member" on ${table}
   for select using (
-    household_code = 'Angelo-family-2026'
-    or household_code in (
+    household_code in (
       select h.code from households h
       join household_members hm on hm.household_id = h.id
       where hm.user_id = auth.uid()
@@ -354,8 +372,7 @@ create policy "select: legacy code or member" on ${table}
 
 create policy "insert: legacy code or writable member" on ${table}
   for insert with check (
-    household_code = 'Angelo-family-2026'
-    or household_code in (
+    household_code in (
       select h.code from households h
       join household_members hm on hm.household_id = h.id
       where hm.user_id = auth.uid() and hm.role != 'readonly'
@@ -365,16 +382,14 @@ create policy "insert: legacy code or writable member" on ${table}
 create policy "update: legacy code or writable member" on ${table}
   for update
   using (
-    household_code = 'Angelo-family-2026'
-    or household_code in (
+    household_code in (
       select h.code from households h
       join household_members hm on hm.household_id = h.id
       where hm.user_id = auth.uid() and hm.role != 'readonly'
     )
   )
   with check (
-    household_code = 'Angelo-family-2026'
-    or household_code in (
+    household_code in (
       select h.code from households h
       join household_members hm on hm.household_id = h.id
       where hm.user_id = auth.uid() and hm.role != 'readonly'
@@ -383,8 +398,7 @@ create policy "update: legacy code or writable member" on ${table}
 
 create policy "delete: legacy code or writable member" on ${table}
   for delete using (
-    household_code = 'Angelo-family-2026'
-    or household_code in (
+    household_code in (
       select h.code from households h
       join household_members hm on hm.household_id = h.id
       where hm.user_id = auth.uid() and hm.role != 'readonly'
@@ -508,6 +522,11 @@ create policy "owners remove members or self leave" on household_members
 
 
 -- ── Re-create the 8 data-table policies using the helper functions ─────────
+-- Same retirement note as AUTH_MIGRATION_SQL above: the legacy-code bridge
+-- clause has been removed from the policies below. It was a one-time
+-- transitional mechanism for this household's original migration, not a
+-- permanent feature of this policy shape — older docs describing the
+-- bridge-inclusive version of this script predate this change.
 ${['ingredients', 'recipes', 'meal_plans', 'grocery_lists', 'household_items', 'collections', 'kitchen_references', 'sync_settings'].map(table => `
 -- ${table}
 drop policy if exists "select: legacy code or member" on ${table};
@@ -517,31 +536,26 @@ drop policy if exists "delete: legacy code or writable member" on ${table};
 
 create policy "select: legacy code or member" on ${table}
   for select using (
-    household_code = 'Angelo-family-2026'
-    or is_member_of_code(household_code)
+    is_member_of_code(household_code)
   );
 
 create policy "insert: legacy code or writable member" on ${table}
   for insert with check (
-    household_code = 'Angelo-family-2026'
-    or is_writable_member_of_code(household_code)
+    is_writable_member_of_code(household_code)
   );
 
 create policy "update: legacy code or writable member" on ${table}
   for update
   using (
-    household_code = 'Angelo-family-2026'
-    or is_writable_member_of_code(household_code)
+    is_writable_member_of_code(household_code)
   )
   with check (
-    household_code = 'Angelo-family-2026'
-    or is_writable_member_of_code(household_code)
+    is_writable_member_of_code(household_code)
   );
 
 create policy "delete: legacy code or writable member" on ${table}
   for delete using (
-    household_code = 'Angelo-family-2026'
-    or is_writable_member_of_code(household_code)
+    is_writable_member_of_code(household_code)
   );`).join('\n')}
 
 -- ============================================================================
@@ -649,6 +663,99 @@ grant execute on function join_household_by_code(text, text) to authenticated;
 -- account test pass will be re-run in full.
 -- ============================================================================`
 
+// ─── Auth migration fix 4 (Family Share: optional role at join) ────────────
+// Family Share's root cause (confirmed via a live-captured RLS-denial error
+// and a direct root-cause investigation): familyShareCode was never routed
+// through create_household()/join_household_by_code(), so no households row
+// ever existed for it, and is_member_of_code()/is_writable_member_of_code()
+// require one. Fix: give Family Share a real households row + real
+// household_members rows, reusing this exact membership model — no RLS
+// policy changes needed, since both functions already work correctly for
+// any households row with any code the moment a matching row + membership
+// exists. The one piece actually missing: join_household_by_code() had no
+// way to join as anything but 'contributor', but a Family Share invite's
+// role is chosen by the owner at share time, not the joiner — this fix adds
+// an optional p_role parameter, defaulting to 'contributor' when omitted so
+// every existing (non-Family-Share) caller's behavior is byte-identical to
+// before this change.
+export const AUTH_MIGRATION_FIX4_SQL = `-- ============================================================================
+-- Angelo Family Meal Planner — Auth Migration FIX 4 (Family Share: optional role at join)
+-- ============================================================================
+-- Run this once. Safe to run now. Existing Household Sync create/join
+-- behavior is unchanged — this only adds an optional third parameter that
+-- defaults to today's hardcoded 'contributor' behavior when omitted.
+-- ============================================================================
+
+-- Same reason as FIX 3: CREATE OR REPLACE can't add a parameter with a
+-- default to an existing function signature cleanly alongside the return
+-- type already in place, so the old version is dropped and recreated.
+-- Dropping also wipes its EXECUTE grant, hence the re-grant at the end.
+drop function if exists join_household_by_code(text, text);
+
+create function join_household_by_code(p_code text, p_display_name text, p_role text default 'contributor')
+returns table(out_household_id uuid, out_role text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_role text;
+begin
+  if auth.uid() is null then
+    raise exception 'Must be signed in';
+  end if;
+
+  -- A joiner can never grant themselves 'owner' through this parameter —
+  -- only create_household() can create an owner (by making its own caller
+  -- the owner of the household it creates). Any value other than the two
+  -- legitimate joiner roles — including 'owner', including null, including
+  -- a typo or a manipulated request — silently falls back to 'contributor',
+  -- the same default this function always used before this parameter
+  -- existed. This check is what makes the parameter safe to expose at all.
+  if p_role is null or p_role not in ('contributor', 'readonly') then
+    v_role := 'contributor';
+  else
+    v_role := p_role;
+  end if;
+
+  select id into v_id from households where code = p_code;
+  if v_id is null then
+    raise exception 'No household found for that code';
+  end if;
+
+  -- On a genuine first join, v_role is what gets stored. On a re-join
+  -- (already a member), only display_name refreshes — an existing role
+  -- (including one an owner may have since adjusted via Manage Members)
+  -- is deliberately never silently overwritten by a stale invite being
+  -- reused.
+  insert into household_members (household_id, user_id, role, display_name)
+  values (v_id, auth.uid(), v_role, p_display_name)
+  on conflict (household_id, user_id) do update set display_name = excluded.display_name;
+
+  return query select hm.household_id, hm.role from household_members hm
+    where hm.household_id = v_id and hm.user_id = auth.uid();
+end;
+$$;
+
+revoke all on function join_household_by_code(text, text, text) from public;
+grant execute on function join_household_by_code(text, text, text) to authenticated;
+
+-- ============================================================================
+-- End of fix. Verify: (1) an existing primary-household Join by Code still
+-- works and still grants 'contributor' with no p_role passed; (2) a Family
+-- Share invite encoding 'readonly' actually joins the participant as
+-- 'readonly'; (3) a disposable account cannot grant itself 'owner' by
+-- calling this RPC directly with p_role set to 'owner'.
+-- ============================================================================`
+
+// ─── Latest incremental fix pointer ─────────────────────────────────────────
+// CloudSyncSection.tsx's "Latest Fix" disclosure shows this alias, not a
+// hardcoded script name — when a new AUTH_MIGRATION_FIXn_SQL is added,
+// reassign this to point at it. Nothing else needs to change for the UI to
+// pick up the new script.
+export const LATEST_MIGRATION_FIX_SQL = AUTH_MIGRATION_FIX4_SQL
+
 // ─── Generate a memorable sync code ─────────────────────────────────────────
 
 const ADJECTIVES = ['happy', 'sunny', 'quick', 'bright', 'calm', 'brave', 'cool', 'wise', 'nice', 'bold']
@@ -663,6 +770,14 @@ export function generateSyncCode(householdName?: string): string {
 }
 
 // ─── Sync helpers ────────────────────────────────────────────────────────────
+
+// Escapes ILIKE's own wildcard characters so a case-insensitive household_code
+// comparison can't accidentally behave as a pattern match. generateSyncCode()
+// itself never produces a % or _, but none of the 3 free-text code-entry
+// points validate against a hand-typed one containing them.
+function escapeIlikeValue(value: string): string {
+  return value.replace(/%/g, '\\%').replace(/_/g, '\\_')
+}
 
 // PostgREST caps an unpaginated select at its default row limit (1000 on
 // this project) — for a household with more rows than that (this one has
@@ -680,7 +795,7 @@ async function fetchCloudRows(supabase: SupabaseClient, table: string, code: str
     const { data, error } = await supabase
       .from(table)
       .select('*')
-      .eq('household_code', code)
+      .ilike('household_code', escapeIlikeValue(code))
       .order('id')
       .range(offset, offset + pageSize - 1)
     if (error) throw new Error(`Supabase fetch error (${table}): ${error.message}`)
@@ -692,11 +807,35 @@ async function fetchCloudRows(supabase: SupabaseClient, table: string, code: str
   return all
 }
 
+// Preserves the PostgrestError's .code — a plain Error loses it, and
+// isCollisionError() below needs it. Same .message text as before this
+// existed, so nothing that only reads .message changes behavior.
+class SupabaseWriteError extends Error {
+  code?: string
+  constructor(message: string, code?: string) {
+    super(message)
+    this.code = code
+  }
+}
+
 async function upsertCloudRow(supabase: SupabaseClient, table: string, code: string, id: string, data: unknown, updatedAt: string) {
   const { error } = await supabase
     .from(table)
     .upsert({ id, household_code: code, data, updated_at: updatedAt }, { onConflict: 'id' })
-  if (error) throw new Error(`Supabase upsert error (${table}): ${error.message}`)
+  if (error) throw new SupabaseWriteError(`Supabase upsert error (${table}): ${error.message}`, error.code)
+}
+
+// The signal confirmed sufficient (this investigation chain) to distinguish
+// a genuine cross-household id collision from every other upsert failure:
+// 42501 is RLS-denial in general, but only the UPDATE-path USING clause
+// (the row already exists, under a household this caller can't write to)
+// includes "(USING expression)" in its message — an INSERT-path WITH CHECK
+// denial never does. With the role-validation checks in runSync()/
+// runFamilyShareSync() already gating anyone who reaches this call, the
+// only way upsertCloudRow can still fail this way is a real conflict — no
+// cloudIdSet involvement needed here.
+function isCollisionError(err: unknown): boolean {
+  return err instanceof SupabaseWriteError && err.code === '42501' && err.message.includes('(USING expression)')
 }
 
 async function deleteCloudRow(supabase: SupabaseClient, table: string, code: string, id: string) {
@@ -704,8 +843,22 @@ async function deleteCloudRow(supabase: SupabaseClient, table: string, code: str
     .from(table)
     .delete()
     .eq('id', id)
-    .eq('household_code', code)
+    .ilike('household_code', escapeIlikeValue(code))
   if (error) throw new Error(`Supabase delete error (${table}): ${error.message}`)
+}
+
+// Single-row lookup by id, used only by the Family Share merge-preservation
+// step below — deliberately not the paginated fetchCloudRows(), since that
+// fetches the whole household's rows and this only ever needs one.
+async function fetchSingleCloudRow(supabase: SupabaseClient, table: string, code: string, id: string): Promise<CloudRow | null> {
+  const { data, error } = await supabase
+    .from(table)
+    .select('*')
+    .eq('id', id)
+    .ilike('household_code', escapeIlikeValue(code))
+    .maybeSingle()
+  if (error) throw new Error(`Supabase fetch error (${table}): ${error.message}`)
+  return data as CloudRow | null
 }
 
 // Strips cost/store fields for Family Share sync
@@ -718,7 +871,34 @@ function stripCostData(ingredient: Ingredient): Ingredient {
       totalServingsInPackage: undefined,
       costPerServing: undefined,
       store: undefined,
+      priceLastUpdated: undefined,
     })),
+  }
+}
+
+// Restores the 5 fields stripCostData() removes, sourced from whatever
+// already exists in the cloud row at this id — used only by the Family
+// Share ingredient push, immediately before upsertCloudRow(). Scoped to
+// exactly this: it does not touch any field outside this list, and it does
+// not invent values for a variant that has no existing counterpart.
+function mergeProtectedVariantFields(existingData: unknown, incomingData: Ingredient): Ingredient {
+  const existing = existingData as Ingredient | null | undefined
+  if (!existing?.variants) return incomingData
+  const existingVariantMap = new Map(existing.variants.map(v => [v.id, v]))
+  return {
+    ...incomingData,
+    variants: incomingData.variants.map(v => {
+      const match = existingVariantMap.get(v.id)
+      if (!match) return v
+      return {
+        ...v,
+        packageCost: match.packageCost,
+        totalServingsInPackage: match.totalServingsInPackage,
+        costPerServing: match.costPerServing,
+        store: match.store,
+        priceLastUpdated: match.priceLastUpdated,
+      }
+    }),
   }
 }
 
@@ -790,8 +970,8 @@ export async function syncIngredients(
   direction: 'both' | 'push' | 'pull',
   familyShare = false,
   onProgress?: SyncProgressCallback,
-): Promise<Pick<SyncSummary, 'addedLocally' | 'uploadedToCloud' | 'updatedToNewer' | 'duplicatesForReview'>> {
-  const result = { addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0, duplicatesForReview: [] as SyncDuplicate[] }
+): Promise<Pick<SyncSummary, 'addedLocally' | 'uploadedToCloud' | 'updatedToNewer' | 'duplicatesForReview' | 'collisionsForReview'>> {
+  const result = { addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0, duplicatesForReview: [] as SyncDuplicate[], collisionsForReview: [] as SyncCollision[] }
 
   onProgress?.({ step: 'Checking ingredients', total: null })
   const localItems = await getAllIngredients(true)
@@ -836,9 +1016,22 @@ export async function syncIngredients(
           continue
         }
       }
-      const toUpload = familyShare ? stripCostData(item) : item
-      await upsertCloudRow(supabase, 'ingredients', code, item.id, toUpload, item.updatedAt)
-      result.uploadedToCloud++
+      let toUpload: Ingredient = item
+      if (familyShare) {
+        const stripped = stripCostData(item)
+        // Fetch-then-merge, Family Share push only: the regular sync branch
+        // above (familyShare === false) never reaches this block at all —
+        // no fetch, no merge, identical to today.
+        const existingRow = await fetchSingleCloudRow(supabase, 'ingredients', code, item.id)
+        toUpload = existingRow ? mergeProtectedVariantFields(existingRow.data, stripped) : stripped
+      }
+      try {
+        await upsertCloudRow(supabase, 'ingredients', code, item.id, toUpload, item.updatedAt)
+        result.uploadedToCloud++
+      } catch (err) {
+        if (!isCollisionError(err)) throw err
+        result.collisionsForReview.push({ type: 'ingredient', localItem: item, attemptedHouseholdCode: code })
+      }
       onProgress?.({ step: 'Uploading ingredients', current: ++pushed, total: localItems.length })
     }
   }
@@ -884,8 +1077,8 @@ export async function syncRecipes(
   code: string,
   direction: 'both' | 'push' | 'pull',
   onProgress?: SyncProgressCallback,
-): Promise<Pick<SyncSummary, 'addedLocally' | 'uploadedToCloud' | 'updatedToNewer' | 'duplicatesForReview'>> {
-  const result = { addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0, duplicatesForReview: [] as SyncDuplicate[] }
+): Promise<Pick<SyncSummary, 'addedLocally' | 'uploadedToCloud' | 'updatedToNewer' | 'duplicatesForReview' | 'collisionsForReview'>> {
+  const result = { addedLocally: 0, uploadedToCloud: 0, updatedToNewer: 0, duplicatesForReview: [] as SyncDuplicate[], collisionsForReview: [] as SyncCollision[] }
 
   onProgress?.({ step: 'Checking recipes', total: null })
   const localItems = await getAllRecipes(true)
@@ -917,8 +1110,13 @@ export async function syncRecipes(
           continue
         }
       }
-      await upsertCloudRow(supabase, 'recipes', code, item.id, item, item.updatedAt)
-      result.uploadedToCloud++
+      try {
+        await upsertCloudRow(supabase, 'recipes', code, item.id, item, item.updatedAt)
+        result.uploadedToCloud++
+      } catch (err) {
+        if (!isCollisionError(err)) throw err
+        result.collisionsForReview.push({ type: 'recipe', localItem: item, attemptedHouseholdCode: code })
+      }
       onProgress?.({ step: 'Uploading recipes', current: ++pushed, total: localItems.length })
     }
   }
@@ -1048,9 +1246,9 @@ async function syncReferences(
 // theme, and other per-device/personal fields (see runSync for the full list).
 const SYNCED_SETTINGS_KEYS = [
   'householdName', 'unitSystem', 'geminiModel', 'nutrientToggles', 'macroHistoryDays',
-  'storePreferenceEnabled', 'householdSize', 'people', 'setupComplete',
+  'storePreferenceEnabled', 'people', 'setupComplete',
   'ingredientCategories', 'recipeTags', 'brands', 'stores',
-  'ingredientDisplay', 'allergenWatchList',
+  'ingredientDisplay', 'allergenWatchList', 'kitchenReferencePhotoPolicy',
 ] as const
 
 function pickSyncableSettings(settings: AppSettings): Record<string, unknown> {
@@ -1114,6 +1312,7 @@ export async function runSync(
     uploadedToCloud: 0,
     updatedToNewer: 0,
     duplicatesForReview: [],
+    collisionsForReview: [],
     errors: [],
   }
 
@@ -1129,12 +1328,34 @@ export async function runSync(
     return summary
   }
 
+  if (direction !== 'pull') {
+    // Not wrapped in try/catch: a genuine lookup failure here is a
+    // different problem than "you don't have write access," and should
+    // surface as the generic sync-failure error the caller (handleSync in
+    // CloudSyncSection.tsx) already produces for any uncaught throw — not
+    // be reworded into a misleading "readonly" or "no matching household"
+    // message.
+    const memberships = await getMyHouseholds(settings.supabaseUrl, settings.supabaseAnonKey)
+    const norm = (s: string) => s.trim().toLowerCase()
+    const activeCode = norm(code)
+    const membership = memberships.find(h => norm(h.code) === activeCode)
+    if (!membership) {
+      summary.errors.push('Could not confirm your membership in this household. Try signing in again.')
+      return summary
+    }
+    if (membership.role === 'readonly') {
+      summary.errors.push('You are a read-only member. You cannot push to this household.')
+      return summary
+    }
+  }
+
   try {
     const ing = await syncIngredients(supabase, code, direction, false, onProgress)
     summary.addedLocally    += ing.addedLocally
     summary.uploadedToCloud += ing.uploadedToCloud
     summary.updatedToNewer  += ing.updatedToNewer
     summary.duplicatesForReview.push(...ing.duplicatesForReview)
+    summary.collisionsForReview.push(...ing.collisionsForReview)
   } catch (e) {
     summary.errors.push(`Ingredients: ${e instanceof Error ? e.message : String(e)}`)
   }
@@ -1145,6 +1366,7 @@ export async function runSync(
     summary.uploadedToCloud += rec.uploadedToCloud
     summary.updatedToNewer  += rec.updatedToNewer
     summary.duplicatesForReview.push(...rec.duplicatesForReview)
+    summary.collisionsForReview.push(...rec.collisionsForReview)
   } catch (e) {
     summary.errors.push(`Recipes: ${e instanceof Error ? e.message : String(e)}`)
   }
@@ -1210,12 +1432,14 @@ export async function runSync(
 export async function runFamilyShareSync(
   settings: AppSettings,
   direction: 'both' | 'push' | 'pull',
+  onProgress?: SyncProgressCallback,
 ): Promise<SyncSummary> {
   const summary: SyncSummary = {
     addedLocally: 0,
     uploadedToCloud: 0,
     updatedToNewer: 0,
     duplicatesForReview: [],
+    collisionsForReview: [],
     errors: [],
   }
 
@@ -1231,30 +1455,43 @@ export async function runFamilyShareSync(
     return summary
   }
 
-  const familyCode = `${shareCode}:family`
-
-  if (settings.familyShareRole === 'readonly' && direction === 'push') {
-    summary.errors.push('You are a read-only member. You cannot push to this family share.')
-    return summary
+  if (direction !== 'pull') {
+    // Same non-wrapped treatment as runSync() above — a lookup failure
+    // propagates to the caller's own try/catch rather than being
+    // reinterpreted as a membership problem.
+    const memberships = await getMyHouseholds(settings.supabaseUrl, settings.supabaseAnonKey)
+    const norm = (s: string) => s.trim().toLowerCase()
+    const activeCode = norm(shareCode)
+    const membership = memberships.find(h => norm(h.code) === activeCode)
+    if (!membership) {
+      summary.errors.push('Could not confirm your membership in this family share. Try signing in again.')
+      return summary
+    }
+    if (membership.role === 'readonly') {
+      summary.errors.push('You are a read-only member. You cannot push to this family share.')
+      return summary
+    }
   }
 
   try {
-    const rec = await syncRecipes(supabase, familyCode, direction)
+    const rec = await syncRecipes(supabase, shareCode, direction, onProgress)
     summary.addedLocally    += rec.addedLocally
     summary.uploadedToCloud += rec.uploadedToCloud
     summary.updatedToNewer  += rec.updatedToNewer
     summary.duplicatesForReview.push(...rec.duplicatesForReview)
+    summary.collisionsForReview.push(...rec.collisionsForReview)
   } catch (e) {
     summary.errors.push(`Recipes: ${e instanceof Error ? e.message : String(e)}`)
   }
 
   try {
     // Ingredients synced without cost data
-    const ing = await syncIngredients(supabase, familyCode, direction, true)
+    const ing = await syncIngredients(supabase, shareCode, direction, true, onProgress)
     summary.addedLocally    += ing.addedLocally
     summary.uploadedToCloud += ing.uploadedToCloud
     summary.updatedToNewer  += ing.updatedToNewer
     summary.duplicatesForReview.push(...ing.duplicatesForReview)
+    summary.collisionsForReview.push(...ing.collisionsForReview)
   } catch (e) {
     summary.errors.push(`Ingredients: ${e instanceof Error ? e.message : String(e)}`)
   }
@@ -1447,4 +1684,70 @@ export async function resolveRecipeDuplicate(
   }
 
   return counts
+}
+
+// Push-as-New (Model B: clone). Structurally separate from
+// resolveIngredientDuplicate() above — that function exists specifically to
+// repoint references away from one of two already-referenced records; a
+// collision clone is a brand-new record nothing references yet, so no
+// repointing is needed, and the original local record is never touched.
+export async function resolveIngredientCollision(
+  collision: SyncCollision & { type: 'ingredient' },
+  settings: AppSettings,
+): Promise<void> {
+  // Checked before any local write — a "not configured" failure here is a
+  // precondition, not a failed-after-succeeding write, so there's nothing
+  // to compensate for as long as this stays ahead of saveIngredient().
+  const supabase = getSupabaseClient(settings.supabaseUrl, settings.supabaseAnonKey)
+  if (!supabase) throw new Error('Supabase is not configured.')
+
+  const local = collision.localItem as Ingredient
+  const clone: Ingredient = {
+    ...local,
+    id: newId(),
+    // Shallow-copied so the clone doesn't share the same variants array/
+    // objects with the original — each variant's own id is deliberately
+    // left unchanged, since every variant lookup in this codebase is
+    // parent-ingredient-scoped (confirmed this investigation chain).
+    variants: local.variants.map(v => ({ ...v })),
+  }
+  await saveIngredient(clone) // sets clone.updatedAt
+
+  // Family Share pushes strip cost/store data before upload — a clone
+  // pushed into that same household must not reintroduce it. Derived from
+  // settings rather than carrying a familyShare field on SyncCollision.
+  const norm = (s: string) => s.trim().toLowerCase()
+  const isFamilyShare = !!settings.familyShareCode && norm(settings.familyShareCode) === norm(collision.attemptedHouseholdCode)
+  const toUpload = isFamilyShare ? stripCostData(clone) : clone
+
+  try {
+    await upsertCloudRow(supabase, 'ingredients', collision.attemptedHouseholdCode, clone.id, toUpload, clone.updatedAt)
+  } catch (err) {
+    // Compensating delete: Push-as-New isn't naturally idempotent the way
+    // duplicate-resolution is (stable ids there mean a retry just re-applies
+    // the same repoint) — without this, a failed cloud push here would leave
+    // an orphaned local clone, and retrying would create a second one under
+    // yet another id.
+    await deleteIngredient(clone.id).catch(() => {})
+    throw err
+  }
+}
+
+export async function resolveRecipeCollision(
+  collision: SyncCollision & { type: 'recipe' },
+  settings: AppSettings,
+): Promise<void> {
+  const supabase = getSupabaseClient(settings.supabaseUrl, settings.supabaseAnonKey)
+  if (!supabase) throw new Error('Supabase is not configured.')
+
+  const local = collision.localItem as Recipe
+  const clone: Recipe = { ...local, id: newId() }
+  await saveRecipe(clone) // sets clone.updatedAt
+
+  try {
+    await upsertCloudRow(supabase, 'recipes', collision.attemptedHouseholdCode, clone.id, clone, clone.updatedAt)
+  } catch (err) {
+    await deleteRecipe(clone.id).catch(() => {})
+    throw err
+  }
 }

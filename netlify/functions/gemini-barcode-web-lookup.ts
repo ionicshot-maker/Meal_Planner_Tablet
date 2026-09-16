@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions'
+import { resolveGeminiModel, buildGeminiResolution, GEMINI_FALLBACK_MODEL } from '../../src/utils/geminiModel'
 
 const NO_CACHE = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
-const FALLBACK_MODEL = 'gemini-3-flash'
 
 interface RequestBody {
   barcode?: string
@@ -130,7 +130,7 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'No barcode provided.' }) }
   }
 
-  const primaryModel = model?.trim() || 'gemini-3.1-flash-lite'
+  const primaryModel = resolveGeminiModel(model)
   const key = apiKey.trim()
 
   async function callGemini(m: string): Promise<Response> {
@@ -155,8 +155,8 @@ export const handler: Handler = async (event) => {
     return { statusCode: 502, headers: NO_CACHE, body: JSON.stringify({ error: `Could not reach Gemini API: ${msg}` }) }
   }
 
-  if (geminiRes.status === 404 && usedModel !== FALLBACK_MODEL) {
-    usedModel = FALLBACK_MODEL
+  if (geminiRes.status === 404 && usedModel !== GEMINI_FALLBACK_MODEL) {
+    usedModel = GEMINI_FALLBACK_MODEL
     try {
       geminiRes = await callGemini(usedModel)
     } catch (err) {
@@ -259,5 +259,5 @@ export const handler: Handler = async (event) => {
     sourceTitle: chosenChunk.web.title || chosenChunk.web.uri,
   }
 
-  return { statusCode: 200, headers: NO_CACHE, body: JSON.stringify({ status: 1, result }) }
+  return { statusCode: 200, headers: NO_CACHE, body: JSON.stringify({ status: 1, result, resolution: buildGeminiResolution(primaryModel, usedModel) }) }
 }

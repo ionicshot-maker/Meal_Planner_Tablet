@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ConfirmDiscardDialog } from '@/components/ui'
+import { ConfirmDiscardDialog, Modal, Button } from '@/components/ui'
 import { useConfirmClose } from '@/hooks/useConfirmClose'
 import type { MealPlanDay, MealPlanWeekTemplate } from '@/types'
-import { toISODate, addDays, getWeekStart, parseDateLocal } from '@/utils/mealPlanUtils'
+import { toISODate, addDays, getWeekStart, parseDateLocal, formatMonthRange } from '@/utils/mealPlanUtils'
 import styles from './TemplateModal.module.css'
 
 interface Props {
@@ -31,6 +31,7 @@ export function TemplateModal({
   const [newName, setNewName] = useState('')
   const [copyTarget, setCopyTarget] = useState(toISODate(addDays(weekStart, 7)))
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [confirmingCopy, setConfirmingCopy] = useState(false)
 
   // Only the "save as template" name field on the Templates tab is unsaved
   // typed input — Copy Week is date/click selections only, low-stakes to lose.
@@ -40,6 +41,15 @@ export function TemplateModal({
   const currentHasContent = currentWeekDays.some(d =>
     d.meals.breakfast.length + d.meals.lunch.length + d.meals.dinner.length + d.meals.snacks.length > 0
   )
+
+  // Derived entirely from copyTarget (already-selected date) via the same
+  // getWeekStart()/addDays() utilities handleCopy() itself already uses —
+  // no fetch of the target week's actual contents, just the date range it
+  // covers, so the confirmation below can state the range without touching
+  // handleCopyWeek()'s write path at all.
+  const targetWeekStart = getWeekStart(parseDateLocal(copyTarget))
+  const targetWeekEnd = addDays(targetWeekStart, 6)
+  const targetRangeLabel = formatMonthRange(toISODate(targetWeekStart), toISODate(targetWeekEnd))
 
   function handleSave() {
     const name = newName.trim()
@@ -152,7 +162,7 @@ export function TemplateModal({
               </label>
               <button
                 className={styles.copyBtn}
-                onClick={handleCopy}
+                onClick={() => setConfirmingCopy(true)}
                 disabled={!currentHasContent}
               >Copy Week</button>
               {!currentHasContent && (
@@ -164,6 +174,25 @@ export function TemplateModal({
       </div>
     </div>
     <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    {confirmingCopy && (
+      <Modal
+        open
+        onClose={() => setConfirmingCopy(false)}
+        title="Copy Week"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmingCopy(false)}>Cancel</Button>
+            <Button variant="danger" onClick={handleCopy}>Replace &amp; Copy</Button>
+          </>
+        }
+      >
+        <p>
+          Existing meals for <strong>{targetRangeLabel}</strong> will be permanently replaced with this week's plan.
+          This cannot be undone.
+        </p>
+      </Modal>
+    )}
     </>,
     document.body
   )

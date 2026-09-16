@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions'
+import { resolveGeminiModel, buildGeminiResolution, GEMINI_FALLBACK_MODEL } from '../../src/utils/geminiModel'
 
 const NO_CACHE = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
 
@@ -35,8 +36,6 @@ Do NOT do any arithmetic yourself — extract numbers exactly as printed, and le
 
 Return ONLY the JSON object, no explanation, no markdown, no code fences.`
 
-const FALLBACK_MODEL = 'gemini-3-flash'
-
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers: NO_CACHE, body: JSON.stringify({ error: 'Method not allowed' }) }
@@ -58,7 +57,7 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'No photo provided.' }) }
   }
 
-  const primaryModel = model?.trim() || 'gemini-3.1-flash-lite'
+  const primaryModel = resolveGeminiModel(model)
   const key = apiKey.trim()
   const imageMimeType = mimeType?.trim() || 'image/jpeg'
 
@@ -104,9 +103,9 @@ export const handler: Handler = async (event) => {
   }
 
   // Model not found → try fallback
-  if (geminiRes.status === 404 && usedModel !== FALLBACK_MODEL) {
-    console.log('[gemini-receipt-scan] model not found, trying fallback:', FALLBACK_MODEL)
-    usedModel = FALLBACK_MODEL
+  if (geminiRes.status === 404 && usedModel !== GEMINI_FALLBACK_MODEL) {
+    console.log('[gemini-receipt-scan] model not found, trying fallback:', GEMINI_FALLBACK_MODEL)
+    usedModel = GEMINI_FALLBACK_MODEL
     try {
       geminiRes = await callGemini(usedModel)
       console.log('[gemini-receipt-scan] fallback Gemini HTTP status:', geminiRes.status)
@@ -213,6 +212,7 @@ export const handler: Handler = async (event) => {
       date: parsed.date ?? null,
       total: typeof parsed.total === 'number' ? parsed.total : null,
       items,
+      resolution: buildGeminiResolution(primaryModel, usedModel),
     }),
   }
 }

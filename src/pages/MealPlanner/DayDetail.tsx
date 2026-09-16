@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { MealPlanDay, MealSlotItem, MealItemRole, Recipe, Ingredient } from '@/types'
 import { parseDateLocal, blankDayMeals } from '@/utils/mealPlanUtils'
 import { formatMinutes } from '@/utils/units'
+import { Button, Modal } from '@/components/ui'
 import { MealSlotSection } from './MealSlotSection'
 import styles from './DayDetail.module.css'
 
@@ -26,6 +27,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
 export function DayDetail({ date, day, recipes, allRecipes, ingredientMap, watchedAllergens, onUpdate, onClose }: Props) {
   const [showSnacks, setShowSnacks] = useState(day.meals.snacks.length > 0)
   const [draggingRecipeId, setDraggingRecipeId] = useState<string | null>(null)
+  const [confirmClearDay, setConfirmClearDay] = useState(false)
 
   const d = parseDateLocal(date)
   const title = `${DAY_NAMES[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`
@@ -41,8 +43,8 @@ export function DayDetail({ date, day, recipes, allRecipes, ingredientMap, watch
   }
 
   function clearDay() {
-    if (!confirm('Clear all meals for this day?')) return
     onUpdate({ date, meals: blankDayMeals() })
+    setConfirmClearDay(false)
   }
 
   // Total time for the day (unique recipes only)
@@ -96,7 +98,7 @@ export function DayDetail({ date, day, recipes, allRecipes, ingredientMap, watch
           )}
         </div>
         <div className={styles.headerActions}>
-          <button className={styles.clearBtn} onClick={clearDay} title="Clear day">Clear</button>
+          <button className={styles.clearBtn} onClick={() => setConfirmClearDay(true)} title="Clear day">Clear</button>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
       </div>
@@ -157,6 +159,23 @@ export function DayDetail({ date, day, recipes, allRecipes, ingredientMap, watch
           </button>
         )}
       </div>
+
+      {confirmClearDay && (
+        <Modal
+          open
+          onClose={() => setConfirmClearDay(false)}
+          title="Clear Day"
+          size="sm"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirmClearDay(false)}>Cancel</Button>
+              <Button variant="danger" onClick={clearDay}>Clear Meals</Button>
+            </>
+          }
+        >
+          <p>Clear all meals for this day?</p>
+        </Modal>
+      )}
     </div>
   )
 }

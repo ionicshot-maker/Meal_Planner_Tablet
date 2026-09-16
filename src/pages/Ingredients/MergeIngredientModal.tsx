@@ -11,6 +11,50 @@ interface Props {
   onMerged: () => void
 }
 
+interface FieldConflict {
+  field: string
+  kept: string
+  discarded: string
+}
+
+// Pure, display-only comparison of the two candidates already in scope here
+// (both full Ingredient objects — the `ingredient` prop and `target` state).
+// No fetching, no backend call, no calculation beyond direct field equality.
+// Scoped to exactly the fields the Slice 3 audit finding named as silently
+// resolved (brand, barcode, price, macros) — mergeIngredients() doesn't
+// merge these per field, it keeps the surviving ingredient's record whole
+// and discards the rest, so this only discloses what's about to be lost; it
+// doesn't offer a per-field choice. Compares each ingredient's variants[0],
+// matching the existing option cards above, which already summarize each
+// candidate the same way.
+function getFieldConflicts(keep: Ingredient, away: Ingredient): FieldConflict[] {
+  const kv = keep.variants[0]
+  const av = away.variants[0]
+  const conflicts: FieldConflict[] = []
+
+  const kBrand = kv?.brand || 'Generic'
+  const aBrand = av?.brand || 'Generic'
+  if (kBrand !== aBrand) conflicts.push({ field: 'Brand', kept: kBrand, discarded: aBrand })
+
+  const kBarcode = kv?.barcode || ''
+  const aBarcode = av?.barcode || ''
+  if (kBarcode !== aBarcode && (kBarcode || aBarcode)) {
+    conflicts.push({ field: 'Barcode', kept: kBarcode || '(none)', discarded: aBarcode || '(none)' })
+  }
+
+  const kPrice = kv?.packageCost != null ? `$${kv.packageCost.toFixed(2)}${kv.store ? ` at ${kv.store}` : ''}` : null
+  const aPrice = av?.packageCost != null ? `$${av.packageCost.toFixed(2)}${av.store ? ` at ${av.store}` : ''}` : null
+  if (kPrice !== aPrice && (kPrice || aPrice)) {
+    conflicts.push({ field: 'Price', kept: kPrice ?? '(none)', discarded: aPrice ?? '(none)' })
+  }
+
+  if (kv && av && JSON.stringify(kv.macros) !== JSON.stringify(av.macros)) {
+    conflicts.push({ field: 'Nutrition values', kept: `${kv.macros.calories} cal/serving`, discarded: `${av.macros.calories} cal/serving` })
+  }
+
+  return conflicts
+}
+
 // General-purpose merge entry point from the Ingredients page — for
 // duplicates that aren't barcode-related at all (manually-typed dupes,
 // two separate imports of the same name, etc). Search for the other
@@ -85,7 +129,9 @@ export function MergeIngredientModal({ ingredient, onClose, onMerged }: Props) {
   }
 
   const keepIngredient = keepId === ingredient.id ? ingredient : target
+  const mergeAwayIngredient = keepId === ingredient.id ? target : ingredient
   const mergeAwayName = target ? (keepId === ingredient.id ? target.name : ingredient.name) : ''
+  const fieldConflicts = (keepIngredient && mergeAwayIngredient) ? getFieldConflicts(keepIngredient, mergeAwayIngredient) : []
 
   return (
     <Modal
@@ -159,6 +205,19 @@ export function MergeIngredientModal({ ingredient, onClose, onMerged }: Props) {
                 <option value={target.category}>{target.category} ({target.name})</option>
               </select>
             </label>
+          )}
+
+          {fieldConflicts.length > 0 && (
+            <div className={styles.fieldConflicts}>
+              <p className={styles.fieldConflictsLabel}>
+                These also disagree — only {keepIngredient?.name}'s values will be kept:
+              </p>
+              <ul className={styles.fieldConflictsList}>
+                {fieldConflicts.map(c => (
+                  <li key={c.field}><strong>{c.field}:</strong> keeping "{c.kept}", discarding "{c.discarded}"</li>
+                ))}
+              </ul>
+            </div>
           )}
 
           <p className={styles.warning}>

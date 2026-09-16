@@ -9,6 +9,16 @@
 [functions."gemini-recipe-import"]
   timeout = 26
 
+# Increase timeout for Anthropic recipe import: the upstream call's own 20s
+# AbortSignal timeout can exceed the 10s default
+[functions."anthropic-recipe-import"]
+  timeout = 25
+
+# Increase timeout for OpenAI recipe import: the upstream call's own 20s
+# AbortSignal timeout can exceed the 10s default
+[functions."openai-recipe-import"]
+  timeout = 25
+
 # Increase timeout for photo recipe import: Gemini vision calls can run long on larger images
 [functions."gemini-photo-recipe"]
   timeout = 30

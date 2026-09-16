@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions'
+import { resolveGeminiModel, buildGeminiResolution, GEMINI_FALLBACK_MODEL } from '../../src/utils/geminiModel'
 
 const NO_CACHE = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
 
@@ -12,8 +13,6 @@ interface RequestBody {
 const PROMPT = `This is a photo of a nutrition facts label from a food product. Please extract all nutrition information and return ONLY a valid JSON object with these exact fields: productName (string or null if not visible), brand (string or null), servingSize (number), servingUnit (string — use g, oz, ml, cup, tbsp, tsp, piece, slice, or other appropriate unit), servingsPerContainer (number or null), calories (number), protein (number in grams), carbs (number in grams), fiber (number in grams), sugar (number in grams), fat (number in grams), saturatedFat (number in grams or null), transFat (number in grams or null), sodium (number in milligrams), cholesterol (number in milligrams or null), potassium (number in milligrams or null), vitaminD (number or null), calcium (number or null), iron (number or null). If you cannot read the label clearly return a JSON object with confidence: low and a reason field. Do not guess values you cannot clearly read.
 
 Return ONLY the JSON object, no explanation, no markdown, no code fences.`
-
-const FALLBACK_MODEL = 'gemini-3-flash'
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -36,7 +35,7 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'No photo provided.' }) }
   }
 
-  const primaryModel = model?.trim() || 'gemini-3.1-flash-lite'
+  const primaryModel = resolveGeminiModel(model)
   const key = apiKey.trim()
   const imageMimeType = mimeType?.trim() || 'image/jpeg'
 
@@ -82,9 +81,9 @@ export const handler: Handler = async (event) => {
   }
 
   // Model not found → try fallback
-  if (geminiRes.status === 404 && usedModel !== FALLBACK_MODEL) {
-    console.log('[gemini-label-scan] model not found, trying fallback:', FALLBACK_MODEL)
-    usedModel = FALLBACK_MODEL
+  if (geminiRes.status === 404 && usedModel !== GEMINI_FALLBACK_MODEL) {
+    console.log('[gemini-label-scan] model not found, trying fallback:', GEMINI_FALLBACK_MODEL)
+    usedModel = GEMINI_FALLBACK_MODEL
     try {
       geminiRes = await callGemini(usedModel)
       console.log('[gemini-label-scan] fallback Gemini HTTP status:', geminiRes.status)
@@ -141,7 +140,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 200,
       headers: NO_CACHE,
-      body: JSON.stringify({ lowConfidence: true, reason: 'Gemini returned an empty response for this photo.' }),
+      body: JSON.stringify({ lowConfidence: true, reason: 'Gemini returned an empty response for this photo.', reasonIsFromGemini: false }),
     }
   }
 
@@ -159,7 +158,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 200,
       headers: NO_CACHE,
-      body: JSON.stringify({ lowConfidence: true, reason: 'Could not parse a nutrition label from this photo — the response was not valid JSON.' }),
+      body: JSON.stringify({ lowConfidence: true, reason: 'Could not parse a nutrition label from this photo — the response was not valid JSON.', reasonIsFromGemini: false }),
     }
   }
 
@@ -168,7 +167,11 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 200,
       headers: NO_CACHE,
-      body: JSON.stringify({ lowConfidence: true, reason: typeof parsed.reason === 'string' ? parsed.reason : 'The label was unclear.' }),
+      body: JSON.stringify({
+        lowConfidence: true,
+        reason: typeof parsed.reason === 'string' ? parsed.reason : 'The label was unclear.',
+        reasonIsFromGemini: typeof parsed.reason === 'string',
+      }),
     }
   }
 
@@ -176,6 +179,6 @@ export const handler: Handler = async (event) => {
   return {
     statusCode: 200,
     headers: NO_CACHE,
-    body: JSON.stringify({ status: 1, nutrition: parsed }),
+    body: JSON.stringify({ status: 1, nutrition: parsed, resolution: buildGeminiResolution(primaryModel, usedModel) }),
   }
 }

@@ -1,5 +1,6 @@
 import { getDB } from './schema'
 import { now } from '@/utils/ids'
+import { GEMINI_PRIMARY_MODEL } from '@/utils/geminiModel'
 import type { AppSettings, RecipeTagGroup } from '@/types'
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -10,7 +11,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ai: { provider: 'none', apiKey: '' },
   usdaApiKey: '',
   geminiApiKey: '',
-  geminiModel: 'gemini-3.1-flash-lite',
+  geminiModel: GEMINI_PRIMARY_MODEL,
   nutrientToggles: {
     saturatedFat: false,
     transFat: false,
@@ -20,7 +21,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   macroHistoryDays: 90,
   storePreferenceEnabled: false,
-  householdSize: 1,
   people: [],
   setupComplete: false,
   ingredientCategories: [
@@ -100,6 +100,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   familyShareCode: '',
   familyShareRole: 'owner',
   cloudSyncPromptDismissed: false,
+  setupChecklistHidden: false,
   updatedAt: new Date(0).toISOString(),
 }
 

@@ -1,3 +1,5 @@
+import type { GeminiModelResolution } from '@/utils/geminiModel'
+
 // ─── Unit System ────────────────────────────────────────────────────────────
 export type UnitSystem = 'imperial' | 'metric'
 
@@ -110,10 +112,13 @@ export interface AppSettings {
   usdaApiKey: string
   geminiApiKey: string
   geminiModel: string
+  // Device-local — deliberately excluded from cloud sync (see SYNCED_SETTINGS_KEYS
+  // in db/supabase.ts), same as geminiApiKey: which model actually ran can differ
+  // per device/API key, and only the most recent call's outcome is kept (no log).
+  lastGeminiResolution?: GeminiModelResolution
   nutrientToggles: NutrientToggles
   macroHistoryDays: number    // 90–365
   storePreferenceEnabled: boolean
-  householdSize: number
   people: Person[]
   setupComplete: boolean
   ingredientCategories: string[]
@@ -149,6 +154,12 @@ export interface AppSettings {
   // syncing this would be wrong even though it lives right next to fields
   // that do sync.
   cloudSyncPromptDismissed: boolean
+  // Device-local UI preference — deliberately excluded from cloud sync and
+  // from backup restore, same reasoning as cloudSyncPromptDismissed: whether
+  // one device's Settings page has the Getting Set Up checklist collapsed
+  // says nothing about whether a different device (or a restored device)
+  // should see it collapsed too.
+  setupChecklistHidden: boolean
   updatedAt: string
 }
 

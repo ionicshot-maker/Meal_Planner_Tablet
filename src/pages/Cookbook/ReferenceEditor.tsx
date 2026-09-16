@@ -9,6 +9,8 @@ import { ScrollHint } from '@/components/ScrollHint'
 import { useVisualViewportHeight } from '@/hooks/useVisualViewportHeight'
 import { isTouchDevice } from '@/utils/device'
 import { newId, now } from '@/utils/ids'
+import { GEMINI_PRIMARY_MODEL, type GeminiModelResolution } from '@/utils/geminiModel'
+import { recordGeminiCallResult } from '@/utils/geminiModelClient'
 import type { KitchenReference, ReferenceContentType } from '@/types'
 import { CONTENT_TYPES, CONTENT_TYPE_VALUES } from './referenceContentTypes'
 import styles from './ReferenceEditor.module.css'
@@ -22,6 +24,12 @@ interface GeminiReferenceResult {
   contentType?: string
   content?: string
   tableData?: unknown
+  // Already part of the raw Gemini JSON forwarded by gemini-reference-scan.ts
+  // (its prompt asks for "confidence (high or low)" on every response, not
+  // just the already-handled low-confidence early-return) — reading it here
+  // requires no new API field or extraction-layer change, only a client-side
+  // type addition for data already crossing the wire.
+  confidence?: string
 }
 
 const PHOTO_TIPS = [
@@ -38,7 +46,7 @@ interface Props {
 }
 
 export function ReferenceEditor({ reference, onSave, onClose }: Props) {
-  const { settings } = useSettings()
+  const { settings, updateSettings } = useSettings()
   const [title, setTitle] = useState(reference?.title ?? '')
   const [contentType, setContentType] = useState<ReferenceContentType>(reference?.contentType ?? 'tips')
   const [sourceTags, setSourceTags] = useState<string[]>(reference?.sourceTags ?? [])
@@ -52,6 +60,7 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
   const [scanError, setScanError] = useState('')
   const [lowConfidenceReason, setLowConfidenceReason] = useState<string | null>(null)
   const [photoDecisionPending, setPhotoDecisionPending] = useState(false)
+  const [extractionNotice, setExtractionNotice] = useState<{ level: 'success' | 'warning'; message: string } | null>(null)
 
   const initialSnapshotRef = useRef(JSON.stringify({
     title: reference?.title ?? '', contentType: reference?.contentType ?? 'tips',
@@ -141,12 +150,14 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
     setLowConfidenceReason('')
     setScanError('')
     setPhotoDecisionPending(false)
+    setExtractionNotice(null)
   }
 
   async function handleExtractText() {
     if (!photoDataUrl) return
     setScanError('')
     setLowConfidenceReason(null)
+    setExtractionNotice(null)
     setScanLoading(true)
     try {
       const commaIdx = photoDataUrl.indexOf(',')
@@ -161,11 +172,12 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
           image: base64,
           mimeType,
           apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-3.1-flash-lite',
+          model: settings.geminiModel || GEMINI_PRIMARY_MODEL,
         }),
       })
       const json = await res.json() as {
         status?: number; reference?: GeminiReferenceResult; lowConfidence?: boolean; reason?: string; error?: string
+        resolution?: GeminiModelResolution
       }
 
       if (!res.ok || json.error) {
@@ -176,6 +188,7 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
         setLowConfidenceReason(json.reason ?? 'The page was unclear.')
         return
       }
+      if (json.resolution) await recordGeminiCallResult(updateSettings, json.resolution)
 
       const r = json.reference
       if (r.title) setTitle(r.title)
@@ -187,6 +200,9 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
         setTableMode(true)
         setTableData(r.tableData.map(row => Array.isArray(row) ? row.map(cell => String(cell)) : []))
       }
+      setExtractionNotice(r.confidence === 'high'
+        ? { level: 'success', message: 'Text extracted — please review before saving.' }
+        : { level: 'warning', message: 'Text extracted, but automated extraction can make mistakes — please review carefully before saving.' })
 
       // What happens to the original photo after a successful extraction is
       // governed by the household's Kitchen Reference Photos preference —
@@ -397,6 +413,11 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
                       )}
                     </div>
                     {scanError && <p className={styles.scanError}>{scanError}</p>}
+                    {extractionNotice && (
+                      <p className={extractionNotice.level === 'success' ? styles.scanSuccess : styles.scanLowConfidence}>
+                        {extractionNotice.level === 'success' ? '✅ ' : '⚠️ '}{extractionNotice.message}
+                      </p>
+                    )}
                     {lowConfidenceReason && (
                       <p className={styles.scanLowConfidence}>
                         ⚠️ Could not read this page clearly{lowConfidenceReason ? `: ${lowConfidenceReason}` : '.'} Try a clearer photo, or fill in the fields manually.

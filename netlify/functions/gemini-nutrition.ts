@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions'
+import { GEMINI_PRIMARY_MODEL } from '../../src/utils/geminiModel'
 
 const NO_CACHE = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
 
@@ -38,7 +39,7 @@ const handler: Handler = async (event) => {
   const productName = body.productName?.trim()
   const brand       = body.brand?.trim() ?? ''
   const apiKey      = body.apiKey?.trim()
-  const model       = body.model?.trim() || 'gemini-3.1-flash-lite'
+  const model       = body.model?.trim() || GEMINI_PRIMARY_MODEL
 
   if (!productName) {
     return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'Missing productName' }) }

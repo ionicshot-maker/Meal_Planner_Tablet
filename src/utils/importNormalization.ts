@@ -149,18 +149,23 @@ export function normalizeIngredient(raw: RawIngredient): Ingredient | null {
 // any other bulk-import/seed path (e.g. brandedLibrary.ts) so matching
 // behavior can't drift between them.
 //
-// `fuzzy` defaults to on, but both current callers (JSON Import, the branded
-// starter pack) explicitly opt out with `{ fuzzy: false }` — fuzzy-matching
-// real multi-word branded product names ("Whole Milk", "Creamy Peanut
-// Butter") against the small *generic* starter set's short single-concept
-// names ("Milk", "Butter") produced a very high false-positive rate
-// (verified: ~330-420 of 867 items wrongly "matched" and silently skipped),
-// and the same underlying keyword-subset/edit-distance logic separately
-// caused JSON Import to false-positive on a real 366-item USDA import
-// (2026-07-24) before that caller was also switched to `fuzzy: false`.
-// Barcode + exact name are precise enough to still
-// catch real duplicates (a re-run of the same seed, an item already
-// hand-added) without that collateral damage.
+// `fuzzy` defaults to off (audit Finding #17, 2026-08-08) — both real callers
+// (JSON Import, the branded starter pack) already passed `{ fuzzy: false }`
+// explicitly before this change, so flipping the default was a zero-behavior-
+// change fix, not a functional change; it's kept opt-in now so a future
+// caller doesn't inherit fuzzy matching by omission. Fuzzy-matching real
+// multi-word branded product names ("Whole Milk", "Creamy Peanut Butter")
+// against the small *generic* starter set's short single-concept names
+// ("Milk", "Butter") produced a very high false-positive rate (verified:
+// ~330-420 of 867 items wrongly "matched" and silently skipped), and the same
+// underlying keyword-subset/edit-distance logic separately caused JSON Import
+// to false-positive on a real 366-item USDA import (2026-07-24) before that
+// caller was also switched to `fuzzy: false`. Barcode + exact name are
+// precise enough to still catch real duplicates (a re-run of the same seed,
+// an item already hand-added) without that collateral damage. Both call
+// sites still pass `{ fuzzy: false }` explicitly, even though it now matches
+// the default — kept deliberately, as a second layer of protection at these
+// two specific incident sites against the default ever drifting back.
 export function findIngredientMatch(
   item: Ingredient,
   workingList: Ingredient[],
@@ -173,7 +178,7 @@ export function findIngredientMatch(
   const norm = item.name.trim().toLowerCase()
   const exact = workingList.find(i => i.name.trim().toLowerCase() === norm)
   if (exact) return exact
-  if (options.fuzzy === false) return undefined
+  if (options.fuzzy !== true) return undefined
   return findSmartMatches(item.name, workingList)[0]
 }
 

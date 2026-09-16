@@ -2,21 +2,8 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useSettings } from '@/context/SettingsContext'
 import { DEFAULT_SETTINGS } from '@/db/settings'
+import { editDistance } from '@/utils/smartDuplicate'
 import styles from './ListsSection.module.css'
-
-function editDistance(a: string, b: string): number {
-  const la = a.toLowerCase(), lb = b.toLowerCase()
-  const m = la.length, n = lb.length
-  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
-    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
-  )
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = la[i - 1] === lb[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
-  return dp[m][n]
-}
 
 interface ListCardProps {
   title: string

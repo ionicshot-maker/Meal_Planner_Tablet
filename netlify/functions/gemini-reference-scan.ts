@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions'
+import { resolveGeminiModel, buildGeminiResolution, GEMINI_FALLBACK_MODEL } from '../../src/utils/geminiModel'
 
 const NO_CACHE = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
 
@@ -14,8 +15,6 @@ const PROMPT = `This is a photo of a page from a cookbook or kitchen reference b
 For tables and charts, extract ALL columns completely. For example a proportions table with columns Item, Amount, and Measurement should include all three columns with their full values. Never truncate or omit column values. If a table header row exists include it as the first row of the tableData array. Each row should be a complete array with one entry per column — never use null as a column value unless the cell is genuinely empty in the source.
 
 Return ONLY the JSON object, no explanation, no markdown, no code fences.`
-
-const FALLBACK_MODEL = 'gemini-3-flash'
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -38,7 +37,7 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'No photo provided.' }) }
   }
 
-  const primaryModel = model?.trim() || 'gemini-3.1-flash-lite'
+  const primaryModel = resolveGeminiModel(model)
   const key = apiKey.trim()
   const imageMimeType = mimeType?.trim() || 'image/jpeg'
 
@@ -84,9 +83,9 @@ export const handler: Handler = async (event) => {
   }
 
   // Model not found → try fallback
-  if (geminiRes.status === 404 && usedModel !== FALLBACK_MODEL) {
-    console.log('[gemini-reference-scan] model not found, trying fallback:', FALLBACK_MODEL)
-    usedModel = FALLBACK_MODEL
+  if (geminiRes.status === 404 && usedModel !== GEMINI_FALLBACK_MODEL) {
+    console.log('[gemini-reference-scan] model not found, trying fallback:', GEMINI_FALLBACK_MODEL)
+    usedModel = GEMINI_FALLBACK_MODEL
     try {
       geminiRes = await callGemini(usedModel)
       console.log('[gemini-reference-scan] fallback Gemini HTTP status:', geminiRes.status)
@@ -178,6 +177,6 @@ export const handler: Handler = async (event) => {
   return {
     statusCode: 200,
     headers: NO_CACHE,
-    body: JSON.stringify({ status: 1, reference: parsed }),
+    body: JSON.stringify({ status: 1, reference: parsed, resolution: buildGeminiResolution(primaryModel, usedModel) }),
   }
 }

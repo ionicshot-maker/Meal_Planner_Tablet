@@ -9,6 +9,8 @@ import type { LineMatchResult, RankedCandidate, ConfidenceTier } from '@/utils/r
 import { lookupBarcodeProduct } from '@/utils/barcodeLookup'
 import { lookupBarcodeWeb, type WebLookupProduct } from '@/utils/webBarcodeLookup'
 import { scanNutritionLabel, uncertainLabelFields } from '@/utils/labelScanLookup'
+import { GEMINI_PRIMARY_MODEL, type GeminiModelResolution } from '@/utils/geminiModel'
+import { recordGeminiCallResult } from '@/utils/geminiModelClient'
 import { PhotoCaptureCrop } from '@/components/PhotoCaptureCrop'
 import { IngredientPicker, type PickedIngredient } from '@/pages/Cookbook/IngredientPicker'
 import type { NormalizedLine } from '@/utils/receiptPriceNormalization'
@@ -59,6 +61,7 @@ export interface ReceiptLineDraft {
   labelPhotoStatus: LabelPhotoStatus
   labelUncertainFields?: Set<string>
   labelStatusMessage?: string
+  labelPhotoResolution?: GeminiModelResolution
   // Secondary fallback, only ever triggered by an explicit "Search the web
   // instead" click — never auto-fires. A suggestion here is never
   // auto-applied; webSuggestionDismissed tracks an explicit "no thanks" so
@@ -66,6 +69,7 @@ export interface ReceiptLineDraft {
   webLookupStatus: WebLookupStatus
   webLookupAttempted: boolean
   webLookupResult?: WebLookupProduct
+  webLookupResolution?: GeminiModelResolution
   webSuggestionApplied: boolean
   webSuggestionDismissed: boolean
   saved: boolean
@@ -124,7 +128,7 @@ const MACRO_FIELDS: { key: keyof Macros; label: string }[] = [
 export function ReceiptLineReview({
   lines, setLines, storeName, receiptDate, receiptTotal, photoDataUrl, defaultCategory, onItemSaved, onStartOver,
 }: Props) {
-  const { settings } = useSettings()
+  const { settings, updateSettings } = useSettings()
   const [saving, setSaving] = useState(false)
   const [batchError, setBatchError] = useState('')
 
@@ -192,10 +196,11 @@ export function ReceiptLineReview({
       line.editableName,
       line.newBrand,
       settings.geminiApiKey,
-      settings.geminiModel || 'gemini-3.1-flash-lite'
-    ).then(result => {
+      settings.geminiModel || GEMINI_PRIMARY_MODEL
+    ).then(async result => {
+      if (result.resolution) await recordGeminiCallResult(updateSettings, result.resolution)
       if (result.status === 'found' && result.product) {
-        updateLine(line.id, { webLookupStatus: 'found', webLookupResult: result.product })
+        updateLine(line.id, { webLookupStatus: 'found', webLookupResult: result.product, webLookupResolution: result.resolution })
       } else {
         updateLine(line.id, { webLookupStatus: result.status === 'error' ? 'error' : 'not-found' })
       }
@@ -210,13 +215,15 @@ export function ReceiptLineReview({
   // transcription can still misread a number even off a real photo.
   async function handleLabelPhoto(line: ReceiptLineDraft, dataUrl: string) {
     updateLine(line.id, { labelCaptureOpen: false, labelPhotoStatus: 'loading' })
-    const result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, settings.geminiModel || 'gemini-3.1-flash-lite')
+    const result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, settings.geminiModel || GEMINI_PRIMARY_MODEL)
+    if (result.resolution) await recordGeminiCallResult(updateSettings, result.resolution)
 
     if (result.status === 'found' && result.nutrition) {
       const n = result.nutrition
       updateLine(line.id, {
         labelPhotoStatus: 'found',
         labelUncertainFields: uncertainLabelFields(n),
+        labelPhotoResolution: result.resolution,
         macros: {
           calories: n.calories ?? 0,
           protein: n.protein ?? 0,
@@ -323,7 +330,7 @@ export function ReceiptLineReview({
 
       const servings = Number(line.editableServings)
       const packageCost = line.editableUnitPrice
-      const barcode = line.match.validBarcode ?? line.normalized.barcodeText ?? undefined
+      const barcode = line.match.validBarcode ?? undefined
 
       if (line.itemType === 'household') {
         householdSaves.push({
@@ -707,7 +714,10 @@ export function ReceiptLineReview({
                       )}
                       {line.labelPhotoStatus === 'found' && (
                         <div>
-                          <p className={styles.barcodeStatusOk}>📸 Filled in from your label photo — please verify.</p>
+                          <p className={styles.barcodeStatusOk}>
+                            📸 Filled in from your label photo — please verify.
+                            {line.labelPhotoResolution?.didFallback && ' (via fallback model)'}
+                          </p>
                           {line.labelUncertainFields && line.labelUncertainFields.size > 0 && (
                             <p className={styles.barcodeStatus}>Some fields couldn't be read confidently — highlighted below.</p>
                           )}
@@ -764,6 +774,7 @@ export function ReceiptLineReview({
                           <div className={styles.webSuggestionHeader}>
                             <span className={`${styles.tierBadge} ${styles[`tier_${line.webLookupResult.confidence}`]}`}>
                               {WEB_CONFIDENCE_LABEL[line.webLookupResult.confidence]}
+                              {line.webLookupResolution?.didFallback && ' — via fallback model'}
                             </span>
                             <span className={styles.webSuggestionName}>
                               {line.webLookupResult.productName}

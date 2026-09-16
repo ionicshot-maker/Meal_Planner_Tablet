@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FolderPlus, Pencil, Trash2 } from 'lucide-react'
 import type { Recipe, RecipeCollection, KitchenReference } from '@/types'
+import { Button, Modal } from '@/components/ui'
 import { CollectionView } from './CollectionView'
 import styles from './CollectionsTab.module.css'
 
@@ -20,6 +21,7 @@ export function CollectionsTab({ collections, recipes, references, onSaveCollect
   const [newName, setNewName] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const recipeMap = new Map(recipes.map(r => [r.id, r]))
 
@@ -38,8 +40,8 @@ export function CollectionsTab({ collections, recipes, references, onSaveCollect
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this collection? Recipes will not be affected.')) return
     await onDeleteCollection(id)
+    setConfirmDeleteId(null)
   }
 
   if (viewingCollection) {
@@ -136,7 +138,7 @@ export function CollectionsTab({ collections, recipes, references, onSaveCollect
                     <button
                       className={`${styles.iconBtn} ${styles.danger}`}
                       title="Delete"
-                      onClick={() => handleDelete(c.id)}
+                      onClick={() => setConfirmDeleteId(c.id)}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -146,6 +148,23 @@ export function CollectionsTab({ collections, recipes, references, onSaveCollect
             )
           })}
         </div>
+      )}
+
+      {confirmDeleteId && (
+        <Modal
+          open
+          onClose={() => setConfirmDeleteId(null)}
+          title="Delete Collection"
+          size="sm"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+              <Button variant="danger" onClick={() => handleDelete(confirmDeleteId)}>Delete</Button>
+            </>
+          }
+        >
+          <p>Delete this collection? Recipes will not be affected.</p>
+        </Modal>
       )}
     </div>
   )

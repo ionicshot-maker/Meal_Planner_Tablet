@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions'
+import { resolveGeminiModel, buildGeminiResolution, GEMINI_FALLBACK_MODEL } from '../../src/utils/geminiModel'
 
 const NO_CACHE = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
 
@@ -15,8 +16,6 @@ For each recipe found, return its bounding box as percentages of the full photo'
 {"boxes": [{"leftPct": number, "topPct": number, "widthPct": number, "heightPct": number}, ...]}
 
 Order the boxes in natural reading order (top to bottom, left to right). If the photo contains only one recipe, or you cannot confidently identify separate recipe boundaries, return {"boxes": []}. Do not include any explanation, markdown, or code fences — return only the JSON object.`
-
-const FALLBACK_MODEL = 'gemini-3-flash'
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -39,7 +38,7 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'No photo provided.' }) }
   }
 
-  const primaryModel = model?.trim() || 'gemini-3.1-flash-lite'
+  const primaryModel = resolveGeminiModel(model)
   const key = apiKey.trim()
   const imageMimeType = mimeType?.trim() || 'image/jpeg'
 
@@ -80,8 +79,8 @@ export const handler: Handler = async (event) => {
     return { statusCode: 200, headers: NO_CACHE, body: JSON.stringify({ boxes: [] }) }
   }
 
-  if (geminiRes.status === 404 && usedModel !== FALLBACK_MODEL) {
-    usedModel = FALLBACK_MODEL
+  if (geminiRes.status === 404 && usedModel !== GEMINI_FALLBACK_MODEL) {
+    usedModel = GEMINI_FALLBACK_MODEL
     try {
       geminiRes = await callGemini(usedModel)
     } catch (err) {
@@ -136,5 +135,5 @@ export const handler: Handler = async (event) => {
     .filter(b => [b.leftPct, b.topPct, b.widthPct, b.heightPct].every(n => Number.isFinite(n)))
 
   console.log('[gemini-detect-recipe-boxes] success | boxes found:', boxes.length, '| model:', usedModel)
-  return { statusCode: 200, headers: NO_CACHE, body: JSON.stringify({ boxes }) }
+  return { statusCode: 200, headers: NO_CACHE, body: JSON.stringify({ boxes, resolution: buildGeminiResolution(primaryModel, usedModel) }) }
 }

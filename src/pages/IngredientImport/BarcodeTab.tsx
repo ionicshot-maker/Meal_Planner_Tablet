@@ -4,6 +4,7 @@ import { Button, Input } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { findIngredientByBarcode } from '@/db/ingredients'
 import { DEFAULT_CATEGORIES, isMacrosIncomplete, normalizedToIngredient, lookupBarcodeProduct } from '@/utils/barcodeLookup'
+import { GEMINI_PRIMARY_MODEL } from '@/utils/geminiModel'
 import type { Ingredient, IngredientUnit, Macros, NutritionSource } from '@/types'
 import styles from './BarcodeTab.module.css'
 
@@ -219,7 +220,7 @@ export function BarcodeTab({ onReview, onExistingFound }: Props) {
           productName,
           brand,
           apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-3.1-flash-lite',
+          model: settings.geminiModel || GEMINI_PRIMARY_MODEL,
         }),
       })
       const json = await res.json() as { status: number; nutrition?: GeminiNutrition }

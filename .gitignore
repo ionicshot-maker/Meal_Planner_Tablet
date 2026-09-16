@@ -26,3 +26,7 @@ npm-debug.log*
 # Recipe Import / continuation-detection research, OCR validation) — not
 # permanent repository content
 CookbookReference/Part*_FIXED_OCR.pdf
+
+# Local-only secret files — never committed
+.local-gemini-key.txt
+.local-*.txt

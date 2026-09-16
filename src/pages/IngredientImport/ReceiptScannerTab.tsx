@@ -6,6 +6,8 @@ import { findMatchingProcessedReceipt } from '@/db/processedReceipts'
 import { normalizeLine, type ParsedReceiptLine } from '@/utils/receiptPriceNormalization'
 import { matchLine, resolveCandidateSelection, candidateLabel, guessItemType } from '@/utils/receiptMatching'
 import { newId } from '@/utils/ids'
+import { GEMINI_PRIMARY_MODEL, type GeminiModelResolution } from '@/utils/geminiModel'
+import { recordGeminiCallResult } from '@/utils/geminiModelClient'
 import { ReceiptLineReview, type ReceiptLineDraft } from './ReceiptLineReview'
 import styles from './ScanLabelTab.module.css'
 
@@ -27,6 +29,7 @@ interface GeminiReceiptResponse {
   lowConfidence?: boolean
   reason?: string
   error?: string
+  resolution?: GeminiModelResolution
 }
 
 interface Props {
@@ -34,7 +37,7 @@ interface Props {
 }
 
 export function ReceiptScannerTab({ onItemSaved }: Props) {
-  const { settings } = useSettings()
+  const { settings, updateSettings } = useSettings()
   const [stage, setStage] = useState<Stage>('capture')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -116,7 +119,7 @@ export function ReceiptScannerTab({ onItemSaved }: Props) {
           image: base64,
           mimeType,
           apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-3.1-flash-lite',
+          model: settings.geminiModel || GEMINI_PRIMARY_MODEL,
         }),
       })
       const json = await res.json() as GeminiReceiptResponse
@@ -130,6 +133,7 @@ export function ReceiptScannerTab({ onItemSaved }: Props) {
         setStage('lowConfidence')
         return
       }
+      if (json.resolution) await recordGeminiCallResult(updateSettings, json.resolution)
 
       const meta = { store: json.store ?? null, date: json.date ?? null, total: json.total ?? null }
       setReceiptMeta(meta)

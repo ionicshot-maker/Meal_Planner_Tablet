@@ -13,6 +13,7 @@ import { JsonImportTab } from './JsonImportTab'
 import { ReviewScreen } from './ReviewScreen'
 import { Toast } from './Toast'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
+import type { GeminiModelResolution } from '@/utils/geminiModel'
 import type { Ingredient, NutritionSource } from '@/types'
 import styles from './IngredientImportPage.module.css'
 
@@ -103,6 +104,7 @@ export default function IngredientImportPage() {
   const [reviewNutritionSource, setReviewNutritionSource] = useState<NutritionSource | null>(null)
   const [reviewUncertainFields, setReviewUncertainFields] = useState<Set<string>>(new Set())
   const [reviewNotice, setReviewNotice] = useState<{ level: 'success' | 'warning'; message: string } | null>(null)
+  const [reviewResolution, setReviewResolution] = useState<GeminiModelResolution | undefined>(undefined)
   const [usdaInitialQuery, setUsdaInitialQuery] = useState(() => searchParams.get('q') ?? '')
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [pendingDraft, setPendingDraft] = useState<SavedDraft | null>(null)
@@ -129,6 +131,7 @@ export default function IngredientImportPage() {
     setReviewNutritionSource(source)
     setReviewUncertainFields(new Set())
     setReviewNotice(null)
+    setReviewResolution(undefined)
   }
 
   function handleExistingBarcodeFound(ingredient: Ingredient) {
@@ -141,6 +144,7 @@ export default function IngredientImportPage() {
     setReviewNutritionSource('usda')
     setReviewUncertainFields(new Set())
     setReviewNotice(null)
+    setReviewResolution(undefined)
   }
 
   function handleGeminiReview(draft: Ingredient) {
@@ -148,13 +152,20 @@ export default function IngredientImportPage() {
     setReviewNutritionSource('gemini')
     setReviewUncertainFields(new Set())
     setReviewNotice(null)
+    setReviewResolution(undefined)
   }
 
-  function handleLabelScanReview(draft: Ingredient, uncertainFields: Set<string>, notice: { level: 'success' | 'warning'; message: string }) {
+  function handleLabelScanReview(
+    draft: Ingredient,
+    uncertainFields: Set<string>,
+    notice: { level: 'success' | 'warning'; message: string },
+    resolution?: GeminiModelResolution
+  ) {
     setReviewDraft(draft)
     setReviewNutritionSource('gemini')
     setReviewUncertainFields(uncertainFields)
     setReviewNotice(notice)
+    setReviewResolution(resolution)
   }
 
   function handleSaved(ingredient: Ingredient) {
@@ -162,6 +173,7 @@ export default function IngredientImportPage() {
     setReviewNutritionSource(null)
     setReviewUncertainFields(new Set())
     setReviewNotice(null)
+    setReviewResolution(undefined)
     localStorage.removeItem(DRAFT_KEY)
     setPendingDraft(null)
     addToast(ingredient.name)
@@ -172,6 +184,7 @@ export default function IngredientImportPage() {
     setReviewNutritionSource(null)
     setReviewUncertainFields(new Set())
     setReviewNotice(null)
+    setReviewResolution(undefined)
     checkForDraft()
   }
 
@@ -181,6 +194,7 @@ export default function IngredientImportPage() {
     setReviewNutritionSource(pendingDraft.nutritionSource)
     setReviewUncertainFields(new Set())
     setReviewNotice(null)
+    setReviewResolution(undefined)
     setPendingDraft(null)
   }
 
@@ -195,6 +209,7 @@ export default function IngredientImportPage() {
     setReviewNutritionSource(null)
     setReviewUncertainFields(new Set())
     setReviewNotice(null)
+    setReviewResolution(undefined)
     setUsdaInitialQuery(extractSearchTerm(name))
     setActiveTab('usda')
   }
@@ -236,6 +251,7 @@ export default function IngredientImportPage() {
             nutritionSource={reviewNutritionSource ?? 'manual'}
             uncertainFields={reviewUncertainFields}
             notice={reviewNotice ?? undefined}
+            resolution={reviewResolution}
           />
         </div>
       ) : (

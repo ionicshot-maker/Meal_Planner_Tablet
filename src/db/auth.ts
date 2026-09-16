@@ -72,18 +72,35 @@ export function onAuthStateChange(url: string, key: string, callback: (session: 
 
 // ─── Households ─────────────────────────────────────────────────────────────
 
-export async function createHousehold(url: string, key: string, code: string, name: string, displayName: string): Promise<{ ok: boolean; error?: string }> {
+export async function createHousehold(url: string, key: string, code: string, name: string, displayName: string): Promise<{ ok: boolean; error?: string; householdId?: string }> {
   const supabase = getSupabaseClient(url, key)
   if (!supabase) return { ok: false, error: 'Supabase is not configured.' }
-  const { error } = await supabase.rpc('create_household', { p_code: code, p_name: name, p_display_name: displayName })
+  const { data, error } = await supabase.rpc('create_household', { p_code: code, p_name: name, p_display_name: displayName })
   if (error) return { ok: false, error: error.message }
-  return { ok: true }
+  // create_household() has always returned table(household_id uuid) — this
+  // was simply never read by any caller before Family Share needed it (the
+  // primary-household create flow only ever needed the code, which it
+  // already has). Additive: existing callers that ignore householdId are
+  // completely unaffected.
+  const row = Array.isArray(data) ? data[0] : data
+  return { ok: true, householdId: row?.household_id as string | undefined }
 }
 
-export async function joinHouseholdByCode(url: string, key: string, code: string, displayName: string): Promise<{ ok: boolean; error?: string; role?: MemberRole }> {
+// `role` is the Family Share owner's invite-time choice ('contributor' or
+// 'readonly' only — never 'owner', see AUTH_MIGRATION_FIX4_SQL for why the
+// server itself also refuses to grant 'owner' via this path regardless of
+// what's passed here). Omitted entirely for every pre-existing caller
+// (the primary-household Join-by-Code form), which keeps the RPC call
+// shaped exactly as it was before this parameter existed — the SQL
+// function's own default ('contributor') applies, unchanged.
+export async function joinHouseholdByCode(
+  url: string, key: string, code: string, displayName: string, role?: 'contributor' | 'readonly'
+): Promise<{ ok: boolean; error?: string; role?: MemberRole; householdId?: string }> {
   const supabase = getSupabaseClient(url, key)
   if (!supabase) return { ok: false, error: 'Supabase is not configured.' }
-  const { data, error } = await supabase.rpc('join_household_by_code', { p_code: code, p_display_name: displayName })
+  const rpcArgs: { p_code: string; p_display_name: string; p_role?: string } = { p_code: code, p_display_name: displayName }
+  if (role) rpcArgs.p_role = role
+  const { data, error } = await supabase.rpc('join_household_by_code', rpcArgs)
   if (error) return { ok: false, error: error.message }
   const row = Array.isArray(data) ? data[0] : data
   // Column names are out_household_id/out_role, not household_id/role — the
@@ -91,7 +108,11 @@ export async function joinHouseholdByCode(url: string, key: string, code: string
   // (see AUTH_MIGRATION_FIX3_SQL) to sidestep a PL/pgSQL ambiguous-reference
   // bug where the output variable collided with the table column inside the
   // function body's ON CONFLICT clause.
-  return { ok: true, role: row?.out_role as MemberRole | undefined }
+  return {
+    ok: true,
+    role: row?.out_role as MemberRole | undefined,
+    householdId: row?.out_household_id as string | undefined,
+  }
 }
 
 export async function getMyHouseholds(url: string, key: string): Promise<HouseholdMembership[]> {
@@ -105,7 +126,8 @@ export async function getMyHouseholds(url: string, key: string): Promise<Househo
     .from('household_members')
     .select('household_id, role, households(id, code, name)')
     .eq('user_id', userId)
-  if (error || !data) return []
+  if (error) throw new Error(`Supabase fetch error (household_members): ${error.message}`)
+  if (!data) return []
 
   return data
     .map((row: Record<string, unknown>) => {

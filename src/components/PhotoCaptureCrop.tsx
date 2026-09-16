@@ -41,6 +41,17 @@ interface Props {
    */
   onComplete: (dataUrl: string, originalPhotoDataUrl: string) => void
   /**
+   * Phase 2C-2 — fires once, the instant a photo is acquired (Take Photo,
+   * Choose Photo, drag-drop, or clipboard paste), immediately before the
+   * crop stage renders. Lets a caller kick off boundary detection as early
+   * as possible without blocking the crop screen from appearing right away.
+   * Deliberately NOT fired for the `initialPhotoDataUrl`-seeded re-entry path
+   * ("crop another recipe from this same photo") — that path already has a
+   * photo and isn't a new acquisition, so callers that key detection off
+   * this event naturally get it exactly once per genuinely new photo.
+   */
+  onPhotoSelected?: (dataUrl: string) => void
+  /**
    * Pre-seeds the pipeline with an already-acquired photo and starts
    * directly at the crop stage, skipping Take Photo/Choose Photo entirely —
    * lets a caller re-enter cropping against a photo it already has (e.g.
@@ -58,6 +69,13 @@ interface Props {
    * percent box to a pixel crop needs the <img>'s *rendered* size, which
    * only exists after it mounts and loads. Omitted/undefined reproduces
    * today's exact default-crop behavior, unchanged.
+   *
+   * Phase 2C-2 update: this can now also arrive *after* the crop stage has
+   * already mounted (recipe #1's box is opportunistic — detection may still
+   * be in flight when the crop screen first appears). A change to this prop
+   * is applied the same way as the initial value, UNLESS the user has
+   * already interacted with the crop (see `hasUserInteractedWithCrop`
+   * below) — an in-progress manual crop is never silently overwritten.
    */
   initialCropBox?: CropBoxPercent
 }
@@ -75,13 +93,63 @@ function clampCropBox(box: CropBoxPercent): { x: number; y: number; width: numbe
   return { x, y, width, height }
 }
 
+// Bug fix (Phase 2C-1, live since 2026-07-27): the deployed detection model
+// (gemini-3.1-flash-lite) reliably returns leftPct/widthPct/heightPct on a
+// 0-1000 scale instead of the requested 0-100 scale, confirmed reproducible
+// across 48 boxes / 18 responses / 6 photos in dedicated investigation.
+// Un-normalized, these values silently clamp (via clampCropBox above) to a
+// degenerate sliver pinned to the bottom-right corner — no error, no crash,
+// just a useless suggestion. A CONDITIONAL "if this field > 100" per-field
+// check is provably unsafe: topPct is *naturally* small for boxes near the
+// top of a page in either scale (confirmed in ~25% of a real sample), so a
+// per-field trigger leaves topPct uncorrected while the other three fields
+// get corrected, producing a confidently wrong box on the wrong recipe
+// entirely — worse than doing nothing. The only safe trigger is checking
+// leftPct/widthPct/heightPct (never topPct alone) at the *response* level,
+// then normalizing every field of every box in that response together.
+//
+// This must run once per full detection response (all boxes for a photo),
+// not per box in isolation — a mix of normalized and un-normalized boxes
+// in the same photo's queue would be worse than either state uniformly.
+// Colocated here with clampCropBox since they're one conceptual pipeline,
+// but called from CookbookPage.tsx where the full response array actually
+// exists — PhotoCaptureCrop itself only ever receives one already-selected
+// box (`initialCropBox`), never the full list, so the response-level
+// decision cannot be made at the point clampCropBox runs.
+const MIN_SANE_BOX_PCT = 2
+
+export function normalizeDetectionResponse(boxes: CropBoxPercent[]): (CropBoxPercent | null)[] {
+  // Step 1 — response-level scale normalization. Never trigger on topPct alone.
+  const isInflated = boxes.some(b => b.leftPct > 100 || b.widthPct > 100 || b.heightPct > 100)
+  const scaled = isInflated
+    ? boxes.map(b => ({ leftPct: b.leftPct / 10, topPct: b.topPct / 10, widthPct: b.widthPct / 10, heightPct: b.heightPct / 10 }))
+    : boxes
+
+  // Step 2 (per box, geometric clamp) + Step 3 (per box, discard if unresolvable).
+  return scaled.map((b): CropBoxPercent | null => {
+    const { leftPct, topPct, widthPct, heightPct } = b
+    if (![leftPct, topPct, widthPct, heightPct].every(Number.isFinite)) return null
+    if (leftPct < 0 || topPct < 0 || widthPct <= 0 || heightPct <= 0) return null
+    if (leftPct >= 100 || topPct >= 100) return null
+
+    let width = widthPct
+    let height = heightPct
+    if (leftPct + width > 100) width = 100 - leftPct
+    if (topPct + height > 100) height = 100 - topPct
+
+    if (width < MIN_SANE_BOX_PCT || height < MIN_SANE_BOX_PCT) return null
+
+    return { leftPct, topPct, widthPct: width, heightPct: height }
+  })
+}
+
 /**
  * Shared photo capture + crop pipeline: Take Photo (native camera on mobile,
  * live getUserMedia webcam on desktop) / Choose Photo / drag-drop / clipboard
  * paste, followed by a react-image-crop editor. Used by both the recipe photo
  * import tab and the ingredient label scanner so the two stay in sync.
  */
-export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, initialPhotoDataUrl, initialCropBox }: Props) {
+export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, onPhotoSelected, initialPhotoDataUrl, initialCropBox }: Props) {
   const [stage, setStage] = useState<Stage>(initialPhotoDataUrl ? 'crop' : 'select')
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(initialPhotoDataUrl ?? null)
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false)
@@ -94,6 +162,19 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, in
   const [crop, setCrop] = useState<PixelCrop | undefined>(undefined)
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | undefined>(undefined)
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined)
+  // Phase 2C-2 — explicit interaction tracking for the suggestion-race rule:
+  // an arriving/pending suggestion must never overwrite a crop the user has
+  // already started adjusting. Deliberately a real flag, not inferred from
+  // crop position — the *default* crop is itself just as much "not yet
+  // touched" as a freshly-arrived suggestion, so position alone can't tell
+  // the two apart.
+  const [hasUserInteractedWithCrop, setHasUserInteractedWithCrop] = useState(false)
+  // Whether the crop currently showing came from a detection suggestion
+  // (vs. today's default full-frame/aspect crop) — drives the tentative
+  // visual treatment. Combined with `!hasUserInteractedWithCrop` and (at the
+  // call site) "this is a fresh photo, not a crop-another re-entry" to decide
+  // when to show it.
+  const [cropCameFromSuggestion, setCropCameFromSuggestion] = useState(false)
   const imgRef = useRef<HTMLImageElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
 
@@ -111,15 +192,19 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, in
     setCrop(undefined)
     setCompletedCrop(undefined)
     setCropAspect(undefined)
+    setHasUserInteractedWithCrop(false)
+    setCropCameFromSuggestion(false)
   }
 
   function loadPhotoFile(file: File | undefined) {
     if (!file || !file.type.startsWith('image/')) return
     const reader = new FileReader()
     reader.onload = () => {
-      setPhotoDataUrl(reader.result as string)
+      const dataUrl = reader.result as string
+      setPhotoDataUrl(dataUrl)
       resetCropState()
       setStage('crop')
+      onPhotoSelected?.(dataUrl)
     }
     reader.readAsDataURL(file)
   }
@@ -204,9 +289,11 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, in
     if (!ctx) return
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     stopWebcam()
-    setPhotoDataUrl(canvas.toDataURL('image/jpeg', 0.92))
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+    setPhotoDataUrl(dataUrl)
     resetCropState()
     setStage('crop')
+    onPhotoSelected?.(dataUrl)
   }
 
   function handleCancelWebcam() {
@@ -214,23 +301,52 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, in
     setStage('select')
   }
 
+  // Shared by the initial application (onCropImageLoad) and the late-arrival
+  // effect below — converts a suggested percent box to a pixel crop against
+  // the image's *rendered* dimensions and marks it as suggestion-derived
+  // (drives the tentative visual treatment at the call site).
+  function applySuggestedBox(box: CropBoxPercent, width: number, height: number) {
+    const { x, y, width: boxWidth, height: boxHeight } = clampCropBox(box)
+    const pixelCrop = convertToPixelCrop({ unit: '%', x, y, width: boxWidth, height: boxHeight }, width, height)
+    setCrop(pixelCrop)
+    setCompletedCrop(pixelCrop)
+    setCropCameFromSuggestion(true)
+  }
+
   function onCropImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
     const { width, height } = e.currentTarget
     if (initialCropBox) {
-      const { x, y, width: boxWidth, height: boxHeight } = clampCropBox(initialCropBox)
-      const pixelCrop = convertToPixelCrop({ unit: '%', x, y, width: boxWidth, height: boxHeight }, width, height)
-      setCrop(pixelCrop)
-      setCompletedCrop(pixelCrop)
+      applySuggestedBox(initialCropBox, width, height)
       return
     }
     applyCropAspect(cropAspect, width, height)
   }
+
+  // Phase 2C-2 — recipe #1's suggestion is opportunistic: the crop screen
+  // renders immediately (via onCropImageLoad's default-crop fallback above),
+  // and a box may arrive *after* that, once detection resolves. Re-applies
+  // it the same way, unless the user has already started adjusting the crop
+  // — never overwrite in-progress user input. Guarded on the image already
+  // being loaded (`imgRef.current.width`); if it isn't yet, onCropImageLoad
+  // will apply whatever `initialCropBox` holds once it does load, so there's
+  // no coverage gap. Intentionally reactive to `initialCropBox` only — it
+  // only ever needs to act at the moment a *new* suggestion arrives, and the
+  // interaction/image-loaded checks read their current values at that exact
+  // moment regardless of whether they're listed as dependencies.
+  useEffect(() => {
+    if (!initialCropBox) return
+    if (hasUserInteractedWithCrop) return
+    const img = imgRef.current
+    if (!img || !img.width) return
+    applySuggestedBox(initialCropBox, img.width, img.height)
+  }, [initialCropBox]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function applyCropAspect(aspect: number | undefined, widthArg?: number, heightArg?: number) {
     const width = widthArg ?? imgRef.current?.width
     const height = heightArg ?? imgRef.current?.height
     if (!width || !height) return
     setCropAspect(aspect)
+    setCropCameFromSuggestion(false)
     const percentCrop = aspect
       ? centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height), width, height)
       : { unit: '%' as const, x: 5, y: 5, width: 90, height: 90 }
@@ -268,6 +384,18 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, in
         height: Math.round(completedCrop.height * (imgRef.current.naturalHeight / imgRef.current.height)),
       }
     : null
+
+  // Phase 2C-2 — visually-tentative treatment is recipe-#1-specific only
+  // (evidence: a dedicated re-run of box #1 quality against the real shipped
+  // pipeline found a 25% misleading rate — 2/8 pages included the next
+  // recipe's title/first ingredient — too high to present as "confirmed
+  // correct"). `initialPhotoDataUrl` is absent only for a genuinely fresh
+  // photo acquisition (recipe #1); a "crop another" re-entry (recipe #2+,
+  // Phase 2C-1's existing suggestion styling, deliberately unchanged) always
+  // supplies it. Also false once the user has touched the crop, or when the
+  // current crop is today's ordinary default (no suggestion ever arrived/was
+  // usable) — this is never shown for a default crop.
+  const showTentativeBadge = !initialPhotoDataUrl && cropCameFromSuggestion && !hasUserInteractedWithCrop
 
   return (
     <>
@@ -349,7 +477,7 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, in
                 key={preset.label}
                 type="button"
                 className={`${styles.cropAspectBtn} ${cropAspect === preset.value ? styles.cropAspectBtnActive : ''}`}
-                onClick={() => applyCropAspect(preset.value)}
+                onClick={() => { setHasUserInteractedWithCrop(true); applyCropAspect(preset.value) }}
               >
                 {preset.label}
               </button>
@@ -357,13 +485,17 @@ export function PhotoCaptureCrop({ primaryLabel, tipsTitle, tips, onComplete, in
           </div>
 
           <div className={styles.cropImageWrap}>
+            {showTentativeBadge && (
+              <p className={styles.suggestedBoxLabel}>✨ Suggested crop — please check the boundaries</p>
+            )}
             <ReactCrop
               crop={crop}
-              onChange={pixelCrop => setCrop(pixelCrop)}
+              onChange={pixelCrop => { setHasUserInteractedWithCrop(true); setCrop(pixelCrop) }}
               onComplete={pixelCrop => setCompletedCrop(pixelCrop)}
               aspect={cropAspect}
               minWidth={20}
               minHeight={20}
+              className={showTentativeBadge ? styles.tentativeSuggestion : undefined}
             >
               <img
                 ref={imgRef}

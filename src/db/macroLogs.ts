@@ -34,14 +34,3 @@ export async function getMacroLogCount(): Promise<number> {
   const db = await getDB()
   return db.count('macroLogs')
 }
-
-export async function pruneOldEntries(maxDays: number): Promise<void> {
-  const db = await getDB()
-  const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - maxDays)
-  const cutoffStr = cutoff.toISOString().slice(0, 10)
-  const all = await db.getAll('macroLogs')
-  await Promise.all(
-    all.filter(e => e.date < cutoffStr).map(e => db.delete('macroLogs', e.id))
-  )
-}

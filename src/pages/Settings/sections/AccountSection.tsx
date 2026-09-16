@@ -123,9 +123,17 @@ function SignedInView({
 
   const refresh = useCallback(async () => {
     setLoadingHouseholds(true)
-    const list = await getMyHouseholds(url, anonKey)
-    setHouseholds(list)
-    setLoadingHouseholds(false)
+    try {
+      const list = await getMyHouseholds(url, anonKey)
+      setHouseholds(list)
+      return list
+    } catch {
+      // Leaves the previously-loaded household list as-is rather than
+      // clearing it on a transient failure.
+      return [] as HouseholdMembership[]
+    } finally {
+      setLoadingHouseholds(false)
+    }
   }, [url, anonKey])
 
   useEffect(() => { refresh() }, [refresh])
@@ -156,7 +164,18 @@ function SignedInView({
             url={url}
             anonKey={anonKey}
             email={email}
-            onLinked={code => { onHouseholdLinked(code); refresh() }}
+            onLinked={async linked => {
+              // Self-correct to the canonical households.code casing rather than
+              // trusting what was typed — prefer the household id join already
+              // returns (unambiguous); fall back to a case-insensitive code
+              // match for create, which has no id to compare against. Runs only
+              // once, right here, at link time — never during ordinary sync.
+              const list = await refresh()
+              const match = linked.householdId
+                ? list.find(h => h.householdId === linked.householdId)
+                : list.find(h => h.code.toLowerCase() === linked.code.toLowerCase())
+              onHouseholdLinked(match?.code ?? linked.code)
+            }}
           />
         </>
       )}
@@ -249,7 +268,7 @@ function CreateOrJoinForm({
   url: string
   anonKey: string
   email: string
-  onLinked: (code: string) => void
+  onLinked: (linked: { code: string; householdId?: string }) => void
 }) {
   const [mode, setMode] = useState<'create' | 'join' | null>(null)
   const [name, setName] = useState('')
@@ -265,7 +284,7 @@ function CreateOrJoinForm({
     const result = await createHousehold(url, anonKey, newCode, name.trim(), email)
     setSubmitting(false)
     if (!result.ok) { setError(result.error ?? 'Could not create household.'); return }
-    onLinked(newCode)
+    onLinked({ code: newCode })
     setMode(null)
     setName('')
     setCode('')
@@ -278,7 +297,7 @@ function CreateOrJoinForm({
     const result = await joinHouseholdByCode(url, anonKey, code.trim(), email)
     setSubmitting(false)
     if (!result.ok) { setError(result.error ?? 'Could not join that household.'); return }
-    onLinked(code.trim())
+    onLinked({ code: code.trim(), householdId: result.householdId })
     setMode(null)
     setCode('')
   }

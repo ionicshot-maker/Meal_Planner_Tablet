@@ -58,6 +58,13 @@ export function useIsHouseholdOwner(): { isOwner: boolean; loading: boolean } {
       // missing feature / support question, never a silently-wrong grant.
       setIsOwner(active ? active.role === 'owner' : false)
       setChecking(false)
+    }).catch(() => {
+      // Same fail-closed philosophy as the no-confident-match case above,
+      // now also reached when the lookup itself fails, not just when it
+      // resolves without a match.
+      if (cancelled) return
+      setIsOwner(false)
+      setChecking(false)
     })
 
     return () => { cancelled = true }

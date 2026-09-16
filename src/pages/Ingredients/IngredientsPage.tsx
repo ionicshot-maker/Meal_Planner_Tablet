@@ -4,6 +4,7 @@ import { useSettings, useHouseholdTitle } from '@/context/SettingsContext'
 import { Button, Input, Select, Card, Modal, Toggle } from '@/components/ui'
 import { Download, FileJson, Info, X, SlidersHorizontal } from 'lucide-react'
 import { getAllIngredients, getIngredient, saveIngredient, archiveIngredient, deleteIngredient, searchIngredients } from '@/db/ingredients'
+import { countIngredientReferences, totalReferences, type IngredientReferenceCounts } from '@/db/mergeIngredients'
 import { newId, now } from '@/utils/ids'
 import { IngredientForm } from './IngredientForm'
 import { MergeIngredientModal } from './MergeIngredientModal'
@@ -44,6 +45,7 @@ export default function IngredientsPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [editing, setEditing] = useState<Ingredient | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Ingredient | null>(null)
+  const [confirmDeleteCounts, setConfirmDeleteCounts] = useState<IngredientReferenceCounts | null>(null)
   const [merging, setMerging] = useState<Ingredient | null>(null)
   const [loading, setLoading] = useState(true)
   const [bannerDismissed, setBannerDismissed] = useState(
@@ -124,10 +126,18 @@ export default function IngredientsPage() {
     await load()
   }
 
+  async function openConfirmDelete(ingredient: Ingredient) {
+    setConfirmDelete(ingredient)
+    setConfirmDeleteCounts(null)
+    const counts = await countIngredientReferences(ingredient.id)
+    setConfirmDeleteCounts(counts)
+  }
+
   async function handleDelete(ingredient: Ingredient) {
     await deleteIngredient(ingredient.id)
     await load()
     setConfirmDelete(null)
+    setConfirmDeleteCounts(null)
   }
 
   const categoryOptions = [
@@ -251,7 +261,7 @@ export default function IngredientsPage() {
               display={settings.ingredientDisplay}
               onEdit={() => setEditing(ingredient)}
               onArchive={() => handleArchive(ingredient)}
-              onDelete={() => setConfirmDelete(ingredient)}
+              onDelete={() => openConfirmDelete(ingredient)}
               onMerge={() => setMerging(ingredient)}
             />
           ))}
@@ -269,20 +279,33 @@ export default function IngredientsPage() {
       {confirmDelete && (
         <Modal
           open
-          onClose={() => setConfirmDelete(null)}
+          onClose={() => { setConfirmDelete(null); setConfirmDeleteCounts(null) }}
           title="Delete Ingredient"
           size="sm"
           footer={
             <>
-              <Button variant="secondary" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+              <Button variant="secondary" onClick={() => { setConfirmDelete(null); setConfirmDeleteCounts(null) }}>Cancel</Button>
               <Button variant="danger" onClick={() => handleDelete(confirmDelete)}>Delete Permanently</Button>
             </>
           }
         >
-          <p>
-            Permanently delete <strong>{confirmDelete.name}</strong>? This cannot be undone.
-            Consider archiving instead to preserve it in existing recipes.
-          </p>
+          {confirmDeleteCounts === null ? (
+            <p>Checking for references…</p>
+          ) : totalReferences(confirmDeleteCounts) > 0 ? (
+            <p>
+              <strong>{confirmDelete.name}</strong> is referenced by {confirmDeleteCounts.recipes} recipe(s),{' '}
+              {confirmDeleteCounts.groceryLists} grocery list(s), and {confirmDeleteCounts.macroLogs} macro log entr(y/ies).
+              Deleting it will leave those pointing at nothing — they won't crash, but will show as unlinked/unresolved.
+              Consider archiving instead to preserve it in existing recipes, or <strong>Merge</strong> instead if this
+              is really a duplicate of another ingredient. Delete anyway?
+            </p>
+          ) : (
+            <p>
+              Permanently delete <strong>{confirmDelete.name}</strong>? No recipes, grocery lists, or macro logs
+              currently reference it. This cannot be undone. Consider archiving instead to preserve it in existing
+              recipes.
+            </p>
+          )}
         </Modal>
       )}
 

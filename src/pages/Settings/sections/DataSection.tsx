@@ -2,6 +2,7 @@ import { useState, useEffect, ChangeEvent } from 'react'
 import { Button, Card, Modal, OperationStatus } from '@/components/ui'
 import type { OperationState, OperationProgress } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
+import type { AppSettings } from '@/types'
 import { getAllIngredients, getAllRecipes } from '@/db'
 import { CloudSyncSection } from './CloudSyncSection'
 import { loadSettings } from '@/db/settings'
@@ -38,7 +39,7 @@ interface LocalCounts {
 }
 
 export function DataSection() {
-  const { settings } = useSettings()
+  const { settings, updateSettings } = useSettings()
   const [confirmTarget, setConfirmTarget] = useState<ResetTarget | null>(null)
   const [exporting, setExporting] = useState(false)
   const [importPending, setImportPending] = useState<ImportPending | null>(null)
@@ -268,6 +269,34 @@ export function DataSection() {
 
       await tx.done
 
+      // Settings restore is selective, not a full-object overwrite — deliberately
+      // excludes device-local connection/credential fields (Supabase URL/anon key,
+      // USDA/Gemini API keys, household sync code, Family Share code/role, last-synced
+      // timestamps, the sign-in reminder dismissal, per-device starter-library
+      // onboarding flags, and the settings row's own updatedAt) so restoring a backup
+      // can never redirect this device to a different Supabase project/account or
+      // clobber a connection that's already working here. Anything in data.settings
+      // outside this allowlist — including an old-format `householdSize` key from a
+      // pre-Finding-#3 backup — is silently ignored, not restored, not an error.
+      if (data.settings && typeof data.settings === 'object' && !Array.isArray(data.settings)) {
+        const RESTORABLE_SETTINGS_KEYS = [
+          'householdName', 'unitSystem', 'theme', 'fontSizePt', 'ai', 'geminiModel',
+          'nutrientToggles', 'macroHistoryDays', 'storePreferenceEnabled', 'people',
+          'setupComplete', 'ingredientCategories', 'recipeTags', 'brands', 'stores',
+          'kitchenReferencePhotoPolicy', 'ingredientDisplay', 'allergenWatchList',
+          'miscategoryFixed', 'categoryFixRulesVersion',
+        ] as const
+        const importedSettings = data.settings as Record<string, unknown>
+        const patch: Partial<AppSettings> = {}
+        for (const key of RESTORABLE_SETTINGS_KEYS) {
+          if (key in importedSettings) (patch as Record<string, unknown>)[key] = importedSettings[key]
+        }
+        if (Object.keys(patch).length > 0) {
+          await updateSettings(patch)
+          messages.push('household settings restored')
+        }
+      }
+
       setImportOpDoneMessage(
         messages.length > 0
           ? messages.join(', ') + '.'
@@ -375,7 +404,10 @@ export function DataSection() {
         <p className={styles.desc}>
           Restore from a previously exported JSON backup. Meal plan data, macro logs, and grocery
           history are merged automatically. For ingredients and recipes you will be asked how to
-          handle any duplicates.
+          handle any duplicates. Household name, people profiles, and other preference settings are
+          restored too — but this device's connection details (Supabase project, sign-in, sync codes)
+          stay exactly as they are, so restoring a backup can never redirect you to a different account
+          or project.
         </p>
         <label className={`${styles.importLabel} ${importOpState === 'working' ? styles.importLabelDisabled : ''}`}>
           <span className={styles.importBtn}>Choose File</span>

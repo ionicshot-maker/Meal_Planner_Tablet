@@ -45,6 +45,8 @@ export default function DevToolsPage() {
   const [categoryChoices, setCategoryChoices] = useState<Record<string, string>>({})
   const [mergingId, setMergingId] = useState<string | null>(null)
   const [mergeResult, setMergeResult] = useState<{ keepName: string; counts: IngredientReferenceCounts } | null>(null)
+  const [pendingMerge, setPendingMerge] = useState<{ keepEntry: BarcodeDupeEntry; mergeAwayEntry: BarcodeDupeEntry; category: string } | null>(null)
+  const [pendingMergeCounts, setPendingMergeCounts] = useState<IngredientReferenceCounts | null>(null)
   const [pendingDelete, setPendingDelete] = useState<BarcodeDupeEntry | null>(null)
   const [pendingDeleteCounts, setPendingDeleteCounts] = useState<IngredientReferenceCounts | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -74,6 +76,22 @@ export default function DevToolsPage() {
     } finally {
       setMergingId(null)
     }
+  }
+
+  async function openMergeConfirm(keepEntry: BarcodeDupeEntry, mergeAwayEntry: BarcodeDupeEntry, category: string) {
+    setPendingMerge({ keepEntry, mergeAwayEntry, category })
+    setPendingMergeCounts(null)
+    setActionError('')
+    const counts = await countIngredientReferences(mergeAwayEntry.ingredientId)
+    setPendingMergeCounts(counts)
+  }
+
+  async function confirmMerge() {
+    if (!pendingMerge) return
+    const { keepEntry, mergeAwayEntry, category } = pendingMerge
+    setPendingMerge(null)
+    setPendingMergeCounts(null)
+    await handleMerge(keepEntry, mergeAwayEntry, category)
   }
 
   async function openDeleteConfirm(entry: BarcodeDupeEntry) {
@@ -288,6 +306,10 @@ export default function DevToolsPage() {
                         review each below. The pre-selected "Keep" is whichever entry has the longer (more complete)
                         barcode.
                       </p>
+                      <p className={styles.dupeResultsNote}>
+                        "Skip this pair" only hides it for this session — nothing is saved, so a skipped pair
+                        reappears the next time this page is scanned.
+                      </p>
                       {visibleGroups.map(group => {
                         const defaultKeep = defaultKeepEntry(group.entries)
                         const keepIngredientId = keepPicks[group.normalizedBarcode] ?? defaultKeep.ingredientId
@@ -354,7 +376,7 @@ export default function DevToolsPage() {
                                         size="sm"
                                         variant="secondary"
                                         disabled={mergingId === entry.variantId}
-                                        onClick={() => handleMerge(keepEntry, entry, categoryChoice)}
+                                        onClick={() => openMergeConfirm(keepEntry, entry, categoryChoice)}
                                       >
                                         {mergingId === entry.variantId ? 'Merging…' : `Merge into "${keepEntry.ingredientName}"`}
                                       </Button>
@@ -381,6 +403,55 @@ export default function DevToolsPage() {
             )}
           </Card>
         </section>
+
+        {pendingMerge && (
+          <Modal
+            open
+            onClose={() => { setPendingMerge(null); setPendingMergeCounts(null) }}
+            title="Merge Ingredients"
+            size="sm"
+            footer={
+              <>
+                <Button variant="secondary" onClick={() => { setPendingMerge(null); setPendingMergeCounts(null) }}>
+                  Cancel
+                </Button>
+                <Button variant="danger" onClick={confirmMerge} disabled={mergingId === pendingMerge.mergeAwayEntry.variantId}>
+                  {mergingId === pendingMerge.mergeAwayEntry.variantId ? 'Merging…' : `Merge — Keep "${pendingMerge.keepEntry.ingredientName}"`}
+                </Button>
+              </>
+            }
+          >
+            <div className={styles.dupeEntry}>
+              <div className={styles.dupeEntryInfo}>
+                <span className={styles.dupeEntryName}>{pendingMerge.keepEntry.ingredientName} (kept)</span>
+                <span className={styles.dupeEntryMeta}>
+                  {pendingMerge.keepEntry.brand} · {pendingMerge.category} · barcode <code>{pendingMerge.keepEntry.rawBarcode}</code>
+                </span>
+              </div>
+            </div>
+            <div className={styles.dupeEntry}>
+              <div className={styles.dupeEntryInfo}>
+                <span className={styles.dupeEntryName}>{pendingMerge.mergeAwayEntry.ingredientName} (merged away)</span>
+                <span className={styles.dupeEntryMeta}>
+                  {pendingMerge.mergeAwayEntry.brand} · {pendingMerge.mergeAwayEntry.category} · barcode <code>{pendingMerge.mergeAwayEntry.rawBarcode}</code>
+                </span>
+              </div>
+            </div>
+            {pendingMergeCounts === null ? (
+              <p>Checking for references…</p>
+            ) : (
+              <p>
+                <strong>{pendingMerge.mergeAwayEntry.ingredientName}</strong> is referenced by {pendingMergeCounts.recipes} recipe(s),{' '}
+                {pendingMergeCounts.groceryLists} grocery list(s), and {pendingMergeCounts.macroLogs} macro log entr(y/ies).
+              </p>
+            )}
+            <p>
+              <strong>{pendingMerge.mergeAwayEntry.ingredientName}</strong> will be permanently deleted. Every recipe, grocery
+              list, and macro log entry that references it will be repointed to <strong>{pendingMerge.keepEntry.ingredientName}</strong>{' '}
+              first. This cannot be undone.
+            </p>
+          </Modal>
+        )}
 
         {pendingDelete && (
           <Modal

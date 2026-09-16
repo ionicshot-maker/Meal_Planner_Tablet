@@ -145,6 +145,35 @@ export async function getDB(): Promise<IDBPDatabase<MealPlannerDB>> {
         db.createObjectStore('processedReceipts', { keyPath: 'id' })
       }
     },
+    blocked(currentVersion, blockedVersion, event) {
+      // This tab is trying to open a newer schema version, but another open
+      // tab still holds an older-version connection that hasn't released it
+      // yet — this openDB() call will hang until that tab's connection
+      // closes (normally triggered by that tab's own `blocking` handler
+      // below, once its user closes or reloads it). No app-wide toast/banner
+      // system exists that's reachable from this plain module (outside the
+      // React tree) without building new UI plumbing for a rare, edge-case
+      // scenario — surfaced via console.warn instead.
+      console.warn(
+        `Database upgrade blocked: an older version (${currentVersion}) of this database is still open in another tab, preventing version ${blockedVersion} from opening here. Close other tabs of this app and reload this page.`,
+        event,
+      )
+    },
+    blocking() {
+      // Another tab/context is trying to open a newer schema version and is
+      // blocked by our already-open connection. Close it so that newer
+      // connection can proceed instead of hanging indefinitely, and clear
+      // the cache so a subsequent getDB() call in this tab doesn't return
+      // the now-closed, unusable connection.
+      dbInstance?.close()
+      dbInstance = null
+    },
+    terminated() {
+      // Browser abnormally terminated the connection (not called for a
+      // normal db.close()) — clear the cache so the next getDB() call
+      // reopens a fresh connection instead of returning a dead reference.
+      dbInstance = null
+    },
   })
 
   return dbInstance

@@ -1,4 +1,5 @@
 import type { Macros } from '@/types'
+import type { GeminiModelResolution } from './geminiModel'
 
 export type WebLookupConfidence = 'high' | 'medium' | 'low'
 export type BarcodeSignal = 'text' | 'image' | 'none'
@@ -25,6 +26,7 @@ export interface WebLookupResult {
   status: 'found' | 'not-found' | 'error'
   product?: WebLookupProduct
   errorMessage?: string
+  resolution?: GeminiModelResolution
 }
 
 // Fallback for when Open Food Facts has no record for a barcode — has Gemini
@@ -45,14 +47,14 @@ export async function lookupBarcodeWeb(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ barcode, nameHint, brandHint, apiKey, model }),
     })
-    const json = await res.json() as { status?: number; result?: WebLookupProduct; error?: string }
+    const json = await res.json() as { status?: number; result?: WebLookupProduct; error?: string; resolution?: GeminiModelResolution }
     if (!res.ok || json.error) {
       return { status: 'error', errorMessage: json.error ?? `Request failed (${res.status})` }
     }
     if (json.status !== 1 || !json.result) {
       return { status: 'not-found' }
     }
-    return { status: 'found', product: json.result }
+    return { status: 'found', product: json.result, resolution: json.resolution }
   } catch (err) {
     return { status: 'error', errorMessage: err instanceof Error ? err.message : String(err) }
   }

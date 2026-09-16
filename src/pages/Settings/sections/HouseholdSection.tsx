@@ -31,7 +31,7 @@ const PAYDAY_COLORS = ['#E74C3C', '#E67E22', '#27AE60', '#2980B9', '#8E44AD', '#
 
 export function HouseholdSection() {
   const { settings, updateSettings } = useSettings()
-  const { householdSize, people } = settings
+  const { people } = settings
   const [editingPerson, setEditingPerson] = useState<Person | null>(null)
   const [isAddingPerson, setIsAddingPerson] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
@@ -49,7 +49,7 @@ export function HouseholdSection() {
   function savePerson(updated: Person) {
     if (isAddingPerson) {
       const next = [...people, updated]
-      updateSettings({ people: next, householdSize: next.length })
+      updateSettings({ people: next })
     } else {
       updateSettings({ people: people.map(p => p.id === updated.id ? updated : p) })
     }
@@ -59,7 +59,7 @@ export function HouseholdSection() {
 
   function deletePerson(id: string) {
     const next = people.filter(p => p.id !== id)
-    updateSettings({ people: next, householdSize: Math.max(1, next.length) })
+    updateSettings({ people: next })
     setShowDeleteConfirm(null)
   }
 
@@ -77,26 +77,6 @@ export function HouseholdSection() {
             onChange={e => updateSettings({ householdName: e.target.value })}
             placeholder="e.g. Angelo Family"
           />
-        </div>
-      </Card>
-
-      <Card>
-        <div className={styles.sizeRow}>
-          <span className={styles.fieldLabel}>Household size</span>
-          <div className={styles.sizeControl}>
-            <button
-              className={styles.stepper}
-              onClick={() => updateSettings({ householdSize: Math.max(1, householdSize - 1) })}
-              disabled={householdSize <= 1}
-              aria-label="Decrease"
-            >−</button>
-            <span className={styles.sizeValue}>{householdSize}</span>
-            <button
-              className={styles.stepper}
-              onClick={() => updateSettings({ householdSize: householdSize + 1 })}
-              aria-label="Increase"
-            >+</button>
-          </div>
         </div>
       </Card>
 

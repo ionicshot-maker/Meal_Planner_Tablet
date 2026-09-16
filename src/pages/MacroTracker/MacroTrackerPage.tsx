@@ -96,7 +96,6 @@ export default function MacroTrackerPage() {
             date={date}
             nutrientToggles={nutrientToggles}
             unitSystem={unitSystem}
-            householdSize={settings.householdSize}
           />
         ) : people.length > 0 ? (
           <div className={styles.noPeople}>Select a person above to view their macro log.</div>
