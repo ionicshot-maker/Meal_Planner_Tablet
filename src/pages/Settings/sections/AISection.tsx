@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSettings } from '@/context/SettingsContext'
 import { Button, Card, Input, Select } from '@/components/ui'
 import type { AIProvider } from '@/types'
@@ -33,6 +33,71 @@ interface FetchedModel { id: string; displayName: string }
 
 const SUPABASE_HINT = 'Get a free account at supabase.com — create a project, then go to Project Settings → API.'
 
+/**
+ * Holds a local "draft" copy of a text field that only commits to the real
+ * settings (updateSettings) when the user explicitly clicks Save. This gives
+ * every key/URL field a visible Save + Discard pair and a brief confirmation,
+ * instead of writing on every keystroke with no undo.
+ */
+function useDraftField(savedValue: string, onSave: (value: string) => void) {
+  const [draft, setDraft] = useState(savedValue)
+  const [justSaved, setJustSaved] = useState(false)
+  const prevSaved = useRef(savedValue)
+  const savedTimeout = useRef<number | undefined>(undefined)
+
+  // If the underlying saved value changes from elsewhere (e.g. a cloud sync
+  // pull) and the user hasn't started an unsaved edit, follow it. If they
+  // have an unsaved edit in progress, leave their draft alone.
+  useEffect(() => {
+    if (savedValue !== prevSaved.current) {
+      setDraft(current => (current === prevSaved.current ? savedValue : current))
+      prevSaved.current = savedValue
+    }
+  }, [savedValue])
+
+  useEffect(() => () => window.clearTimeout(savedTimeout.current), [])
+
+  const dirty = draft !== savedValue
+
+  function save() {
+    onSave(draft)
+    prevSaved.current = draft
+    setJustSaved(true)
+    window.clearTimeout(savedTimeout.current)
+    savedTimeout.current = window.setTimeout(() => setJustSaved(false), 2000)
+  }
+
+  function discard() {
+    setDraft(savedValue)
+  }
+
+  return { draft, setDraft, dirty, justSaved, save, discard }
+}
+
+interface SaveRowProps {
+  dirty: boolean
+  justSaved: boolean
+  onSave: () => void
+  onDiscard: () => void
+}
+
+function SaveRow({ dirty, justSaved, onSave, onDiscard }: SaveRowProps) {
+  if (!dirty && !justSaved) return null
+  return (
+    <div className={styles.saveRow}>
+      {dirty ? (
+        <>
+          <Button size="sm" onClick={onSave}>Save</Button>
+          <Button size="sm" variant="ghost" onClick={onDiscard}>Discard</Button>
+          <span className={styles.unsavedHint}>Unsaved changes</span>
+        </>
+      ) : (
+        <span className={styles.savedHint}>✓ Saved</span>
+      )}
+    </div>
+  )
+}
+
 export function AISection() {
   const { settings, updateSettings } = useSettings()
   const { ai, usdaApiKey, geminiApiKey, geminiModel } = settings
@@ -41,16 +106,22 @@ export function AISection() {
   const [fetchedModels, setFetchedModels] = useState<FetchedModel[]>([])
   const [modelFetchError, setModelFetchError] = useState('')
 
+  const aiKey = useDraftField(ai.apiKey, v => updateSettings({ ai: { ...ai, apiKey: v } }))
+  const usda = useDraftField(usdaApiKey, v => updateSettings({ usdaApiKey: v }))
+  const gemini = useDraftField(geminiApiKey, v => updateSettings({ geminiApiKey: v }))
+  const supabaseUrl = useDraftField(settings.supabaseUrl ?? '', v => updateSettings({ supabaseUrl: v }))
+  const supabaseAnonKey = useDraftField(settings.supabaseAnonKey ?? '', v => updateSettings({ supabaseAnonKey: v }))
+
   const availableModelIds = new Set(fetchedModels.map(m => m.id))
 
   async function handleFetchModels() {
-    if (!geminiApiKey) return
+    if (!gemini.draft) return
     setModelFetchLoading(true)
     setModelFetchError('')
     setFetchedModels([])
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiApiKey)}`
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(gemini.draft)}`
       )
       if (!res.ok) {
         const text = await res.text()
@@ -99,23 +170,26 @@ export function AISection() {
           <p className={styles.hint}>{PROVIDER_HINTS[ai.provider]}</p>
 
           {ai.provider !== 'none' && ai.provider !== 'ollama' && (
-            <div className={styles.keyRow}>
-              <Input
-                label="API Key"
-                type={showKey ? 'text' : 'password'}
-                value={ai.apiKey}
-                onChange={e => updateSettings({ ai: { ...ai, apiKey: e.target.value } })}
-                placeholder="Paste your API key"
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                className={styles.showBtn}
-                onClick={() => setShowKey(v => !v)}
-              >
-                {showKey ? 'Hide' : 'Show'}
-              </Button>
-            </div>
+            <>
+              <div className={styles.keyRow}>
+                <Input
+                  label="API Key"
+                  type={showKey ? 'text' : 'password'}
+                  value={aiKey.draft}
+                  onChange={e => aiKey.setDraft(e.target.value)}
+                  placeholder="Paste your API key"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={styles.showBtn}
+                  onClick={() => setShowKey(v => !v)}
+                >
+                  {showKey ? 'Hide' : 'Show'}
+                </Button>
+              </div>
+              <SaveRow dirty={aiKey.dirty} justSaved={aiKey.justSaved} onSave={aiKey.save} onDiscard={aiKey.discard} />
+            </>
           )}
 
           {ai.provider === 'ollama' && (
@@ -149,18 +223,21 @@ export function AISection() {
       </p>
 
       <Card>
-        <div className={styles.keyRow}>
-          <Input
-            label="USDA API Key (optional)"
-            type={showKey ? 'text' : 'password'}
-            value={usdaApiKey}
-            onChange={e => updateSettings({ usdaApiKey: e.target.value })}
-            placeholder="Leave blank to use the demo key"
-            hint="Get a free key at api.nal.usda.gov"
-          />
-          <Button variant="ghost" size="sm" className={styles.showBtn} onClick={() => setShowKey(v => !v)}>
-            {showKey ? 'Hide' : 'Show'}
-          </Button>
+        <div className={styles.fieldGroup}>
+          <div className={styles.keyRow}>
+            <Input
+              label="USDA API Key (optional)"
+              type={showKey ? 'text' : 'password'}
+              value={usda.draft}
+              onChange={e => usda.setDraft(e.target.value)}
+              placeholder="Leave blank to use the demo key"
+              hint="Get a free key at api.nal.usda.gov"
+            />
+            <Button variant="ghost" size="sm" className={styles.showBtn} onClick={() => setShowKey(v => !v)}>
+              {showKey ? 'Hide' : 'Show'}
+            </Button>
+          </div>
+          <SaveRow dirty={usda.dirty} justSaved={usda.justSaved} onSave={usda.save} onDiscard={usda.discard} />
         </div>
       </Card>
 
@@ -176,14 +253,15 @@ export function AISection() {
             <Input
               label="Google Gemini API Key (optional)"
               type={showKey ? 'text' : 'password'}
-              value={geminiApiKey}
-              onChange={e => updateSettings({ geminiApiKey: e.target.value })}
+              value={gemini.draft}
+              onChange={e => gemini.setDraft(e.target.value)}
               placeholder="Get a free key at aistudio.google.com"
             />
             <Button variant="ghost" size="sm" className={styles.showBtn} onClick={() => setShowKey(v => !v)}>
               {showKey ? 'Hide' : 'Show'}
             </Button>
           </div>
+          <SaveRow dirty={gemini.dirty} justSaved={gemini.justSaved} onSave={gemini.save} onDiscard={gemini.discard} />
 
           <div className={styles.modelChipsGroup}>
             <span className={styles.modelChipsLabel}>Gemini Model</span>
@@ -214,7 +292,7 @@ export function AISection() {
                 variant="secondary"
                 size="sm"
                 onClick={handleFetchModels}
-                disabled={!geminiApiKey || modelFetchLoading}
+                disabled={!gemini.draft || modelFetchLoading}
               >
                 {modelFetchLoading ? 'Checking…' : 'Check available models'}
               </Button>
@@ -224,6 +302,9 @@ export function AISection() {
                 </span>
               )}
             </div>
+            {gemini.dirty && gemini.draft && (
+              <p className={styles.hint}>Testing your unsaved key above — click Save to keep it.</p>
+            )}
             {modelFetchError && <p className={styles.modelError}>{modelFetchError}</p>}
           </div>
 
@@ -245,8 +326,8 @@ export function AISection() {
         <div className={styles.fieldGroup}>
           <Input
             label="Supabase Project URL"
-            value={settings.supabaseUrl ?? ''}
-            onChange={e => updateSettings({ supabaseUrl: e.target.value })}
+            value={supabaseUrl.draft}
+            onChange={e => supabaseUrl.setDraft(e.target.value)}
             placeholder="https://xxxx.supabase.co"
             hint={SUPABASE_HINT}
           />
@@ -254,8 +335,8 @@ export function AISection() {
             <Input
               label="Supabase Anon Key"
               type={showKey ? 'text' : 'password'}
-              value={settings.supabaseAnonKey ?? ''}
-              onChange={e => updateSettings({ supabaseAnonKey: e.target.value })}
+              value={supabaseAnonKey.draft}
+              onChange={e => supabaseAnonKey.setDraft(e.target.value)}
               placeholder="eyJ..."
               hint="Copy the anon/public key from Project Settings → API → Project API keys."
             />
@@ -263,6 +344,12 @@ export function AISection() {
               {showKey ? 'Hide' : 'Show'}
             </Button>
           </div>
+          <SaveRow
+            dirty={supabaseUrl.dirty || supabaseAnonKey.dirty}
+            justSaved={supabaseUrl.justSaved || supabaseAnonKey.justSaved}
+            onSave={() => { supabaseUrl.save(); supabaseAnonKey.save() }}
+            onDiscard={() => { supabaseUrl.discard(); supabaseAnonKey.discard() }}
+          />
           {settings.supabaseUrl && settings.supabaseAnonKey && (
             <p className={styles.keyStored}>Supabase credentials stored locally. Never shared with anyone except Supabase.</p>
           )}

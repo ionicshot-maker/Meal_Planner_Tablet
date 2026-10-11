@@ -3,8 +3,11 @@ import { useSettings } from '@/context/SettingsContext'
 import { Button, Card, Input, Select, Toggle, Modal, ConfirmDiscardDialog } from '@/components/ui'
 import { useConfirmClose } from '@/hooks/useConfirmClose'
 import { newId } from '@/utils/ids'
+import { calculateAge } from '@/utils/age'
 import type { Person, PersonMode, PayFrequency, Sex, ActivityLevel, PaydaySchedule } from '@/types'
 import styles from './HouseholdSection.module.css'
+
+const TODAY_ISO = new Date().toISOString().slice(0, 10)
 
 const FREQ_OPTIONS: { value: PayFrequency; label: string }[] = [
   { value: 'weekly',       label: 'Weekly' },
@@ -184,6 +187,18 @@ function PersonModal({ person, isNew, onSave, onClose }: {
     setDraft(d => ({ ...d, paydaySchedule: { ...existing, [key]: value } }))
   }
 
+  function setBirthDate(value: string) {
+    const birthDate = value || undefined
+    // Keep the legacy `age` number in sync too, so anything that still reads
+    // it directly gets an accurate value — but birthDate is now the source
+    // of truth and age is recomputed from it every time this is edited.
+    const computed = calculateAge(birthDate)
+    setDraft(d => ({ ...d, birthDate, age: computed ?? d.age }))
+  }
+
+  const computedAge = calculateAge(draft.birthDate)
+  const hasLegacyAgeOnly = !draft.birthDate && draft.age != null
+
   return (
     <Modal
       open
@@ -231,7 +246,20 @@ function PersonModal({ person, isNew, onSave, onClose }: {
         {draft.mode === 'complex' && (
           <>
             <div className={styles.row2}>
-              <Input label="Age" type="number" min={1} max={120} value={draft.age ?? ''} onChange={e => set('age', +e.target.value || undefined)} />
+              <Input
+                label="Birth Date"
+                type="date"
+                max={TODAY_ISO}
+                value={draft.birthDate ?? ''}
+                onChange={e => setBirthDate(e.target.value)}
+                hint={
+                  computedAge !== undefined
+                    ? `Age: ${computedAge} — updates automatically`
+                    : hasLegacyAgeOnly
+                      ? `Age was manually entered as ${draft.age} and won't update on its own. Set a birth date to fix that.`
+                      : undefined
+                }
+              />
               <Input label="Weight (lbs)" type="number" min={1} value={draft.weight ?? ''} onChange={e => set('weight', +e.target.value || undefined)} />
             </div>
             <Input label="Height (inches)" type="number" min={1} value={draft.height ?? ''} onChange={e => set('height', +e.target.value || undefined)} />

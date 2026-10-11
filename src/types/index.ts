@@ -36,7 +36,8 @@ export interface Person {
   name: string
   mode: PersonMode
   // Complex mode fields
-  age?: number
+  birthDate?: string    // ISO date (YYYY-MM-DD) — preferred; age is computed from this so it never goes stale
+  age?: number           // legacy/fallback — kept in sync automatically when birthDate is set, but if only this is present it was a manually-typed age that can drift out of date
   weight?: number       // stored in lbs
   height?: number       // stored in inches
   sex?: Sex
