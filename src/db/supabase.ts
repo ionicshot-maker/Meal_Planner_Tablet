@@ -749,12 +749,105 @@ grant execute on function join_household_by_code(text, text, text) to authentica
 -- calling this RPC directly with p_role set to 'owner'.
 -- ============================================================================`
 
+// ─── Auth migration fix 5 (block last-owner removal/demotion) ──────────────
+// Confirmed via a dedicated investigation and live-tested this session:
+// household_members' own two policies had no protection against a sole
+// owner stranding their household. Two independently exploitable paths,
+// both reachable through the existing shipped UI, not just a raw API call:
+//   1. DELETE — "owners remove members or self leave"'s self-leave clause
+//      (user_id = auth.uid()) lets a sole owner delete their own row; no
+//      remaining-owner check exists anywhere.
+//   2. UPDATE — "owners update members" has no WITH CHECK clause at all, so
+//      a sole owner can self-demote to 'contributor'/'readonly' via the
+//      same Manage Members role dropdown used to change anyone's role.
+//      Confirmed live this session with a disposable-fixture DO $$ block
+//      (forced rollback, zero permanent effect): the self-demotion
+//      genuinely succeeds under real RLS as it stands today.
+// Fix: one shared invariant, not two separately-reasoned rules —
+// would_leave_household_ownerless() below is true only when the household
+// has OTHER members AND removing/demoting the acting user would leave zero
+// owners among them. A household with no other members is unaffected
+// (there's no account/household-deletion flow anywhere else in this app,
+// so this preserves the only exit path a genuine single-person household
+// has); a household with 2+ owners is unaffected (removing or demoting one
+// still leaves an owner). The function deliberately excludes the acting
+// user's own row from both its EXISTS checks (user_id <> p_acting_user_id)
+// — its result never depends on how RLS's snapshot sees the very row being
+// mutated, which is what makes this provably correct from the SQL text
+// alone rather than resting on the same MVCC subtlety that made the
+// original UPDATE bug easy to miss.
+export const AUTH_MIGRATION_FIX5_SQL = `-- ============================================================================
+-- Angelo Family Meal Planner — Auth Migration FIX 5 (block last-owner removal/demotion)
+-- ============================================================================
+-- Run this once. Safe to run now — the new function is additive, and the
+-- two policy bodies below only ADD a restriction; every case that was
+-- already allowed and doesn't strand anyone (a non-owner leaving on their
+-- own, an owner managing a different member, either of 2+ owners leaving
+-- or stepping down) remains allowed exactly as before.
+-- ============================================================================
+
+create or replace function would_leave_household_ownerless(p_household_id uuid, p_acting_user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    exists (
+      select 1 from household_members
+      where household_id = p_household_id and user_id <> p_acting_user_id
+    )
+    and not exists (
+      select 1 from household_members
+      where household_id = p_household_id and user_id <> p_acting_user_id and role = 'owner'
+    );
+$$;
+
+revoke all on function would_leave_household_ownerless(uuid, uuid) from public;
+grant execute on function would_leave_household_ownerless(uuid, uuid) to authenticated, anon;
+
+drop policy if exists "owners remove members or self leave" on household_members;
+create policy "owners remove members or self leave" on household_members
+  for delete using (
+    (
+      is_household_owner(household_id)
+      or user_id = auth.uid()
+    )
+    and not (
+      user_id = auth.uid()
+      and role = 'owner'
+      and would_leave_household_ownerless(household_id, auth.uid())
+    )
+  );
+
+drop policy if exists "owners update members" on household_members;
+create policy "owners update members" on household_members
+  for update
+  using (is_household_owner(household_id))
+  with check (
+    not (
+      user_id = auth.uid()
+      and role <> 'owner'
+      and would_leave_household_ownerless(household_id, auth.uid())
+    )
+  );
+
+-- ============================================================================
+-- End of fix. Verify: (1) a sole owner with no other members can still
+-- delete their own row AND still self-demote (the preserved single-person
+-- exit path); (2) a sole owner WITH at least one other member can no
+-- longer do either; (3) in a household with 2+ owners, one deleting or
+-- demoting themselves still succeeds unregressed; (4) an owner removing or
+-- re-assigning a DIFFERENT member's role is completely unaffected.
+-- ============================================================================`
+
 // ─── Latest incremental fix pointer ─────────────────────────────────────────
 // CloudSyncSection.tsx's "Latest Fix" disclosure shows this alias, not a
 // hardcoded script name — when a new AUTH_MIGRATION_FIXn_SQL is added,
 // reassign this to point at it. Nothing else needs to change for the UI to
 // pick up the new script.
-export const LATEST_MIGRATION_FIX_SQL = AUTH_MIGRATION_FIX4_SQL
+export const LATEST_MIGRATION_FIX_SQL = AUTH_MIGRATION_FIX5_SQL
 
 // ─── Generate a memorable sync code ─────────────────────────────────────────
 

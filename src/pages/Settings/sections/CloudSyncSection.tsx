@@ -8,6 +8,7 @@ import {
   runSync, runFamilyShareSync, generateSyncCode,
   isSupabaseConfigured, SUPABASE_SETUP_SQL,
   AUTH_MIGRATION_SQL, AUTH_MIGRATION_FIX_SQL, AUTH_MIGRATION_FIX2_SQL, AUTH_MIGRATION_FIX3_SQL, AUTH_MIGRATION_FIX4_SQL,
+  AUTH_MIGRATION_FIX5_SQL,
   LATEST_MIGRATION_FIX_SQL,
   resolveIngredientDuplicate, resolveRecipeDuplicate,
   resolveIngredientCollision, resolveRecipeCollision,
@@ -25,7 +26,7 @@ import styles from './CloudSyncSection.module.css'
 
 type SyncDirection = 'both' | 'push' | 'pull'
 
-// "Full Setup" — five scripts, meant to be run back-to-back in this exact
+// "Full Setup" — six scripts, meant to be run back-to-back in this exact
 // order in a fresh Supabase project with no existing schema (each was
 // authored as a standalone patch on top of the last during live testing, and
 // each says so in its own header comment). Concatenating them here — rather
@@ -34,6 +35,7 @@ type SyncDirection = 'both' | 'push' | 'pull'
 // Not for an already-migrated project — see "Latest Fix" below for that case.
 const AUTH_SETUP_SQL_COMBINED = [
   AUTH_MIGRATION_SQL, AUTH_MIGRATION_FIX_SQL, AUTH_MIGRATION_FIX2_SQL, AUTH_MIGRATION_FIX3_SQL, AUTH_MIGRATION_FIX4_SQL,
+  AUTH_MIGRATION_FIX5_SQL,
 ].join('\n\n\n')
 
 // ─── Family Share (Own-Household fix) ──────────────────────────────────────
@@ -51,6 +53,7 @@ function FamilyShareSection({ url, anonKey }: { url: string; anonKey: string }) 
   const [households, setHouseholds] = useState<HouseholdMembership[]>([])
   const [loadingHouseholds, setLoadingHouseholds] = useState(true)
   const [members, setMembers] = useState<HouseholdMemberRow[]>([])
+  const [pendingRemoveMember, setPendingRemoveMember] = useState<HouseholdMemberRow | null>(null)
   const [loadingMembers, setLoadingMembers] = useState(false)
   const [creating, setCreating] = useState(false)
   const [joining, setJoining] = useState(false)
@@ -128,10 +131,11 @@ function FamilyShareSection({ url, anonKey }: { url: string; anonKey: string }) 
     setMembers(await getHouseholdMembers(url, anonKey, familyHousehold.householdId))
   }
 
-  async function handleRemoveMember(userId: string) {
-    if (!familyHousehold) return
-    await removeMember(url, anonKey, familyHousehold.householdId, userId)
+  async function confirmRemoveMember() {
+    if (!pendingRemoveMember || !familyHousehold) return
+    await removeMember(url, anonKey, familyHousehold.householdId, pendingRemoveMember.userId)
     setMembers(await getHouseholdMembers(url, anonKey, familyHousehold.householdId))
+    setPendingRemoveMember(null)
   }
 
   if (authLoading || loadingHouseholds) {
@@ -214,13 +218,37 @@ function FamilyShareSection({ url, anonKey }: { url: string; anonKey: string }) 
                           value={m.role}
                           onChange={e => handleRoleChange(m.userId, e.target.value as MemberRole)}
                         />
-                        <Button size="sm" variant="ghost" onClick={() => handleRemoveMember(m.userId)}>Remove</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setPendingRemoveMember(m)}>Remove</Button>
                       </>
                     )}
                   </div>
                 ))}
               </div>
             </>
+          )}
+          {/* No last-owner branch needed here, unlike AccountSection.tsx's HouseholdCard:
+              the "Remove" control above is only ever offered on a non-owner row
+              (m.role === 'owner' renders a plain span instead) — the acting owner's
+              own row is never removable through this UI, so this confirmation can
+              never target the household's last owner. */}
+          {pendingRemoveMember && (
+            <Modal
+              open
+              onClose={() => setPendingRemoveMember(null)}
+              title="Remove Member"
+              size="sm"
+              footer={
+                <>
+                  <Button variant="secondary" onClick={() => setPendingRemoveMember(null)}>Cancel</Button>
+                  <Button variant="danger" onClick={confirmRemoveMember}>Remove</Button>
+                </>
+              }
+            >
+              <p>
+                Remove {pendingRemoveMember.displayName || pendingRemoveMember.userId} from this Family
+                Share? They'll lose access immediately.
+              </p>
+            </Modal>
           )}
         </>
       )}

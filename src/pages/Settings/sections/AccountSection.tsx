@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Button, Card, Input, Select } from '@/components/ui'
+import { Button, Card, Input, Select, Modal } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { useSupabaseAuth } from '@/hooks/useSupabaseAuth'
 import {
@@ -195,6 +195,7 @@ function HouseholdCard({
   const [expanded, setExpanded] = useState(false)
   const [members, setMembers] = useState<HouseholdMemberRow[]>([])
   const [loadingMembers, setLoadingMembers] = useState(false)
+  const [pendingRemove, setPendingRemove] = useState<HouseholdMemberRow | null>(null)
 
   async function toggleExpand() {
     const next = !expanded
@@ -212,11 +213,30 @@ function HouseholdCard({
     onChanged()
   }
 
-  async function handleRemove(userId: string) {
-    await removeMember(url, anonKey, household.householdId, userId)
+  async function confirmRemove() {
+    if (!pendingRemove) return
+    await removeMember(url, anonKey, household.householdId, pendingRemove.userId)
     setMembers(await getHouseholdMembers(url, anonKey, household.householdId))
+    setPendingRemove(null)
     onChanged()
   }
+
+  // Mirrors would_leave_household_ownerless() in db/supabase.ts exactly —
+  // this is a client-side courtesy for the confirmation copy below, not the
+  // actual enforcement (the RLS policy is). "Self" is identified the same
+  // way the "(you)" tag above already does, for consistency with this
+  // file's own convention. Returns 'blocked' when the action would strand
+  // other members (RLS will reject it), 'lastMember' when it's the
+  // legitimate sole-member exit path (RLS will allow it), or null for every
+  // ordinary removal.
+  function ownerRemovalRisk(m: HouseholdMemberRow): 'blocked' | 'lastMember' | null {
+    if (m.role !== 'owner' || m.displayName !== myEmail) return null
+    const others = members.filter(x => x.userId !== m.userId)
+    if (others.length === 0) return 'lastMember'
+    return others.some(x => x.role === 'owner') ? null : 'blocked'
+  }
+
+  const pendingRemoveRisk = pendingRemove ? ownerRemovalRisk(pendingRemove) : null
 
   return (
     <div className={styles.householdCard}>
@@ -248,7 +268,7 @@ function HouseholdCard({
                       onChange={e => handleRoleChange(m.userId, e.target.value as MemberRole)}
                       wrapperClassName={styles.roleSelect}
                     />
-                    <button type="button" className={styles.linkBtnDanger} onClick={() => handleRemove(m.userId)}>Remove</button>
+                    <button type="button" className={styles.linkBtnDanger} onClick={() => setPendingRemove(m)}>Remove</button>
                   </>
                 ) : (
                   <span className={styles.roleTag}>{m.role}</span>
@@ -257,6 +277,43 @@ function HouseholdCard({
             ))}
           </div>
         )
+      )}
+      {pendingRemove && pendingRemoveRisk === 'blocked' && (
+        <Modal
+          open
+          onClose={() => setPendingRemove(null)}
+          title="Can't Remove Yourself"
+          size="sm"
+          footer={<Button variant="secondary" onClick={() => setPendingRemove(null)}>Close</Button>}
+        >
+          <p>
+            You're this household's only owner. Removing yourself would leave the other members with
+            no one who can manage the household, change settings, or add another owner. Promote someone
+            else to Owner first, then you'll be able to leave.
+          </p>
+        </Modal>
+      )}
+      {pendingRemove && pendingRemoveRisk !== 'blocked' && (
+        <Modal
+          open
+          onClose={() => setPendingRemove(null)}
+          title={pendingRemoveRisk === 'lastMember' ? 'Leave Household' : 'Remove Member'}
+          size="sm"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setPendingRemove(null)}>Cancel</Button>
+              <Button variant="danger" onClick={confirmRemove}>
+                {pendingRemoveRisk === 'lastMember' ? 'Leave' : 'Remove'}
+              </Button>
+            </>
+          }
+        >
+          <p>
+            {pendingRemoveRisk === 'lastMember'
+              ? "You're the only member of this household. Leaving will remove your own access to it — no one will be left who can manage it, though the household and its data aren't deleted, and anyone with the household code can join it again later."
+              : `Remove ${pendingRemove.displayName || pendingRemove.userId} from this household? They'll lose access immediately.`}
+          </p>
+        </Modal>
       )}
     </div>
   )
