@@ -11,6 +11,7 @@ import {
   isPhotoImportAvailable, effectivePhotoGeminiKey,
 } from '@/utils/aiImport'
 import type { AIRecipeResult, UncertainField } from '@/utils/aiImport'
+import { withAutoRetryOnThrow, MAX_AUTO_RETRIES } from '@/utils/geminiAutoRetry'
 import type { ImportNotice } from './RecipeEditor'
 import styles from './RecipeImportModal.module.css'
 
@@ -56,6 +57,8 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
   const [pasteText, setPasteText] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [autoRetry, setAutoRetry] = useState(false)
+  const [retryAttempt, setRetryAttempt] = useState(0)
 
   // Photo tab state
   const [photoStage, setPhotoStage] = useState<PhotoStage>('capture')
@@ -95,8 +98,13 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
     if (!url.trim()) { setError('Please enter a URL.'); return }
     setError('')
     setLoading(true)
+    setRetryAttempt(0)
     try {
-      const result = await importRecipeFromUrl(url.trim(), effectiveAI, geminiModel)
+      const result = await withAutoRetryOnThrow(
+        () => importRecipeFromUrl(url.trim(), effectiveAI, geminiModel),
+        autoRetry,
+        attempt => setRetryAttempt(attempt),
+      )
       onImported(result)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Import failed. Try pasting the text instead.')
@@ -109,8 +117,13 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
     if (!pasteText.trim()) { setError('Please paste recipe text.'); return }
     setError('')
     setLoading(true)
+    setRetryAttempt(0)
     try {
-      const result = await importRecipeFromText(pasteText.trim(), effectiveAI, geminiModel)
+      const result = await withAutoRetryOnThrow(
+        () => importRecipeFromText(pasteText.trim(), effectiveAI, geminiModel),
+        autoRetry,
+        attempt => setRetryAttempt(attempt),
+      )
       onImported(result)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Import failed. Check your AI provider settings.')
@@ -139,6 +152,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
     if (!photoDataUrl) return
     setError('')
     setLoading(true)
+    setRetryAttempt(0)
     try {
       const commaIdx = photoDataUrl.indexOf(',')
       const base64 = photoDataUrl.slice(commaIdx + 1)
@@ -146,7 +160,11 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
       const mimeType = mimeMatch?.[1] || 'image/jpeg'
       const geminiKey = effectivePhotoGeminiKey(settings)
 
-      const outcome = await importRecipeFromPhoto(base64, mimeType, geminiKey, geminiModel)
+      const outcome = await withAutoRetryOnThrow(
+        () => importRecipeFromPhoto(base64, mimeType, geminiKey, geminiModel),
+        autoRetry,
+        attempt => setRetryAttempt(attempt),
+      )
 
       if (outcome.lowConfidence) {
         setLowConfidenceReason(outcome.reason)
@@ -184,6 +202,17 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
           <div className={styles.aiBadge}>
             ✨ Powered by {aiLabel}
           </div>
+        )}
+
+        {(aiConfigured || photoConfigured) && (
+          <label className={styles.autoRetryLabel}>
+            <input
+              type="checkbox"
+              checked={autoRetry}
+              onChange={e => setAutoRetry(e.target.checked)}
+            />
+            Keep auto-retrying if the AI is busy (up to {MAX_AUTO_RETRIES} tries)
+          </label>
         )}
 
         <div className={styles.tabs}>
@@ -445,7 +474,9 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
           <div className={styles.loadingOverlay}>
             <div className={styles.spinner} />
             <p className={styles.loadingText}>
-              {tab === 'url' ? 'Fetching and parsing recipe…' : tab === 'photo' ? 'Reading recipe from photo…' : 'Parsing recipe text…'}
+              {retryAttempt > 0
+                ? `Gemini is busy — retrying (${retryAttempt}/${MAX_AUTO_RETRIES})…`
+                : tab === 'url' ? 'Fetching and parsing recipe…' : tab === 'photo' ? 'Reading recipe from photo…' : 'Parsing recipe text…'}
             </p>
           </div>
         )}

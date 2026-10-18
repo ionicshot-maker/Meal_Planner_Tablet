@@ -6,6 +6,7 @@ import { findMatchingProcessedReceipt } from '@/db/processedReceipts'
 import { normalizeLine, type ParsedReceiptLine } from '@/utils/receiptPriceNormalization'
 import { matchLine, resolveCandidateSelection, candidateLabel, guessItemType } from '@/utils/receiptMatching'
 import { newId } from '@/utils/ids'
+import { withAutoRetryOnResult, MAX_AUTO_RETRIES } from '@/utils/geminiAutoRetry'
 import { ReceiptLineReview, type ReceiptLineDraft } from './ReceiptLineReview'
 import styles from './ScanLabelTab.module.css'
 
@@ -43,6 +44,8 @@ export function ReceiptScannerTab({ onItemSaved }: Props) {
   const [receiptMeta, setReceiptMeta] = useState<{ store: string | null; date: string | null; total: number | null }>({ store: null, date: null, total: null })
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
   const [duplicateInfo, setDuplicateInfo] = useState<{ processedAt: string } | null>(null)
+  const [autoRetry, setAutoRetry] = useState(false)
+  const [retryAttempt, setRetryAttempt] = useState(0)
   const pendingItemsRef = useRef<ParsedReceiptLine[] | undefined>(undefined)
 
   const hasKey = Boolean(settings.geminiApiKey)
@@ -103,25 +106,36 @@ export function ReceiptScannerTab({ onItemSaved }: Props) {
   async function handlePhotoCaptured(dataUrl: string) {
     setError('')
     setLoading(true)
+    setRetryAttempt(0)
     try {
       const commaIdx = dataUrl.indexOf(',')
       const base64 = dataUrl.slice(commaIdx + 1)
       const mimeMatch = dataUrl.slice(0, commaIdx).match(/data:(.*);base64/)
       const mimeType = mimeMatch?.[1] || 'image/jpeg'
 
-      const res = await fetch('/api/gemini-receipt-scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: base64,
-          mimeType,
-          apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-3.1-flash-lite',
-        }),
-      })
-      const json = await res.json() as GeminiReceiptResponse
+      async function scanOnce(): Promise<GeminiReceiptResponse> {
+        const res = await fetch('/api/gemini-receipt-scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image: base64,
+            mimeType,
+            apiKey: settings.geminiApiKey,
+            model: settings.geminiModel || 'gemini-3.1-flash-lite',
+          }),
+        })
+        const body = await res.json() as GeminiReceiptResponse
+        return res.ok ? body : { error: body.error ?? `Request failed (${res.status})` }
+      }
 
-      if (!res.ok || json.error) {
+      const json = await withAutoRetryOnResult(
+        scanOnce,
+        r => r.error,
+        autoRetry,
+        attempt => setRetryAttempt(attempt),
+      )
+
+      if (json.error) {
         setError(json.error ?? 'Could not read the receipt. Try again.')
         return
       }
@@ -254,6 +268,16 @@ export function ReceiptScannerTab({ onItemSaved }: Props) {
             ingredients (or flagged for review) before anything is written — nothing is applied
             automatically.
           </p>
+          <div className={styles.autoRetryRow}>
+            <label className={styles.autoRetryLabel}>
+              <input
+                type="checkbox"
+                checked={autoRetry}
+                onChange={e => setAutoRetry(e.target.checked)}
+              />
+              Keep auto-retrying if Gemini is busy (up to {MAX_AUTO_RETRIES} tries)
+            </label>
+          </div>
           <PhotoCaptureCrop
             primaryLabel="Take Photo or Scan Receipt"
             tipsTitle="🧾 Tips for scanning receipts:"
@@ -268,7 +292,11 @@ export function ReceiptScannerTab({ onItemSaved }: Props) {
           {loading && (
             <div className={styles.scanningOverlay}>
               <div className={styles.spinner} />
-              <p className={styles.scanningText}>Reading receipt…</p>
+              <p className={styles.scanningText}>
+                {retryAttempt > 0
+                  ? `Gemini is busy — retrying (${retryAttempt}/${MAX_AUTO_RETRIES})…`
+                  : 'Reading receipt…'}
+              </p>
             </div>
           )}
         </>

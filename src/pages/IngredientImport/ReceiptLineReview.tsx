@@ -9,6 +9,7 @@ import type { LineMatchResult, RankedCandidate, ConfidenceTier } from '@/utils/r
 import { lookupBarcodeProduct } from '@/utils/barcodeLookup'
 import { lookupBarcodeWeb, type WebLookupProduct } from '@/utils/webBarcodeLookup'
 import { scanNutritionLabel, uncertainLabelFields } from '@/utils/labelScanLookup'
+import { withAutoRetryOnResult } from '@/utils/geminiAutoRetry'
 import { PhotoCaptureCrop } from '@/components/PhotoCaptureCrop'
 import { IngredientPicker, type PickedIngredient } from '@/pages/Cookbook/IngredientPicker'
 import type { NormalizedLine } from '@/utils/receiptPriceNormalization'
@@ -187,12 +188,16 @@ export function ReceiptLineReview({
   function triggerWebLookup(line: ReceiptLineDraft) {
     if (!settings.geminiApiKey || line.webLookupAttempted) return
     updateLine(line.id, { webLookupAttempted: true, webLookupStatus: 'loading' })
-    lookupBarcodeWeb(
-      line.match.validBarcode!,
-      line.editableName,
-      line.newBrand,
-      settings.geminiApiKey,
-      settings.geminiModel || 'gemini-3.1-flash-lite'
+    withAutoRetryOnResult(
+      () => lookupBarcodeWeb(
+        line.match.validBarcode!,
+        line.editableName,
+        line.newBrand,
+        settings.geminiApiKey,
+        settings.geminiModel || 'gemini-3.1-flash-lite'
+      ),
+      r => (r.status === 'error' ? r.errorMessage : undefined),
+      true,
     ).then(result => {
       if (result.status === 'found' && result.product) {
         updateLine(line.id, { webLookupStatus: 'found', webLookupResult: result.product })
@@ -210,7 +215,11 @@ export function ReceiptLineReview({
   // transcription can still misread a number even off a real photo.
   async function handleLabelPhoto(line: ReceiptLineDraft, dataUrl: string) {
     updateLine(line.id, { labelCaptureOpen: false, labelPhotoStatus: 'loading' })
-    const result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, settings.geminiModel || 'gemini-3.1-flash-lite')
+    const result = await withAutoRetryOnResult(
+      () => scanNutritionLabel(dataUrl, settings.geminiApiKey, settings.geminiModel || 'gemini-3.1-flash-lite'),
+      r => (r.status === 'error' ? r.errorMessage : undefined),
+      true,
+    )
 
     if (result.status === 'found' && result.nutrition) {
       const n = result.nutrition

@@ -222,6 +222,21 @@
   color: var(--color-text);
 }
 
+.autoRetryLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.autoRetryLabel input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
 .scanError { color: var(--color-danger); font-size: var(--text-sm); margin: 0; }
 .scanLowConfidence {
   font-size: var(--text-sm);

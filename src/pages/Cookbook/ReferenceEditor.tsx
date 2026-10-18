@@ -9,6 +9,7 @@ import { ScrollHint } from '@/components/ScrollHint'
 import { useVisualViewportHeight } from '@/hooks/useVisualViewportHeight'
 import { isTouchDevice } from '@/utils/device'
 import { newId, now } from '@/utils/ids'
+import { withAutoRetryOnResult, MAX_AUTO_RETRIES } from '@/utils/geminiAutoRetry'
 import type { KitchenReference, ReferenceContentType } from '@/types'
 import { CONTENT_TYPES, CONTENT_TYPE_VALUES } from './referenceContentTypes'
 import styles from './ReferenceEditor.module.css'
@@ -52,6 +53,8 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
   const [scanError, setScanError] = useState('')
   const [lowConfidenceReason, setLowConfidenceReason] = useState<string | null>(null)
   const [photoDecisionPending, setPhotoDecisionPending] = useState(false)
+  const [autoRetry, setAutoRetry] = useState(false)
+  const [retryAttempt, setRetryAttempt] = useState(0)
 
   const initialSnapshotRef = useRef(JSON.stringify({
     title: reference?.title ?? '', contentType: reference?.contentType ?? 'tips',
@@ -148,27 +151,40 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
     setScanError('')
     setLowConfidenceReason(null)
     setScanLoading(true)
+    setRetryAttempt(0)
     try {
       const commaIdx = photoDataUrl.indexOf(',')
       const base64 = photoDataUrl.slice(commaIdx + 1)
       const mimeMatch = photoDataUrl.slice(0, commaIdx).match(/data:(.*);base64/)
       const mimeType = mimeMatch?.[1] || 'image/jpeg'
 
-      const res = await fetch('/api/gemini-reference-scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: base64,
-          mimeType,
-          apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-3.1-flash-lite',
-        }),
-      })
-      const json = await res.json() as {
+      type ReferenceScanResponse = {
         status?: number; reference?: GeminiReferenceResult; lowConfidence?: boolean; reason?: string; error?: string
       }
 
-      if (!res.ok || json.error) {
+      async function scanOnce(): Promise<ReferenceScanResponse> {
+        const res = await fetch('/api/gemini-reference-scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image: base64,
+            mimeType,
+            apiKey: settings.geminiApiKey,
+            model: settings.geminiModel || 'gemini-3.1-flash-lite',
+          }),
+        })
+        const body = await res.json() as ReferenceScanResponse
+        return res.ok ? body : { error: body.error ?? `Request failed (${res.status})` }
+      }
+
+      const json = await withAutoRetryOnResult(
+        scanOnce,
+        r => r.error,
+        autoRetry,
+        attempt => setRetryAttempt(attempt),
+      )
+
+      if (json.error) {
         setScanError(json.error ?? 'Could not read this page. Try again.')
         return
       }
@@ -392,10 +408,22 @@ export function ReferenceEditor({ reference, onSave, onClose }: Props) {
                       {hasGeminiKey && (
                         <button type="button" className={styles.btnPrimary} onClick={handleExtractText} disabled={scanLoading}>
                           <Sparkles size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                          {scanLoading ? 'Reading page…' : 'Extract Text with Gemini'}
+                          {scanLoading
+                            ? (retryAttempt > 0 ? `Gemini is busy — retrying (${retryAttempt}/${MAX_AUTO_RETRIES})…` : 'Reading page…')
+                            : 'Extract Text with Gemini'}
                         </button>
                       )}
                     </div>
+                    {hasGeminiKey && (
+                      <label className={styles.autoRetryLabel}>
+                        <input
+                          type="checkbox"
+                          checked={autoRetry}
+                          onChange={e => setAutoRetry(e.target.checked)}
+                        />
+                        Keep auto-retrying if Gemini is busy (up to {MAX_AUTO_RETRIES} tries)
+                      </label>
+                    )}
                     {scanError && <p className={styles.scanError}>{scanError}</p>}
                     {lowConfidenceReason && (
                       <p className={styles.scanLowConfidence}>

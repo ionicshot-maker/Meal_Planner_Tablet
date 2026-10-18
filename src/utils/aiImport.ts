@@ -3,6 +3,7 @@ import { normalizeUnit } from './recipeCalculations'
 import { parseTimeToMinutes } from './units'
 import { parseFraction } from './fractionInput'
 import { fetchPageAsText } from './recipeParse'
+import { withAutoRetryOnResult } from './geminiAutoRetry'
 import type { CropBoxPercent } from '@/components/PhotoCaptureCrop'
 
 export interface AIRecipeResult {
@@ -306,17 +307,29 @@ export async function detectRecipeBoxes(
 ): Promise<DetectedRecipeBox[]> {
   if (!geminiApiKey) return []
   try {
-    const res = await fetch('/api/gemini-detect-recipe-boxes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: base64Image, mimeType, apiKey: geminiApiKey, model: geminiModel || 'gemini-3.1-flash-lite' }),
-    })
-    if (!res.ok) {
-      console.error('[detectRecipeBoxes] non-ok response:', res.status, await res.text().catch(() => ''))
+    async function detectOnce(): Promise<{ boxes?: DetectedRecipeBox[]; error?: string }> {
+      const res = await fetch('/api/gemini-detect-recipe-boxes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64Image, mimeType, apiKey: geminiApiKey, model: geminiModel || 'gemini-3.1-flash-lite' }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        return { error: text || `status ${res.status}` }
+      }
+      const json = await res.json() as { boxes?: DetectedRecipeBox[] }
+      return { boxes: json.boxes }
+    }
+
+    // Best-effort suggestion — auto-retry a transient "busy" response
+    // silently, same as any other failure mode here, this never blocks or
+    // surfaces an error to the caller.
+    const { boxes, error } = await withAutoRetryOnResult(detectOnce, r => r.error, true)
+    if (error) {
+      console.error('[detectRecipeBoxes] non-ok response:', error)
       return []
     }
-    const json = await res.json() as { boxes?: DetectedRecipeBox[] }
-    return Array.isArray(json.boxes) ? json.boxes : []
+    return Array.isArray(boxes) ? boxes : []
   } catch (err) {
     console.error('[detectRecipeBoxes] threw:', err)
     return []

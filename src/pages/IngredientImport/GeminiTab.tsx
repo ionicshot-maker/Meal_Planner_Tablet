@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Button, Input } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { newId, now } from '@/utils/ids'
+import { withAutoRetryOnResult, MAX_AUTO_RETRIES } from '@/utils/geminiAutoRetry'
 import type { Ingredient, IngredientUnit, Macros } from '@/types'
 import styles from './GeminiTab.module.css'
 
@@ -82,6 +83,8 @@ export function GeminiTab({ onReview, initialQuery }: Props) {
   const [brand, setBrand] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [autoRetry, setAutoRetry] = useState(false)
+  const [retryAttempt, setRetryAttempt] = useState(0)
   const didAutoLookup = useRef(false)
 
   const userCategories = settings.ingredientCategories
@@ -100,19 +103,30 @@ export function GeminiTab({ onReview, initialQuery }: Props) {
     if (!productName.trim() || !hasKey) return
     setLoading(true)
     setError('')
+    setRetryAttempt(0)
     try {
-      const res = await fetch('/api/gemini-nutrition', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productName: productName.trim(),
-          brand: brand.trim(),
-          apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-3.1-flash-lite',
-        }),
-      })
-      const json = await res.json() as { status: number; nutrition?: GeminiNutrition; error?: string }
-      if (!res.ok || json.status !== 1 || !json.nutrition) {
+      async function lookupOnce(): Promise<{ status: number; nutrition?: GeminiNutrition; error?: string }> {
+        const res = await fetch('/api/gemini-nutrition', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productName: productName.trim(),
+            brand: brand.trim(),
+            apiKey: settings.geminiApiKey,
+            model: settings.geminiModel || 'gemini-3.1-flash-lite',
+          }),
+        })
+        const body = await res.json() as { status: number; nutrition?: GeminiNutrition; error?: string }
+        return res.ok ? body : { status: res.status, error: body.error ?? `Request failed (${res.status})` }
+      }
+
+      const json = await withAutoRetryOnResult(
+        lookupOnce,
+        r => (r.status !== 1 ? r.error : undefined),
+        autoRetry,
+        attempt => setRetryAttempt(attempt),
+      )
+      if (json.status !== 1 || !json.nutrition) {
         setError(json.error ?? 'No nutrition data found for this product. Try a different name.')
         return
       }
@@ -162,11 +176,22 @@ export function GeminiTab({ onReview, initialQuery }: Props) {
         />
       </div>
 
+      <label className={styles.autoRetryLabel}>
+        <input
+          type="checkbox"
+          checked={autoRetry}
+          onChange={e => setAutoRetry(e.target.checked)}
+        />
+        Keep auto-retrying if Gemini is busy (up to {MAX_AUTO_RETRIES} tries)
+      </label>
+
       <Button
         onClick={handleLookup}
         disabled={loading || !productName.trim()}
       >
-        {loading ? 'Getting nutrition…' : 'Look Up with Gemini'}
+        {loading
+          ? (retryAttempt > 0 ? `Gemini is busy — retrying (${retryAttempt}/${MAX_AUTO_RETRIES})…` : 'Getting nutrition…')
+          : 'Look Up with Gemini'}
       </Button>
 
       {error && (

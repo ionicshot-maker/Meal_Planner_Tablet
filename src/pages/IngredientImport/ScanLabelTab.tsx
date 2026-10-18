@@ -4,6 +4,7 @@ import { PhotoCaptureCrop } from '@/components/PhotoCaptureCrop'
 import { newId, now } from '@/utils/ids'
 import { normalizeUnit } from '@/utils/recipeCalculations'
 import { scanNutritionLabel, uncertainLabelFields, type LabelNutrition } from '@/utils/labelScanLookup'
+import { withAutoRetryOnResult, MAX_AUTO_RETRIES } from '@/utils/geminiAutoRetry'
 import type { Ingredient, Macros } from '@/types'
 import styles from './ScanLabelTab.module.css'
 
@@ -98,20 +99,6 @@ interface Props {
   onReview: (draft: Ingredient, uncertainFields: Set<string>, notice: Notice) => void
 }
 
-// Gemini's own "busy" responses (model overloaded / rate limited) vs. a
-// slow upstream call that outran our client-side timeout — both are worth
-// auto-retrying since the model usually frees up within a few seconds.
-// A real failure (bad key, unreadable photo, etc.) won't match this and
-// surfaces immediately instead of silently retrying something that can't
-// succeed.
-const RETRYABLE_ERROR_PATTERN = /high demand|overloaded|try again later|rate limit|\b429\b|\b503\b|timed? ?out/i
-const MAX_AUTO_RETRIES = 3
-const RETRY_DELAY_MS = 3000
-
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
 export function ScanLabelTab({ onReview }: Props) {
   const { settings } = useSettings()
   const [stage, setStage] = useState<Stage>('capture')
@@ -131,20 +118,12 @@ export function ScanLabelTab({ onReview }: Props) {
     setRetryAttempt(0)
     try {
       const model = settings.geminiModel || 'gemini-3.1-flash-lite'
-      let result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, model)
-
-      let attempt = 1
-      while (
-        autoRetry &&
-        result.status === 'error' &&
-        RETRYABLE_ERROR_PATTERN.test(result.errorMessage ?? '') &&
-        attempt <= MAX_AUTO_RETRIES
-      ) {
-        setRetryAttempt(attempt)
-        await sleep(RETRY_DELAY_MS)
-        result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, model)
-        attempt++
-      }
+      const result = await withAutoRetryOnResult(
+        () => scanNutritionLabel(dataUrl, settings.geminiApiKey, model),
+        r => (r.status === 'error' ? r.errorMessage : undefined),
+        autoRetry,
+        attempt => setRetryAttempt(attempt),
+      )
 
       if (result.status === 'error') {
         setError(result.errorMessage ?? 'Could not read the nutrition label. Try again.')

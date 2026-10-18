@@ -4,6 +4,7 @@ import { Button, Input } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { findIngredientByBarcode } from '@/db/ingredients'
 import { DEFAULT_CATEGORIES, isMacrosIncomplete, normalizedToIngredient, lookupBarcodeProduct } from '@/utils/barcodeLookup'
+import { withAutoRetryOnResult } from '@/utils/geminiAutoRetry'
 import type { Ingredient, IngredientUnit, Macros, NutritionSource } from '@/types'
 import styles from './BarcodeTab.module.css'
 
@@ -212,19 +213,31 @@ export function BarcodeTab({ onReview, onExistingFound }: Props) {
   async function tryGeminiEnrich(draft: Ingredient, productName: string, brands: string): Promise<Ingredient | null> {
     try {
       const brand = brands.split(',')[0].trim()
-      const res = await fetch('/api/gemini-nutrition', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productName,
-          brand,
-          apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-3.1-flash-lite',
-        }),
-      })
-      const json = await res.json() as { status: number; nutrition?: GeminiNutrition }
-      if (!res.ok || json.status !== 1 || !json.nutrition) return null
-      const g = json.nutrition
+
+      async function enrichOnce(): Promise<{ nutrition?: GeminiNutrition; error?: string }> {
+        const res = await fetch('/api/gemini-nutrition', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productName,
+            brand,
+            apiKey: settings.geminiApiKey,
+            model: settings.geminiModel || 'gemini-3.1-flash-lite',
+          }),
+        })
+        const body = await res.json() as { status: number; nutrition?: GeminiNutrition; error?: string }
+        if (!res.ok || body.status !== 1 || !body.nutrition) {
+          return { error: body.error ?? `status ${body.status}` }
+        }
+        return { nutrition: body.nutrition }
+      }
+
+      // Silent background enrichment — auto-retry a transient "busy" response
+      // without surfacing anything to the user; a real failure still falls
+      // through to the null below and the caller keeps the OFF data as-is.
+      const { nutrition } = await withAutoRetryOnResult(enrichOnce, r => r.error, true)
+      if (!nutrition) return null
+      const g = nutrition
       const mergedMacros: Macros = {
         calories: g.calories ?? 0,
         protein:  g.protein  ?? 0,
