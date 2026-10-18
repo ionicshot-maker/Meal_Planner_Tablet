@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import { loadSettings, saveSettings, DEFAULT_SETTINGS } from '@/db/settings'
 import type { AppSettings } from '@/types'
 
@@ -15,15 +15,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Mirrors `settings` synchronously. Two updateSettings() calls can fire back
+  // to back in the same event handler (e.g. saving a URL field and a key field
+  // together) before React has re-rendered between them, so building the next
+  // patch from the `settings` state variable would make the second call clobber
+  // the first with a stale snapshot. The ref is updated immediately on every
+  // call, so each one always merges onto the other's result instead of onto
+  // whatever was there before either ran.
+  const settingsRef = useRef(settings)
+
   useEffect(() => {
     loadSettings().then(s => {
+      settingsRef.current = s
       setSettings(s)
       setIsLoading(false)
     })
   }, [])
 
   async function updateSettings(patch: Partial<AppSettings>) {
-    const updated = { ...settings, ...patch }
+    const updated = { ...settingsRef.current, ...patch }
+    settingsRef.current = updated
     setSettings(updated)
     await saveSettings(updated)
   }
@@ -32,6 +43,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // directly to the DB, bypassing this context's local state.
   async function reloadSettings() {
     const fresh = await loadSettings()
+    settingsRef.current = fresh
     setSettings(fresh)
   }
 
