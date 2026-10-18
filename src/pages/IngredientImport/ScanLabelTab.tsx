@@ -98,12 +98,28 @@ interface Props {
   onReview: (draft: Ingredient, uncertainFields: Set<string>, notice: Notice) => void
 }
 
+// Gemini's own "busy" responses (model overloaded / rate limited) vs. a
+// slow upstream call that outran our client-side timeout — both are worth
+// auto-retrying since the model usually frees up within a few seconds.
+// A real failure (bad key, unreadable photo, etc.) won't match this and
+// surfaces immediately instead of silently retrying something that can't
+// succeed.
+const RETRYABLE_ERROR_PATTERN = /high demand|overloaded|try again later|rate limit|\b429\b|\b503\b|timed? ?out/i
+const MAX_AUTO_RETRIES = 3
+const RETRY_DELAY_MS = 3000
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 export function ScanLabelTab({ onReview }: Props) {
   const { settings } = useSettings()
   const [stage, setStage] = useState<Stage>('capture')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [lowConfidenceReason, setLowConfidenceReason] = useState('')
+  const [autoRetry, setAutoRetry] = useState(false)
+  const [retryAttempt, setRetryAttempt] = useState(0)
 
   const hasKey = Boolean(settings.geminiApiKey)
   const userCategories = settings.ingredientCategories
@@ -112,8 +128,23 @@ export function ScanLabelTab({ onReview }: Props) {
   async function handlePhotoCaptured(dataUrl: string) {
     setError('')
     setLoading(true)
+    setRetryAttempt(0)
     try {
-      const result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, settings.geminiModel || 'gemini-3.1-flash-lite')
+      const model = settings.geminiModel || 'gemini-3.1-flash-lite'
+      let result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, model)
+
+      let attempt = 1
+      while (
+        autoRetry &&
+        result.status === 'error' &&
+        RETRYABLE_ERROR_PATTERN.test(result.errorMessage ?? '') &&
+        attempt <= MAX_AUTO_RETRIES
+      ) {
+        setRetryAttempt(attempt)
+        await sleep(RETRY_DELAY_MS)
+        result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, model)
+        attempt++
+      }
 
       if (result.status === 'error') {
         setError(result.errorMessage ?? 'Could not read the nutrition label. Try again.')
@@ -134,6 +165,7 @@ export function ScanLabelTab({ onReview }: Props) {
       setError(err instanceof Error ? err.message : 'Could not read the nutrition label. Try again.')
     } finally {
       setLoading(false)
+      setRetryAttempt(0)
     }
   }
 
@@ -172,6 +204,16 @@ export function ScanLabelTab({ onReview }: Props) {
             Take or upload a photo of a nutrition facts label. Crop tightly to just the nutrition
             facts panel for the best read — handy for packaging with several products on it.
           </p>
+          <div className={styles.autoRetryRow}>
+            <label className={styles.autoRetryLabel}>
+              <input
+                type="checkbox"
+                checked={autoRetry}
+                onChange={e => setAutoRetry(e.target.checked)}
+              />
+              Keep auto-retrying if Gemini is busy (up to {MAX_AUTO_RETRIES} tries)
+            </label>
+          </div>
           <PhotoCaptureCrop
             primaryLabel="Take Photo or Scan Label"
             tipsTitle="📸 Tips for scanning nutrition labels:"
@@ -186,7 +228,11 @@ export function ScanLabelTab({ onReview }: Props) {
           {loading && (
             <div className={styles.scanningOverlay}>
               <div className={styles.spinner} />
-              <p className={styles.scanningText}>Reading nutrition label…</p>
+              <p className={styles.scanningText}>
+                {retryAttempt > 0
+                  ? `Gemini is busy — retrying (${retryAttempt}/${MAX_AUTO_RETRIES})…`
+                  : 'Reading nutrition label…'}
+              </p>
             </div>
           )}
         </>

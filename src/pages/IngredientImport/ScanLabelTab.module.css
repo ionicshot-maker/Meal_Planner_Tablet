@@ -54,6 +54,28 @@
   margin: 0;
 }
 
+.autoRetryRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.autoRetryLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.autoRetryLabel input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
 .scanningOverlay {
   position: absolute;
   inset: 0;
