@@ -116,20 +116,19 @@ function priceDeltaInfo(oldPrice: number, newPrice: number): { pct: number; isSa
 // legitimately differ between two physical units of the same product — a
 // sale on one, a loyalty discount on another — and "Don't Add" already gives
 // a precise way to drop the extras after a human looks at them), but it's
-// easy to miss that 4 scattered rows are actually the same item. Cycling
-// through a fixed palette by first-appearance order means two different
-// duplicated items on the same receipt never land on the same color — e.g.
-// item A's 4 rows are blue, item B's 3 rows are purple, never both blue.
-const DUPLICATE_GROUP_PALETTE = [
-  '#4f8ef7', // blue
-  '#9b59f6', // purple
-  '#2ecc71', // green
-  '#f5a623', // amber
-  '#ff6b9d', // pink
-  '#17a2b8', // teal
-  '#e74c3c', // red
-  '#8a6d3b', // brown
-]
+// easy to miss that a handful of scattered rows are actually the same item.
+// Colors come from the golden-angle hue step (~137.5°) rather than a fixed
+// palette — a stocked-up grocery trip can easily have 8+ different
+// duplicated items (canned goods, frozen veggies, a few cuts of meat...), and
+// a short fixed list would start repeating colors well before that. The
+// golden angle keeps consecutive hues far apart no matter how many groups
+// show up, so colors stay visually distinct even for a large, varied order;
+// saturation/lightness are fixed so every generated color still contrasts
+// well with the white badge text.
+function colorForGroup(index: number): string {
+  const hue = (index * 137.508) % 360
+  return `hsl(${hue.toFixed(1)}, 65%, 42%)`
+}
 
 interface DuplicateGroupInfo {
   color: string
@@ -156,11 +155,11 @@ function computeDuplicateGroups(lines: ReceiptLineDraft[]): Map<string, Duplicat
   }
 
   const result = new Map<string, DuplicateGroupInfo>()
-  let colorIndex = 0
+  let groupIndex = 0
   for (const group of byKey.values()) {
     if (group.length < 2) continue
-    const color = DUPLICATE_GROUP_PALETTE[colorIndex % DUPLICATE_GROUP_PALETTE.length]
-    colorIndex++
+    const color = colorForGroup(groupIndex)
+    groupIndex++
     group.forEach((line, i) => {
       result.set(line.id, { color, size: group.length, index: i + 1 })
     })
