@@ -187,6 +187,24 @@
 
 .cardActions { display: flex; gap: var(--space-2); flex-shrink: 0; }
 
+/* ── Mobile: the four action buttons (Edit/Archive/Merge…/Delete) are
+   flex-shrink: 0 in .cardMain, so below ~480px they stop shrinking and
+   instead squeeze .cardInfo down past its content width — the ingredient
+   name then wraps one word per line and the tap-min-height buttons
+   (bumped up for touch, see Button.module.css) overlap it. Stack the
+   name/meta above the actions instead of sitting them side by side, and
+   let the actions wrap onto as many rows as they need, so neither ever
+   has to shrink below its natural width. ── */
+@media (max-width: 480px) {
+  .cardMain {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cardActions {
+    flex-wrap: wrap;
+  }
+}
+
 .variants {
   display: flex;
   flex-wrap: wrap;
