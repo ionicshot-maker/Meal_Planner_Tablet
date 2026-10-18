@@ -59,12 +59,13 @@ function AuthForm({ url, anonKey }: { url: string; anonKey: string }) {
     setError('')
     setConfirmationSent(false)
     try {
+      const cleanEmail = email.trim()
       if (mode === 'signup') {
-        const result = await signUpWithPassword(url, anonKey, email, password)
+        const result = await signUpWithPassword(url, anonKey, cleanEmail, password)
         if (!result.ok) { setError(result.error ?? 'Sign up failed.'); return }
         if (result.needsEmailConfirmation) { setConfirmationSent(true); return }
       } else {
-        const result = await signInWithPassword(url, anonKey, email, password)
+        const result = await signInWithPassword(url, anonKey, cleanEmail, password)
         if (!result.ok) { setError(result.error ?? 'Sign in failed.'); return }
       }
     } finally {
@@ -80,7 +81,11 @@ function AuthForm({ url, anonKey }: { url: string; anonKey: string }) {
       </div>
       <Input
         label="Email"
-        type="email"
+        type="text"
+        inputMode="email"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
         required
         value={email}
         onChange={e => setEmail(e.target.value)}
