@@ -246,6 +246,16 @@
 }
 .rowSaved { opacity: 0.6; background: color-mix(in srgb, var(--color-success) 5%, transparent); }
 .rowError { border-color: var(--color-danger); }
+.rowDuplicate { border-left-width: 4px; border-left-style: solid; }
+
+.dupBadge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
 
 .rowHeader {
   display: flex;

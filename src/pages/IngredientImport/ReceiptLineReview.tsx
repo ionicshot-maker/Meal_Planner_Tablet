@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { applyReceiptSaveBatch, type IngredientBatchOp } from '@/db/ingredients'
 import { useSettings } from '@/context/SettingsContext'
 import { normalizeBrandName } from '@/utils/brandNormalization'
@@ -112,6 +112,62 @@ function priceDeltaInfo(oldPrice: number, newPrice: number): { pct: number; isSa
   return { pct, isSaleRange: pct >= 0.10 }
 }
 
+// Repeated-item highlighting: receipt lines are never auto-merged (price can
+// legitimately differ between two physical units of the same product — a
+// sale on one, a loyalty discount on another — and "Don't Add" already gives
+// a precise way to drop the extras after a human looks at them), but it's
+// easy to miss that 4 scattered rows are actually the same item. Cycling
+// through a fixed palette by first-appearance order means two different
+// duplicated items on the same receipt never land on the same color — e.g.
+// item A's 4 rows are blue, item B's 3 rows are purple, never both blue.
+const DUPLICATE_GROUP_PALETTE = [
+  '#4f8ef7', // blue
+  '#9b59f6', // purple
+  '#2ecc71', // green
+  '#f5a623', // amber
+  '#ff6b9d', // pink
+  '#17a2b8', // teal
+  '#e74c3c', // red
+  '#8a6d3b', // brown
+]
+
+interface DuplicateGroupInfo {
+  color: string
+  size: number
+  index: number // this line's 1-based position within its group, for "2 of 4" labeling
+}
+
+// Grouping key: a validated barcode is the most reliable "same product"
+// signal (survives OCR noise in the name); falling back to the normalized
+// name text when no barcode was read off the line.
+function duplicateGroupKey(line: ReceiptLineDraft): string {
+  const barcode = line.match.validBarcode ?? line.normalized.barcodeText
+  if (barcode) return `barcode:${barcode}`
+  return `name:${line.normalized.parsedName.trim().toLowerCase()}`
+}
+
+function computeDuplicateGroups(lines: ReceiptLineDraft[]): Map<string, DuplicateGroupInfo> {
+  const byKey = new Map<string, ReceiptLineDraft[]>()
+  for (const line of lines) {
+    const key = duplicateGroupKey(line)
+    const group = byKey.get(key)
+    if (group) group.push(line)
+    else byKey.set(key, [line])
+  }
+
+  const result = new Map<string, DuplicateGroupInfo>()
+  let colorIndex = 0
+  for (const group of byKey.values()) {
+    if (group.length < 2) continue
+    const color = DUPLICATE_GROUP_PALETTE[colorIndex % DUPLICATE_GROUP_PALETTE.length]
+    colorIndex++
+    group.forEach((line, i) => {
+      result.set(line.id, { color, size: group.length, index: i + 1 })
+    })
+  }
+  return result
+}
+
 const MACRO_FIELDS: { key: keyof Macros; label: string }[] = [
   { key: 'calories', label: 'Cal' },
   { key: 'protein', label: 'Pro (g)' },
@@ -128,6 +184,7 @@ export function ReceiptLineReview({
   const { settings } = useSettings()
   const [saving, setSaving] = useState(false)
   const [batchError, setBatchError] = useState('')
+  const duplicateGroups = useMemo(() => computeDuplicateGroups(lines), [lines])
 
   function updateLine(id: string, patch: Partial<ReceiptLineDraft>) {
     setLines(ls => ls.map(l => (l.id === id ? { ...l, ...patch } : l)))
@@ -474,8 +531,14 @@ export function ReceiptLineReview({
           const showChoiceRow = line.barcodeLookupStatus === 'not-found' &&
             line.labelPhotoStatus !== 'found' && line.labelPhotoStatus !== 'loading' && !line.labelCaptureOpen
 
+          const dupGroup = duplicateGroups.get(line.id)
+
           return (
-            <div key={line.id} className={`${styles.row} ${line.saved ? styles.rowSaved : ''} ${line.error ? styles.rowError : ''}`}>
+            <div
+              key={line.id}
+              className={`${styles.row} ${line.saved ? styles.rowSaved : ''} ${line.error ? styles.rowError : ''} ${dupGroup ? styles.rowDuplicate : ''}`}
+              style={dupGroup ? { borderLeftColor: dupGroup.color } : undefined}
+            >
               <div className={styles.rowHeader}>
                 <div className={styles.rawText}>
                   <span className={styles.rawLabel}>Receipt text:</span> "{line.normalized.rawText}"
@@ -483,6 +546,11 @@ export function ReceiptLineReview({
                     <span className={styles.crossCheckWarning}> ⚠ {line.normalized.crossCheckWarning}</span>
                   )}
                 </div>
+                {dupGroup && (
+                  <span className={styles.dupBadge} style={{ background: dupGroup.color }}>
+                    {dupGroup.index} of {dupGroup.size} — looks like the same item
+                  </span>
+                )}
                 {line.itemType === 'ingredient' && (
                   <span className={`${styles.tierBadge} ${styles[`tier_${line.match.barcodeMatch ? 'high' : line.match.tier}`]}`}>
                     {line.match.barcodeMatch ? 'Barcode match' : TIER_LABEL[line.match.tier]}
