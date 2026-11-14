@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
@@ -5,9 +8,14 @@ import { Store, type Role } from '../src/store.js';
 
 export const PW = 'correct horse battery';
 
+// Anything a route writes to disk (the safety backup replace-data takes first, for one) must go to a throwaway folder, never into the
+// working directory. One per test process, removed when it ends.
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-server-test-'));
+process.on('exit', () => { try { fs.rmSync(scratch, { recursive: true, force: true }); } catch { /* best effort */ } });
+
 export function makeServer(env: NodeJS.ProcessEnv = {}) {
   const store = new Store(':memory:');
-  const config = loadConfig({ PUBLIC_ORIGIN: 'http://localhost:8791', ...env });
+  const config = loadConfig({ PUBLIC_ORIGIN: 'http://localhost:8791', DATA_DIR: scratch, ...env });
   const app = buildApp(store, config);
   return { store, config, app };
 }
