@@ -1,8 +1,9 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb'
+import { withChangeSignal } from '../sync/changeSignal'
 import type { AppSettings, Ingredient, Recipe, MealPlanDay, MealPlanWeekTemplate, MacroLogEntry, GroceryList, HouseholdItem, RecipeCollection, KitchenReference, ProcessedReceipt } from '@/types'
 
 const DB_NAME = 'MealPlannerDB'
-const DB_VERSION = 5
+const DB_VERSION = 6
 
 export interface MealPlannerDB extends DBSchema {
   settings: {
@@ -71,11 +72,49 @@ export interface MealPlannerDB extends DBSchema {
     key: string
     value: ProcessedReceipt
   }
+  // V6: sync bookkeeping. Device-local: never exported, never synced, never part of a backup (see src/sync).
+  syncState: {
+    key: string   // `${table}|${id}`
+    value: SyncStateRow
+  }
+  syncMeta: {
+    key: string
+    value: { key: string; value: unknown }
+  }
+  syncConflicts: {
+    key: number
+    value: SyncConflictRow
+    indexes: { 'by-at': string }
+  }
+  heldDuplicates: {
+    key: string   // `${table}|${cloudId}`
+    value: HeldDuplicateRow
+  }
+}
+
+export interface SyncStateRow { key: string; rev: number; hash: string; held?: boolean; deleted?: boolean }
+export interface SyncConflictRow {
+  id?: number; at: string; table: string; recordId: string; kept: 'local' | 'server'
+  local: Record<string, unknown> | null; server: Record<string, unknown>
+}
+export interface HeldDuplicateRow {
+  key: string; table: 'ingredients' | 'recipes'; cloudId: string; localId: string; rev: number
+  cloud: Record<string, unknown>; at: string
 }
 
 let dbInstance: IDBPDatabase<MealPlannerDB> | null = null
+let signalledInstance: IDBPDatabase<MealPlannerDB> | null = null
 
+// The app's database. Any write made through it raises the sync change signal (see src/sync/changeSignal.ts), so the sync
+// provider notices edits without every save function having to announce them.
 export async function getDB(): Promise<IDBPDatabase<MealPlannerDB>> {
+  const raw = await getRawDB()
+  if (!signalledInstance) signalledInstance = withChangeSignal(raw)
+  return signalledInstance
+}
+
+// The same database, unwrapped. Only the sync engine uses this: its own writes must not count as local changes.
+export async function getRawDB(): Promise<IDBPDatabase<MealPlannerDB>> {
   if (dbInstance) return dbInstance
 
   dbInstance = await openDB<MealPlannerDB>(DB_NAME, DB_VERSION, {
@@ -143,6 +182,21 @@ export async function getDB(): Promise<IDBPDatabase<MealPlannerDB>> {
       // V5: Processed receipts — duplicate-scan protection for the Receipt Scanner
       if (!db.objectStoreNames.contains('processedReceipts')) {
         db.createObjectStore('processedReceipts', { keyPath: 'id' })
+      }
+
+      // V6: sync bookkeeping (device-local)
+      if (!db.objectStoreNames.contains('syncState')) {
+        db.createObjectStore('syncState', { keyPath: 'key' })
+      }
+      if (!db.objectStoreNames.contains('syncMeta')) {
+        db.createObjectStore('syncMeta', { keyPath: 'key' })
+      }
+      if (!db.objectStoreNames.contains('syncConflicts')) {
+        const store = db.createObjectStore('syncConflicts', { keyPath: 'id', autoIncrement: true })
+        store.createIndex('by-at', 'at')
+      }
+      if (!db.objectStoreNames.contains('heldDuplicates')) {
+        db.createObjectStore('heldDuplicates', { keyPath: 'key' })
       }
     },
   })

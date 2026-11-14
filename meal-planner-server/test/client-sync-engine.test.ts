@@ -669,3 +669,34 @@ test('settling a duplicate whose local copy has since been deleted just takes th
   assert.ok(B.get('ingredients', 'a-butter'), 'with nothing to collide with, the incoming copy is kept regardless of the choice');
   await assert.rejects(() => resolveHeldDuplicate(B.store, portFor(B), key, 'keep-both'), /already been settled/);
 });
+
+// ============================================================ a hold whose collision disappears
+test('a held duplicate is adopted automatically once the record it collided with is deleted or renamed', async () => {
+  const { A, B } = await twoDevices();
+  await A.save('ingredients', ingredient('a-sage', 'Sage'));
+  await B.save('ingredients', ingredient('b-sage', 'sage'));
+  await A.engine.syncOnce();
+  await B.engine.syncOnce();
+  assert.equal((await B.store.listHeld()).length, 1);
+  assert.equal(B.get('ingredients', 'a-sage'), undefined);
+  // B renames its own copy: there is nothing left to collide with, so the next cycle adopts the other copy by itself
+  await B.save('ingredients', { ...B.get('ingredients', 'b-sage')!, name: 'Rubbed Sage' });
+  const out = await B.engine.syncOnce();
+  assert.equal(out.status, 'ok');
+  assert.equal(out.pulled, 1);
+  assert.equal(out.changedLocal, true);
+  assert.equal((await B.store.listHeld()).length, 0);
+  assert.ok(B.get('ingredients', 'a-sage'));
+  const quiet = await B.engine.syncOnce();
+  assert.deepEqual([quiet.pushed, quiet.pulled, quiet.held], [0, 0, 0]);
+});
+
+test('a hold that still collides is left for review, however many cycles pass', async () => {
+  const { A, B } = await twoDevices();
+  await A.save('ingredients', ingredient('a-sage', 'Sage'));
+  await B.save('ingredients', ingredient('b-sage', 'sage'));
+  await A.engine.syncOnce();
+  await B.engine.syncOnce();
+  for (let i = 0; i < 3; i++) { const o = await B.engine.syncOnce(); assert.equal(o.pulled, 0); }
+  assert.equal((await B.store.listHeld()).length, 1);
+});

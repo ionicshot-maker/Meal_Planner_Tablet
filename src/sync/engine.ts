@@ -61,6 +61,8 @@ export interface LocalStore {
   noteEpoch(epoch: string): Promise<void>;
   /** Forget what the server is believed to hold (every record becomes "never sent", the cursor goes to 0) but KEEP all data. */
   resetSyncState(): Promise<void>;
+  /** Duplicates currently held back for review. */
+  listHeld(): Promise<HeldDuplicate[]>;
   /** normalized name -> id of the local records of an ingredients/recipes table (for duplicate-name detection). */
   nameIndex(table: SyncTable): Promise<Map<string, string>>;
   /** How many live records per table this device has exchanged with the server (the denominator for the delete guard). */
@@ -269,6 +271,31 @@ export class SyncEngine {
       cursor = page.rev;
       if (!page.more) break;
     }
+    await this.releaseStaleHolds(out);
+  }
+
+  /** A held duplicate whose collision has since gone away (the other record was deleted or renamed, possibly later in the same
+   * pull) is no longer a duplicate: adopt it instead of leaving it waiting for a review that has nothing to decide. */
+  private async releaseStaleHolds(out: SyncOutcome) {
+    const held = await this.local.listHeld();
+    if (held.length === 0) return;
+    const indexes = new Map<string, Map<string, string>>();
+    const adopt: AdoptItem[] = [];
+    const release: string[] = [];
+    for (const h of held) {
+      let names = indexes.get(h.table);
+      if (!names) { names = await this.local.nameIndex(h.table); indexes.set(h.table, names); }
+      const name = normName(h.cloud.name);
+      const other = name ? names.get(name) : undefined;
+      if (other && other !== h.cloudId) continue; // still collides: leave it for review
+      adopt.push({ table: h.table, id: h.cloudId, rev: h.rev, deleted: false, record: h.cloud });
+      release.push(h.key);
+      if (name) names.set(name, h.cloudId); // a second held record with the same name would now collide with this one
+    }
+    if (adopt.length === 0) return;
+    await this.local.commitPull({ adopt, keepLocal: [], conflicts: [], hold: [], releaseHeld: release }, null);
+    out.pulled += adopt.length;
+    out.changedLocal = true;
   }
 
   private async nameIndex(table: SyncTable) {

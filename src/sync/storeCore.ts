@@ -202,7 +202,7 @@ export class StoreCore implements LocalStore {
   }
 
   // ---- duplicate review ----
-  listHeld() { return this.b.listHeld(); }
+  listHeld(): Promise<HeldDuplicate[]> { return this.b.listHeld(); }
   getHeld(key: string) { return this.b.getHeld(key); }
   /** Settles a held duplicate: drops the hold and optionally records a new state for the record. Used by resolveDuplicate. */
   async settleHeld(key: string, entry?: SyncStateEntry) {

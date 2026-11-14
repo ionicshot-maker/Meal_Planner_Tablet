@@ -32,6 +32,10 @@ export const SYNCED_SETTINGS_KEYS = [
 
 const EPOCH = '1970-01-01T00:00:00.000Z';
 
+/** A shallow copy of `o` without the listed keys. */
+const omit = (o: Record<string, unknown>, ...keys: string[]): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
+
 /** The id a record is known by on the server. */
 export function recordId(table: SyncTable, rec: LocalRec): string | undefined {
   if (table === 'settings') return 'singleton';
@@ -61,18 +65,13 @@ export function toWire(table: SyncTable, rec: LocalRec): WireRec | undefined {
     if (ai && typeof ai.provider === 'string') out.aiProvider = ai.provider;
     return { ...out, id, updatedAt: stamp(rec) };
   }
-  const { deletedAt: _d, ...rest } = rec;
-  return { ...rest, id, updatedAt: stamp(rec) };
+  return { ...omit(rec, 'deletedAt'), id, updatedAt: stamp(rec) };
 }
 
 /** A pulled (live) wire record turned back into what the app stores. Not used for settings (merged by the store). */
 export function fromWire(table: SyncTable, wire: WireRec): LocalRec {
-  const { deletedAt: _d, ...rest } = wire;
-  if (table === 'mealPlanDays') {
-    const { id: _id, ...day } = rest;
-    return day;
-  }
-  return rest;
+  // a meal-plan day is keyed by its own `date`; the `id` exists only on the wire
+  return table === 'mealPlanDays' ? omit(wire, 'deletedAt', 'id') : omit(wire, 'deletedAt');
 }
 
 export const tombstone = (id: string, at: string): WireRec => ({ id, updatedAt: at, deletedAt: at });
@@ -89,8 +88,7 @@ function canon(v: unknown): string {
 /** The synced CONTENT of a wire record: everything except `updatedAt` (it changes on every save, even a no-op one) and
  * `deletedAt` (reduced to a deleted/not-deleted bit: a tombstone is content). Key order never matters. */
 export function contentOf(wire: WireRec): string {
-  const { updatedAt: _u, deletedAt, ...body } = wire;
-  return canon({ ...body, __deleted: deletedAt ? 1 : 0 });
+  return canon({ ...omit(wire, 'updatedAt', 'deletedAt'), __deleted: wire.deletedAt ? 1 : 0 });
 }
 
 /** Compact stable hash (two FNV-1a passes -> 16 hex chars). Only used to detect "changed since last sync". */

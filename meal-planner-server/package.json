@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "dev": "node --import tsx --watch src/index.ts",
-    "test": "node --import tsx --test test/*.test.ts",
+    "test": "node --env-file=test/tsx.env --import tsx --test test/*.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "fake-indexeddb": "^6.2.8",
     "tsx": "^4.20.0",
     "typescript": "~5.9.0"
   }
