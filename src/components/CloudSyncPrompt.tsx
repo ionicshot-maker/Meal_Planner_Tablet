@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSettings } from '@/context/SettingsContext'
-import { useSupabaseAuth } from '@/hooks/useSupabaseAuth'
+import { useSync } from '@/sync/syncContext'
 import { Modal, Button } from '@/components/ui'
 import styles from './CloudSyncPrompt.module.css'
 
-// A one-time-per-session nudge toward Cloud Sync for anyone not signed in.
+// A one-time-per-session nudge toward signing in, for anyone not signed in on a device that can reach the household's server
+// (with no server behind this address there is nothing to sign in to, so it stays quiet).
 // Gated on setupComplete + starterLibrarySeeded so it can't stack on top of
 // SetupWizard/StarterLibraryPrompt — those resolve first. Two independent
 // dismiss lifetimes: closing (X, backdrop, Esc, or "Not Now") without
@@ -16,15 +17,15 @@ import styles from './CloudSyncPrompt.module.css'
 // either one can turn it back on for the other.
 export function CloudSyncPrompt() {
   const { settings, updateSettings, isLoading: settingsLoading } = useSettings()
-  const { session, loading: authLoading } = useSupabaseAuth(settings.supabaseUrl, settings.supabaseAnonKey)
+  const { state } = useSync()
   const [sessionDismissed, setSessionDismissed] = useState(false)
   const [dontShowAgain, setDontShowAgain] = useState(false)
   const navigate = useNavigate()
 
   const shouldShow =
-    !settingsLoading && !authLoading &&
+    !settingsLoading &&
     settings.setupComplete && settings.starterLibrarySeeded &&
-    !session && !settings.cloudSyncPromptDismissed && !sessionDismissed
+    state === 'signed-out' && !settings.cloudSyncPromptDismissed && !sessionDismissed
 
   async function handleClose() {
     if (dontShowAgain) {
@@ -44,7 +45,7 @@ export function CloudSyncPrompt() {
     <Modal
       open
       onClose={handleClose}
-      title="Sync your data across devices?"
+      title="Sign in to share your household's data?"
       size="sm"
       footer={
         <>
@@ -55,13 +56,12 @@ export function CloudSyncPrompt() {
     >
       <div className={styles.body}>
         <p className={styles.desc}>
-          Cloud Sync keeps your ingredients, recipes, meal plans, and grocery lists in sync across every
-          device in your home. It's entirely optional — everything already works fully offline on this
-          device without it.
+          Signing in keeps your ingredients, recipes, meal plans, and grocery lists the same on every
+          device in your home, automatically. Everything still works without it — it just stays on this
+          device.
         </p>
         <p className={styles.desc}>
-          Signing in also gives you real control over who can access your data, instead of a shared code
-          alone.
+          You'll need the username and password your household's owner set up for you.
         </p>
         <label className={styles.checkboxRow}>
           <input

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSettings } from '@/context/SettingsContext'
+import { useAuth } from '@/hooks/useAuth'
 import { getAllIngredients } from '@/db/ingredients'
 import { getAllRecipes } from '@/db/recipes'
 import { getDB } from '@/db/schema'
@@ -38,7 +39,8 @@ export function SetupChecklist({ onSwitchSection }: Props) {
   const hasPeople = settings.people.length > 0
   const hasUsdaKey = Boolean(settings.usdaApiKey)
   const hasGeminiKey = Boolean(settings.geminiApiKey)
-  const hasCloudSync = Boolean(settings.supabaseUrl?.trim() && settings.householdSyncCode?.trim())
+  const { user } = useAuth()
+  const hasCloudSync = Boolean(user)
 
   const required = [hasHouseholdName, hasPeople, counts.hasIngredients, counts.hasRecipes, counts.hasMealPlan]
   const requiredDone = required.filter(Boolean).length
@@ -96,7 +98,7 @@ export function SetupChecklist({ onSwitchSection }: Props) {
       onClick: () => onSwitchSection('integrations'),
     },
     {
-      label: 'Set up Cloud Sync — sync between devices (optional)',
+      label: 'Sign in to share with your household (optional)',
       done: hasCloudSync,
       optional: true,
       onClick: () => onSwitchSection('data'),

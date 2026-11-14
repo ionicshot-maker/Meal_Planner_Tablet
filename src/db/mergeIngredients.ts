@@ -157,14 +157,14 @@ export async function mergeIngredients(
 }
 
 // The shared store-list type both mergeIngredients() and Cloud Sync's
-// resolveIngredientDuplicate() (src/db/supabase.ts) open their transaction
+// the duplicate resolution (src/sync/duplicatePort.ts) open their transaction
 // with — kept as one alias so the two stay structurally interchangeable
 // rather than silently drifting apart.
 type MergeTx = IDBPTransaction<MealPlannerDB, ['ingredients', 'recipes', 'groceryLists', 'macroLogs'], 'readwrite'>
 
 // The actual reference-discovery/repointing logic, extracted so it has
 // exactly one implementation used by both mergeIngredients() (this file)
-// and Cloud Sync's resolveIngredientDuplicate() (src/db/supabase.ts) — the
+// and Cloud Sync's resolveIngredientDuplicate() (src/sync/duplicatePort.ts) — the
 // two places in the app that ever need to retire one ingredient id in favor
 // of another. Operates purely on an already-open transaction's store
 // handles and the two ids/variant-id-sets involved; it does NOT require

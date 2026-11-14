@@ -125,3 +125,9 @@
   font-size: var(--text-xs);
   color: var(--color-text-muted);
 }
+
+/* ── Sync status panel ────────────────────────────────────────────────────── */
+.statusLine { font-size: var(--text-base); margin: 0 0 var(--space-2); }
+.callout { margin-top: var(--space-4); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-warning); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--text-sm); }
+.callout p { margin: 0; }
+.modalHelp { margin-top: var(--space-2); font-size: var(--text-sm); color: var(--color-text-muted); }

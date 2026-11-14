@@ -4,6 +4,8 @@ import { useTheme } from '@/context/ThemeContext'
 import { useSettings } from '@/context/SettingsContext'
 import { useVisualViewportHeight } from '@/hooks/useVisualViewportHeight'
 import { useIsHouseholdOwner } from '@/hooks/useIsHouseholdOwner'
+import { SyncStatus } from './SyncStatus'
+import { SyncBanners } from './SyncBanners'
 import {
   Carrot, Download, BookOpen, Calendar, BarChart2, ShoppingCart,
   Settings, HelpCircle, UtensilsCrossed, Sun, Moon, Monitor, Wrench,
@@ -78,14 +80,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
             ))}
           </ul>
         </div>
-        <button className={styles.themeBtn} onClick={cycleTheme} aria-label="Toggle theme">
-          <span aria-hidden="true">{themeIcon}</span>
-          <span className={styles.navLabel}>
-            {preference === 'system' ? 'System' : preference === 'dark' ? 'Dark' : 'Light'}
-          </span>
-        </button>
+        <div className={styles.navBottom}>
+          <SyncStatus />
+          <button className={styles.themeBtn} onClick={cycleTheme} aria-label="Toggle theme">
+            <span aria-hidden="true">{themeIcon}</span>
+            <span className={styles.navLabel}>
+              {preference === 'system' ? 'System' : preference === 'dark' ? 'Dark' : 'Light'}
+            </span>
+          </button>
+        </div>
       </nav>
       <main className={styles.main} id="main-content">
+        <SyncBanners />
         {children}
       </main>
     </div>

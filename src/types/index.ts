@@ -96,16 +96,13 @@ export interface IngredientDisplayToggles {
 // ─── Nutrition Source ────────────────────────────────────────────────────────
 export type NutritionSource = 'openfoodfacts' | 'gemini' | 'usda' | 'manual'
 
-// ─── Cloud Sync ───────────────────────────────────────────────────────────────
-export type FamilyShareRole = 'owner' | 'contributor' | 'readonly'
-
 // ─── App Settings ────────────────────────────────────────────────────────────
 export interface AppSettings {
   householdName: string
   unitSystem: UnitSystem
   theme: ThemePreference
-  // Device-local — deliberately excluded from cloud sync (see SYNCED_SETTINGS_KEYS
-  // in db/supabase.ts) since a kitchen tablet may want larger text than a desktop.
+  // Device-local — deliberately not synced (see SYNCED_SETTINGS_KEYS in sync/records.ts)
+  // since a kitchen tablet may want larger text than a desktop.
   fontSizePt: number
   ai: AIConfig
   usdaApiKey: string
@@ -133,22 +130,10 @@ export interface AppSettings {
   allergenWatchList: string[]   // subset of ALLERGENS — meal planner warns when a planned meal contains one
   miscategoryFixed: boolean     // one-time flag: has fixMiscategorizedIngredients() already run?
   categoryFixRulesVersion: number // bumped whenever the fix rules change materially, to force one more pass
-  // Cloud sync
-  supabaseUrl: string
-  supabaseAnonKey: string
-  householdSyncCode: string
-  familyShareCode: string
-  familyShareRole: FamilyShareRole
-  // Device-local — deliberately excluded from cloud sync (see SYNCED_SETTINGS_KEYS
-  // in db/supabase.ts). Each device tracks when *it* last synced; syncing this
-  // field itself would just show whichever device synced last, everywhere.
-  lastHouseholdSyncAt?: string
-  lastFamilySyncAt?: string
-  // Device-local — deliberately excluded from cloud sync. A dismissal on one
-  // device says nothing about whether a *different* device has ever seen the
-  // Cloud Sync explainer — a brand-new device should still get it once, so
-  // syncing this would be wrong even though it lives right next to fields
-  // that do sync.
+  // Device-local — deliberately not synced. A dismissal on one device says
+  // nothing about whether a *different* device has ever seen the sign-in
+  // reminder — a brand-new device should still get it once, so syncing this
+  // would be wrong even though it lives right next to fields that do sync.
   cloudSyncPromptDismissed: boolean
   updatedAt: string
 }

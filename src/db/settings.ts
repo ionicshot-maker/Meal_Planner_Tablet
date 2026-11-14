@@ -94,11 +94,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   allergenWatchList: [],
   miscategoryFixed: false,
   categoryFixRulesVersion: 0,
-  supabaseUrl: '',
-  supabaseAnonKey: '',
-  householdSyncCode: '',
-  familyShareCode: '',
-  familyShareRole: 'owner',
   cloudSyncPromptDismissed: false,
   updatedAt: new Date(0).toISOString(),
 }
@@ -180,12 +175,20 @@ function mergeDefaultTags(current: RecipeTagGroup[]): RecipeTagGroup[] {
   return result
 }
 
+// Fields from the Supabase / household-code / Family Share era. Removed when settings load, so a leftover value (including a
+// Supabase anon key) does not sit in this device's database or travel into backups; the next save drops them for good.
+const LEGACY_SETTINGS_KEYS = [
+  'supabaseUrl', 'supabaseAnonKey', 'householdSyncCode', 'familyShareCode', 'familyShareRole',
+  'lastHouseholdSyncAt', 'lastFamilySyncAt',
+] as const
+
 export async function loadSettings(): Promise<AppSettings> {
   const db = await getDB()
   const stored = await db.get('settings', 'app')
   if (!stored) return { ...DEFAULT_SETTINGS }
   // Merge stored over defaults to pick up any new default fields added in upgrades
   const merged: AppSettings = { ...DEFAULT_SETTINGS, ...stored }
+  for (const k of LEGACY_SETTINGS_KEYS) delete (merged as unknown as Record<string, unknown>)[k]
   // Restore any missing default recipe tags (adds back deleted groups/tags without removing custom ones)
   merged.recipeTags = mergeDefaultTags(merged.recipeTags)
   return merged

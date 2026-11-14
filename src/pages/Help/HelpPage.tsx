@@ -1,7 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { PageHelpButton } from '@/components/layout/PageHelpButton'
+import { SYNC_STATE_LABELS as L } from '@/components/layout/syncStateLabels'
 import styles from './HelpPage.module.css'
+
+// What each state of the sync status pill means. The labels come straight from the pill itself, so this list can't drift from it.
+const SYNC_PILL_HELP: [string, string][] = [
+  [`${L.idle.label} · just now`, 'Everything on this device matches the household as of the last check (it says how long ago). This is how it should look most of the time.'],
+  [L.syncing.label, 'Sending or receiving changes this very moment. It usually takes a second or two.'],
+  [L.offline.label, "This device can't reach the household's server right now. Keep working — your changes are kept and go up by themselves when the connection is back."],
+  [L['signed-out'].label, "You aren't signed in, so nothing is being shared. Sign in under Settings → Data → Account."],
+  [L['read-only'].label, "Your account can look at everything but not change it. Everyone else's updates still reach you."],
+  [L['needs-adopt'].label, 'The app needs an answer from you — either to join the household on a new device, or about a lot of removed items. Tap the pill to see which.'],
+  [L.error.label, 'Something went wrong. Open Settings → Data to read what, tap Sync now to retry, and see Troubleshooting if it keeps happening.'],
+]
 
 export default function HelpPage() {
   const navigate = useNavigate()
@@ -19,7 +31,11 @@ export default function HelpPage() {
 
   const TOC_ITEMS = [
     ['#welcome',            'Welcome'],
+    ['#whats-in-the-app',   "What's in the App"],
     ['#getting-started',    'Getting Started'],
+    ['#account',            'Signing In & Your Account'],
+    ['#cloud-sync',         'Syncing Between Devices'],
+    ['#ai-features',        'Photos, Receipts & AI Helpers'],
     ['#api-keys',           'Setting Up Free Services'],
     ['#ingredients',        'Ingredients'],
     ['#ingredient-info',    'Understanding Your Ingredients'],
@@ -29,7 +45,6 @@ export default function HelpPage() {
     ['#grocery',            'Grocery List'],
     ['#macros',             'Macro Tracker'],
     ['#drinks',             'Drinks'],
-    ['#cloud-sync',         'Cloud Sync & Sign In'],
     ['#settings-reference', 'Settings Reference'],
     ['#faq',                'FAQ'],
     ['#troubleshooting',    'Troubleshooting'],
@@ -60,10 +75,33 @@ export default function HelpPage() {
           <h2 className={styles.sectionTitle}>Welcome to Your Meal Planner</h2>
           <div className={styles.welcomeCard}>
             <p>
-              This app helps your family plan meals for the week, track what you eat, build your grocery
-              list automatically, and sync everything between your devices. You add your ingredients and
-              recipes once — then every week you tap which meals you want each day and the app tells you
-              exactly what to buy at the store. No more forgetting things or buying the same item twice.
+              This app helps your family plan meals for the week, track what you eat, and build your grocery
+              list automatically. You add your ingredients and recipes once — then every week you tap which
+              meals you want each day and the app tells you exactly what to buy at the store. No more forgetting
+              things or buying the same item twice. Everyone in your home signs in to the same shared copy, so
+              the whole household sees the same recipes, plans, and lists on their own phone or tablet.
+            </p>
+          </div>
+        </section>
+
+        {/* ── What's in the app ────────────────────────────────────────────── */}
+        <section id="whats-in-the-app" className={styles.section}>
+          <h2 className={styles.sectionTitle}>What's in the App</h2>
+          <p className={styles.sectionDesc}>The menu (on the side of a tablet, across the top of a phone) takes you to each part.</p>
+          <div className={styles.featureCard}>
+            <ul className={styles.featureList}>
+              <li><strong>🥕 Ingredients</strong> — everything you buy at the store, with its nutrition facts and price. Recipes and grocery lists are built from these. <a href="#ingredients">More</a></li>
+              <li><strong>⬇️ Import Ingredients</strong> — the quick ways to add ingredients: scan a barcode, look one up, photograph a label or a receipt. <a href="#ai-features">More</a></li>
+              <li><strong>📖 Cookbook</strong> — your recipes, plus collections (like "Weeknight Dinners") and kitchen reference pages (substitution charts, conversions). <a href="#cookbook">More</a></li>
+              <li><strong>📅 Meal Plan</strong> — a week at a glance. Tap a day and choose what's for breakfast, lunch, and dinner. <a href="#planner">More</a></li>
+              <li><strong>🛒 Grocery</strong> — builds your shopping list from the meals you planned, and lets you check things off in the store. <a href="#grocery">More</a></li>
+              <li><strong>📊 Macros</strong> — optional. Daily nutrition totals, and a place to log what you actually ate. <a href="#macros">More</a></li>
+              <li><strong>⚙️ Settings</strong> — your household's name and people, units, text size, your free keys, and your account and sync. <a href="#settings-reference">More</a></li>
+              <li><strong>❓ Help</strong> — this page.</li>
+            </ul>
+            <p className={styles.sectionDesc} style={{ marginTop: 'var(--space-3)' }}>
+              At the bottom of the menu you'll also see a small status pill that shows whether your changes are shared with the
+              rest of the household right now — see <a href="#cloud-sync">Syncing Between Devices</a>.
             </p>
           </div>
         </section>
@@ -74,7 +112,7 @@ export default function HelpPage() {
           <p className={styles.sectionDesc}>Follow these steps in order and you will be up and running in no time.</p>
           <div className={styles.infoBox}>
             <p>
-              Before step 3 below, it's worth two minutes to set up a couple of free services — they make
+              Before step 3 below, it's worth two minutes to set up a free key or two — they make
               adding ingredients and recipes much faster (auto-filling nutrition facts instead of typing
               them by hand). See <a href="#api-keys">Setting Up Free Services</a> for exact steps. Everything
               in this app also works completely fine without them — you can always add these later.
@@ -83,13 +121,13 @@ export default function HelpPage() {
           <div className={styles.stepsCard}>
             {[
               ['⚙️ Set your household name', 'Go to Settings and type your family name, like "The Smith Family". This name appears at the top of the app.'],
-              ['👥 Add your family members', 'In Settings → Household, add each person in your home — this is what lets meals and portions be planned per person. Nutrition tracking (step 7 below) is a separate, fully optional feature; adding someone here doesn\'t turn tracking on for them.'],
+              ['👥 Add your family members', 'In Settings → Household, add each person in your home — this is what lets meals and portions be planned per person. (Separate from this, each person who uses the app gets their own login — see Signing In & Your Account.) Nutrition tracking (step 7 below) is a separate, fully optional feature; adding someone here doesn\'t turn tracking on for them.'],
               ['🥕 Add ingredients', 'Go to Ingredients and tap + Add Ingredient. Add everything you cook with. You can also scan barcodes on the Import page — that works right away, no setup required.'],
               ['📖 Add recipes', 'Go to the Cookbook and tap + New Recipe. Type one in by hand, or import automatically from a URL or pasted recipe text — auto-import needs a free AI key set up first (see Setting Up Free Services below); without one, pasted text still opens as a handy reference to type from.'],
               ['📅 Plan your meals', 'Go to Meal Plan and tap each day to choose recipes for breakfast, lunch, and dinner.'],
               ['🛒 Generate your grocery list', 'Go to Grocery, pick your shopping dates, and tap Generate List. The app figures out everything you need.'],
               ['📊 Track your nutrition (optional)', 'Go to Macros to see your daily nutrition totals and log what you actually ate.'],
-              ['☁️ Sync across your devices (optional)', 'Want the same data on your phone and tablet? See Cloud Sync & Sign In below — it takes about five extra minutes.'],
+              ['🔑 Sign in to share with your household', 'Settings → Data → Account. Use the username and password an owner gave you. After that, everything you do is shared with everyone in your home automatically — see Signing In & Your Account and Syncing Between Devices below. (If you are the very first person, the Account box lets you create the household\'s owner account.)'],
             ].map(([title, desc], i) => (
               <div key={i} className={styles.gettingStartedStep}>
                 <div className={styles.stepCircle}>{i + 1}</div>
@@ -108,7 +146,7 @@ export default function HelpPage() {
           <div className={styles.infoBox}>
             <p>
               This app can use a few outside services to save you typing — looking up nutrition facts
-              automatically, reading a recipe photo, or keeping your data in sync across devices. Each one
+              automatically, or reading a recipe, label, or receipt from a photo. Each one
               needs a free "API key" — a long password-like code that lets the app talk to that service on
               your behalf. Getting one is free and takes about two minutes per service; think of it like
               signing up for a free account on a website, then copying a code from that website into this app.
@@ -218,48 +256,10 @@ export default function HelpPage() {
             </p>
           </div>
 
-          {/* Supabase */}
-          <div className={styles.apiCard}>
-            <div className={styles.apiCardHeader}>
-              <span className={styles.apiCardIcon}>☁️</span>
-              <div>
-                <div className={styles.apiCardTitle}>Supabase — Free</div>
-                <div className={styles.apiCardSub}>What it's for: syncing your data between your own devices, signing in, and sharing recipes with family</div>
-              </div>
-            </div>
-            <p className={styles.apiCardBody}>
-              A free cloud database — think of it as a private storage locker for your data that every one
-              of your devices can check into. <strong>If you skip this:</strong> the app works completely
-              normally on one device; you just won't be able to access the same data from a second device,
-              or sign in, or share recipes with family elsewhere. See{' '}
-              <a href="#cloud-sync">Cloud Sync &amp; Sign In</a> below for what these unlock in full.
-            </p>
-            <div className={styles.apiSteps}>
-              {[
-                'Open Supabase in a new tab using the button below.',
-                'Click "Start for free" and create a free account.',
-                'Click "New Project" and give it a name like "Family Meal Planner". Choose a region close to you, and set a database password (save it somewhere — Supabase may ask for it again, though this app never needs it directly).',
-                'Once the project is ready (may take a minute or two), click "Project Settings" (gear icon) in the left menu, then click "API".',
-                'Copy the "Project URL" (starts with https://). Paste it into Settings → Integrations → Supabase Project URL.',
-                'Copy the "anon public" key (the long one under Project API keys). Paste it into Settings → Integrations → Supabase Anon Key.',
-                'Go to Settings → Data → Cloud Sync. Tap "Show database setup SQL", copy the whole thing, and run it in Supabase under Database → SQL Editor → New Query → Run. This creates the tables your data lives in.',
-                'Still in Settings → Data → Cloud Sync, tap "Show account/sign-in setup SQL" and run that too, the same way — this is what lets you actually sign in and create/join a household in the next step. It\'s four scripts run back-to-back; paste and run each one in order, waiting for each to finish before running the next.',
-                'Now go to Settings → Data → Cloud Sync → Account and create your account (email + password) — see Cloud Sync & Sign In below for what to do next.',
-              ].map((step, i) => (
-                <div key={i} className={styles.apiStep}>
-                  <div className={styles.apiStepNum}>{i + 1}</div>
-                  <div className={styles.apiStepText}>{step}</div>
-                </div>
-              ))}
-            </div>
-            <a href="https://supabase.com" target="_blank" rel="noreferrer" className={styles.openLinkBtn}>
-              Open Supabase in a New Tab →
-            </a>
-          </div>
-
           <div className={styles.privacyNote}>
-            <strong>Keep your codes private.</strong> Treat them like passwords. They are stored only on your
-            device and are never sent to anyone except the service you are using them for.
+            <strong>Keep your codes private.</strong> Treat them like passwords. A code is stored only on the device you typed it into —
+            it is never shared with the rest of the household. When you use a feature, it travels through your household's server only to
+            make that one request to the service, and the server does not keep it.
           </div>
         </section>
 
@@ -489,47 +489,175 @@ export default function HelpPage() {
           </div>
         </section>
 
-        {/* ── Cloud Sync ───────────────────────────────────────────────────── */}
-        <section id="cloud-sync" className={styles.section}>
-          <h2 className={styles.sectionTitle}>Cloud Sync &amp; Sign In</h2>
+        {/* ── Account ──────────────────────────────────────────────────────── */}
+        <section id="account" className={styles.section}>
+          <h2 className={styles.sectionTitle}>Signing In &amp; Your Account</h2>
           <div className={styles.featureCard}>
             <p>
-              Cloud sync lets you access your meal plan from any device and share recipes with family
-              members in another home. It uses Supabase — a free cloud database (see{' '}
-              <a href="#api-keys">Setting Up Free Services</a> to create one). Getting this fully working
-              has two parts: signing in (who you are), and a household (which family's data you're syncing).
+              Your household keeps its recipes, plans, and lists on its own private server at home. To use it, each person has their
+              own account — a username and a password. Nobody signs themselves up: an <strong>owner</strong> adds each person.
             </p>
 
-            <h3 className={styles.subFeatureTitle}>1. Sign In (Settings → Data → Cloud Sync → Account)</h3>
+            <h3 className={styles.subFeatureTitle}>Signing in</h3>
             <ul className={styles.featureList}>
-              <li><strong>What it is:</strong> A real personal account (email + password) for this app, separate from your Google/Gmail account or anything else. This is new — earlier versions of this app only had the shared code below.</li>
-              <li><strong>Why bother:</strong> It's what lets you (and only you, or people you've specifically added) manage who has access, instead of "anyone who has the code can get in."</li>
-              <li><strong>Create an account:</strong> Once your Supabase Project URL and Anon Key are entered in Settings → Integrations, an Account box appears here. Tap Sign Up, enter an email and a password (6+ characters), and tap Create Account. Check your email for a confirmation link if asked for one.</li>
-              <li><strong>Create your household:</strong> After signing in, tap "+ Create a Household," give it a name (like "Smith Family"), and leave the code blank to have one generated for you automatically — or type your own. This is the same kind of code as the Household Sync Code below; creating a household here sets it for you automatically.</li>
-              <li><strong>Join an existing household:</strong> If someone in your home already created one, tap "Join by Code" instead and enter the code they gave you.</li>
-              <li><strong>Trouble signing up or creating a household?</strong> This usually means the Supabase project is missing a one-time setup step — see the "Show account/sign-in setup SQL" button right below the Account box in Settings, and the Supabase steps in <a href="#api-keys">Setting Up Free Services</a>.</li>
-              <li><strong>The sign-in reminder popup:</strong> If you're not signed in, the app shows a one-time reminder about this when you open it. Check "Don't show this again" to dismiss it for good, or turn it back on any time via the toggle right below the Account box in Settings.</li>
-              <li><strong>Dev Tools:</strong> Whoever creates a household is automatically its Owner (the "Manage members" list in the Account box shows everyone's role). Owners get an extra "Dev Tools" item in the main menu — advanced, technical utilities like the bulk ingredient converter and the Barcode Duplicate Finder. Contributors and Read Only members never see it, and neither does anyone who hasn't signed in at all.</li>
+              <li><strong>Open the app</strong> from the address your household uses (ask an owner if you're not sure). On a phone or tablet, use your browser's "Add to Home Screen" so it opens like a regular app.</li>
+              <li>Go to <strong>Settings → Data</strong> and find the <strong>Account</strong> box. Type your username and password and tap <strong>Sign In</strong>. (The app may also pop up and offer to take you there.)</li>
+              <li>Once you're signed in, the box says "Signed in as" with your name and what you're allowed to do. You stay signed in on that device for about two months, so you won't be asked again each time.</li>
+              <li><strong>To sign out</strong> (for example on a shared tablet), tap Sign Out in the same box. Your recipes stay on the device; they just stop syncing until someone signs in.</li>
             </ul>
 
-            <h3 className={styles.subFeatureTitle}>2. Household Sync (sync between your own devices)</h3>
+            <h3 className={styles.subFeatureTitle}>Changing your password</h3>
             <ul className={styles.featureList}>
-              <li><strong>What syncs:</strong> Everything — ingredients (with prices), recipes, recipe collections, kitchen reference pages, meal plans, grocery lists, household items.</li>
-              <li><strong>What never syncs:</strong> Personal macro logs, weight history, and device-specific preferences like theme, text size, and API keys. These stay on each device.</li>
-              <li><strong>If you signed in above and created/joined a household:</strong> Your Household Sync Code is already filled in — you're done, just tap "Sync with Cloud."</li>
-              <li><strong>Without signing in:</strong> You can still type or generate a Household Sync Code directly and sync with it — this still works, it just doesn't have the per-person access control signing in gives you.</li>
-              <li><strong>How to sync:</strong> Go to Settings → Data → Cloud Sync. Tap "Sync with Cloud" to sync in both directions, "Push to Cloud" to send your changes up, or "Pull from Cloud" to get changes from the cloud.</li>
-              <li><strong>Syncing with a spouse or partner:</strong> Have them sign in (or enter the same Household Sync Code) on their device, using the same Supabase Project URL and Anon Key as you. Then either of you can tap "Sync with Cloud" to stay in sync.</li>
-              <li><strong>Merge logic:</strong> The app is smart about merging. If the same item exists on both devices, the newer version wins. New items from the cloud are added; new items from your device are uploaded. Nothing is ever silently deleted.</li>
+              <li>In <strong>Settings → Data → Account</strong>, tap <strong>Change my password</strong>. Type your current password, then the new one twice. Use at least 10 characters — a few words strung together works well.</li>
+              <li>For safety, changing your password signs you out on your <em>other</em> devices. Sign in there again with the new password. The device you're using stays signed in.</li>
+              <li><strong>Forgot your password?</strong> Ask an owner to reset it (see below), then change it to one only you know.</li>
             </ul>
 
-            <h3 className={styles.subFeatureTitle}>3. Family Share (share recipes with out-of-state family)</h3>
+            <h3 className={styles.subFeatureTitle}>Who can do what</h3>
             <ul className={styles.featureList}>
-              <li><strong>What it shares:</strong> Recipes and ingredient nutrition info — but no prices, package costs, or store names. Family members fill in their own prices locally.</li>
-              <li><strong>Why prices are not included:</strong> Prices vary by location and store. Your grocery store prices are private to your household. Family in another state uses their own local prices.</li>
-              <li><strong>How to share:</strong> In Settings → Data → Cloud Sync, create a Family Share Code. Give this code to your family member. They enter it on their device and tap "Pull from Family" to get your recipes.</li>
-              <li><strong>Read Only vs. Contributor:</strong> Read Only family members can only pull (receive) your recipes. Contributors can both pull and push, so they can also share their own recipes back to you.</li>
-              <li><strong>Disconnect a family member:</strong> Tap "Regenerate" next to the Family Share Code to create a new code. Anyone using the old code will no longer receive future syncs.</li>
+              <li><strong>Owner</strong> — can do everything, including adding people, changing what they can do, and resetting passwords. Owners also see an extra "Dev Tools" item in the menu (advanced utilities most people never need).</li>
+              <li><strong>Contributor</strong> — the everyday role. Can add and change recipes, ingredients, meal plans, and grocery lists, and everything syncs. Can't manage other people's accounts.</li>
+              <li><strong>Read only</strong> — can look at everything and receive everyone's updates, but can't change anything. A banner at the top of each page says so. If a read-only person does type something in, it stays on their own device and isn't shared.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>For owners: adding and managing people</h3>
+            <ul className={styles.featureList}>
+              <li>Go to <strong>Settings → Data → Account</strong>. Owners see a <strong>People in this household</strong> list.</li>
+              <li><strong>Add someone:</strong> tap <strong>+ Add a person</strong>, enter their name, a username, a starting password, and choose what they can do. Then tell them their username and password and suggest they change the password after they sign in.</li>
+              <li><strong>Change what someone can do:</strong> use the drop-down next to their name. It takes effect right away, even if they're signed in.</li>
+              <li><strong>Reset a forgotten password:</strong> tap <strong>Reset password</strong> under their name, type a new one, and tell them. They're signed out everywhere until they use it.</li>
+              <li><strong>Turn someone's access off:</strong> tap <strong>Turn access off</strong>. They're signed out immediately and can't sign back in; tap <strong>Turn access back on</strong> any time. Nothing they added is lost.</li>
+              <li><strong>Remove someone for good:</strong> tap <strong>Remove</strong> and confirm. Everything they added to the household stays.</li>
+              <li>You can't turn off, remove, or demote the <em>last</em> owner — the app won't let the household lock itself out. To hand things over, make someone else an owner first.</li>
+            </ul>
+          </div>
+        </section>
+
+        {/* ── Syncing ──────────────────────────────────────────────────────── */}
+        <section id="cloud-sync" className={styles.section}>
+          <h2 className={styles.sectionTitle}>Syncing Between Devices</h2>
+          <div className={styles.featureCard}>
+            <p>
+              Once you're signed in, the household's data is kept the same on every device, <strong>automatically</strong>. There are
+              no buttons to remember: add a recipe on your phone and it shows up on the tablet a moment later.
+            </p>
+            <ul className={styles.featureList}>
+              <li><strong>What's shared:</strong> ingredients (with prices), recipes, collections, kitchen reference pages, meal plans, grocery lists, household items, and the household's shared settings (name, people, categories, and so on).</li>
+              <li><strong>What stays on each device:</strong> your API keys, theme, text size, and your Macro Tracker logs and weight.</li>
+              <li><strong>When it syncs by itself:</strong> when you sign in; a few seconds after you change something; about once a minute while the app is open; when you come back to the app after using something else; and when your internet connection returns after being off.</li>
+              <li><strong>Sync right now:</strong> go to <strong>Settings → Data</strong> and tap <strong>↕ Sync now</strong>. It's handy before you head out the door, but never required.</li>
+              <li><strong>Working offline is fine.</strong> Everything on the device keeps working with no connection. Whatever you change is kept and goes up on its own when you're back online.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>The status pill</h3>
+            <p className={styles.sectionDesc}>
+              At the bottom of the menu (just the icon on a phone), a small pill tells you where things stand. Tap it to open the sync settings.
+            </p>
+            <ul className={styles.featureList}>
+              {SYNC_PILL_HELP.map(([label, meaning]) => (
+                <li key={label}><strong>{label}</strong> — {meaning}</li>
+              ))}
+            </ul>
+            <p className={styles.sectionDesc}>
+              Notes and banners can also appear at the top of a page. <strong>"Updated with changes from another device"</strong> just
+              means someone else's change arrived while you were looking at the page — tap <strong>Refresh this page</strong> to see it.
+            </p>
+
+            <h3 className={styles.subFeatureTitle}>Adding a new device</h3>
+            <ul className={styles.featureList}>
+              <li>Open the app at the household's address on the new device and sign in (Settings → Data → Account).</li>
+              <li>If the household already has data, the pill says <strong>Action needed</strong> and Settings → Data shows <strong>Your household already has data</strong>. Tap <strong>Join — use the household's data here</strong>.</li>
+              <li>The device is then filled with the household's ingredients, recipes, and plans. If the device already had things of its own, a copy is saved to a file first, just in case. The first time can take a few minutes for a big household — you can wait on that screen.</li>
+              <li>Don't make your own recipes on the new device before joining — joining replaces what's on the device with the household's. If the app offers to set up a household name or load the starter ingredients on a new device, you can skip that: joining brings the household's own.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>If you see "Same name, different item"</h3>
+            <p className={styles.sectionDesc}>
+              This happens when two devices each create an ingredient or recipe with the same name before they've synced — for example, when the
+              starter ingredient library gets loaded on two devices. The app won't guess; it keeps both and asks you. A note appears at the top
+              of the page, and the list lives in <strong>Settings → Data → Same name, different item</strong>.
+            </p>
+            <ul className={styles.featureList}>
+              <li>Tap <strong>Review</strong> next to an item. It shows the item you already have and explains the choices:</li>
+              <li><strong>Keep mine</strong> — keep the one on your device; the other is removed for everyone.</li>
+              <li><strong>Keep theirs</strong> — replace yours with the other one. Any recipes, grocery lists, or logs that used yours are switched over to theirs automatically, so nothing breaks.</li>
+              <li><strong>Keep both</strong> — keep both side by side (you can merge them later with the Merge button on an ingredient).</li>
+              <li><strong>Not now</strong> — leave it for later. Nothing is lost.</li>
+              <li><strong>Lots of them?</strong> Tick the ones you want (or none, for all of them) and use <strong>Keep all mine</strong>, <strong>Keep all theirs</strong>, or <strong>Keep all newer</strong> — which keeps whichever was changed most recently. After a starter-library mix-up, "Keep all newer" is usually the quick answer.</li>
+              <li>Some warnings go away by themselves: if the other item is deleted or renamed, the app notices and adds the item without asking.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>If you removed a lot of things</h3>
+            <p className={styles.sectionDesc}>
+              If this device suddenly has many items missing since it last synced — say a reset or a restore went wrong — the app does <strong>not</strong>
+              tell everyone else to delete them. A message asks: <strong>"This device has removed N items… Was that on purpose?"</strong>
+            </p>
+            <ul className={styles.featureList}>
+              <li><strong>No — put them back</strong> brings them back from the household, as if nothing happened.</li>
+              <li><strong>Yes — remove them for everyone</strong> removes them on every device. Only choose this if you really meant to clear them out.</li>
+              <li>Ordinary deleting — a recipe here, an ingredient there — never asks; it just syncs.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>When two people change the same thing</h3>
+            <p className={styles.sectionDesc}>
+              If two people edit the very same recipe before their devices have talked, the newer change is kept, and the other version is saved in
+              <strong> Settings → Data → Changes that overlapped</strong>. Tap <strong>Show</strong> to see them; <strong>Bring back the other version</strong>
+              puts it back if the wrong one won. Nothing is ever thrown away silently.
+            </p>
+          </div>
+        </section>
+
+        {/* ── AI features ──────────────────────────────────────────────────── */}
+        <section id="ai-features" className={styles.section}>
+          <h2 className={styles.sectionTitle}>Photos, Receipts, Barcodes &amp; AI Helpers</h2>
+          <div className={styles.infoBox}>
+            <p>
+              These features save you typing. Most use a free Google Gemini key (see <a href="#api-keys">Setting Up Free Services</a> — one-time,
+              about two minutes) and every one of them can be skipped: you can always type things in by hand. You'll need to be online
+              for any of them. Your key goes through your household's server only to make each request and is never saved there.
+            </p>
+          </div>
+          <div className={styles.featureCard}>
+            <h3 className={styles.subFeatureTitle}>Barcode lookup (no key needed)</h3>
+            <ul className={styles.featureList}>
+              <li>Open <strong>Import Ingredients → Barcode Lookup</strong>. Tap <strong>📷 Scan Barcode with Camera</strong> and point it at the barcode on the package, about 6 inches away in good light. Or type the number into the <strong>Barcode number</strong> box.</li>
+              <li>The app finds the product (name, brand, serving size, nutrition, and often Nutriscore and allergens). Check it over and save it as an ingredient.</li>
+              <li><strong>Not found?</strong> Try Gemini Lookup (type the product name), USDA Lookup (for plain foods like "canned tomatoes"), or Scan Label.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>Look up by name — Gemini Lookup &amp; USDA Lookup</h3>
+            <ul className={styles.featureList}>
+              <li><strong>Gemini Lookup</strong> (needs a Gemini key): type a product like "McCormick Ground Cinnamon" and the AI fills in nutrition facts. Best for packaged and branded items.</li>
+              <li><strong>USDA Lookup</strong> (a free key is optional): type "chicken breast" or "brown rice" and pick the closest match. Best for fresh and plain foods.</li>
+              <li>AI can be wrong. Glance at the numbers — especially serving size — before you save.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>Scan a nutrition label</h3>
+            <ul className={styles.featureList}>
+              <li>Open <strong>Import Ingredients → Scan Label</strong>. Tap <strong>Take Photo or Scan Label</strong> (or choose a photo you already have).</li>
+              <li>Drag the box so it covers just the nutrition panel — important when a package shows more than one product — then confirm.</li>
+              <li>The AI reads the values for you to review and save. A blurry photo gets a friendly "couldn't read that" instead of wrong numbers; retake it with better light.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>Scan a grocery receipt</h3>
+            <ul className={styles.featureList}>
+              <li>Open <strong>Import Ingredients → Receipt Scanner</strong>. Tap <strong>Take Photo or Scan Receipt</strong>. Lay the receipt flat, in good light, with the whole thing in view.</li>
+              <li>Each line is matched against your ingredients. Strong matches are pre-ticked; for the others, pick the right ingredient or create a new one.</li>
+              <li>You'll be asked how many servings are in each package (receipts never print that). Nothing is saved until you review it and confirm — and the app remembers receipts you've already scanned, so you won't add the same prices twice.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>Bring in a recipe</h3>
+            <ul className={styles.featureList}>
+              <li>Go to <strong>Cookbook</strong> and tap <strong>Import</strong>. There are three tabs:</li>
+              <li><strong>Import from URL</strong> — paste the web address of a recipe page. If the site won't let the app read it, open the page yourself, copy the recipe text, and use the next tab instead.</li>
+              <li><strong>Paste Recipe Text</strong> — paste the text of a recipe. With a key set up, it's turned into a structured recipe; without one, it opens next to a blank recipe so you can type from it.</li>
+              <li><strong>Photo</strong> — photograph a cookbook page, a recipe card, or a handwritten note (or choose a photo, or drag one in). Crop to just the recipe, then confirm. If one photo shows several recipes, the app may suggest a starting box for the next one; after you save, it asks <strong>"Crop Another Recipe?"</strong> — choose <strong>Crop Another From This Photo</strong> or <strong>I'm Done With This Photo</strong>.</li>
+              <li>Whichever way you bring it in, you always get a chance to check and fix every field before saving. Handwriting in particular needs a careful look.</li>
+            </ul>
+
+            <h3 className={styles.subFeatureTitle}>Digitize a kitchen reference page</h3>
+            <ul className={styles.featureList}>
+              <li>In the Cookbook, tap the <strong>Reference</strong> filter and then <strong>+ Add Reference</strong>. Attach a photo of the page (<strong>Take Photo or Scan Page</strong>) and the AI reads the title, text, and any table for you to tidy up. You'll be asked whether to keep the original photo.</li>
             </ul>
           </div>
         </section>
@@ -561,7 +689,7 @@ export default function HelpPage() {
 
             <h3 className={styles.subFeatureTitle}>Integrations</h3>
             <ul className={styles.featureList}>
-              <li>This is where every API key from <a href="#api-keys">Setting Up Free Services</a> gets pasted in — AI Provider, USDA, Google Gemini, and Supabase.</li>
+              <li>This is where every API key from <a href="#api-keys">Setting Up Free Services</a> gets pasted in — AI Provider, USDA, and Google Gemini. (Your sign-in and syncing live under Data, not here.)</li>
             </ul>
 
             <h3 className={styles.subFeatureTitle}>Optional Nutrients</h3>
@@ -583,10 +711,10 @@ export default function HelpPage() {
 
             <h3 className={styles.subFeatureTitle}>Data</h3>
             <ul className={styles.featureList}>
-              <li><strong>Cloud Sync:</strong> covered in full in <a href="#cloud-sync">Cloud Sync &amp; Sign In</a> above.</li>
-              <li><strong>Export:</strong> three options — Ingredients only, Cookbook only (recipes/collections/references), or a Full Backup of everything. Save the file somewhere safe (like OneDrive) as a backup, or to move data to another device manually.</li>
-              <li><strong>Import:</strong> bring in a previously exported file. If an item's ID already exists, choose to Skip it or Overwrite it with the imported version.</li>
-              <li><strong>Reset:</strong> clear specific categories of data (just recipes, just the macro log, everything, etc.) without necessarily wiping the whole app — useful for starting a category fresh without losing the rest.</li>
+              <li><strong>Account &amp; Household Sync:</strong> signing in, people, and syncing are covered in <a href="#account">Signing In &amp; Your Account</a> and <a href="#cloud-sync">Syncing Between Devices</a> above.</li>
+              <li><strong>Export:</strong> three options — Ingredients only, Cookbook only (recipes, collections, and kitchen reference pages), or a Full Backup of everything. Save the file somewhere safe (like OneDrive) as a backup, or to hand a copy of your recipes to someone outside the household.</li>
+              <li><strong>Import:</strong> bring in a previously exported file. If an item's ID already exists, choose to Skip it or Overwrite it with the imported version. (Once you are signed in, what you import syncs to the rest of the household.)</li>
+              <li><strong>Reset:</strong> clear specific categories of data (just recipes, just the macro log, everything, etc.) without necessarily wiping the whole app — useful for starting a category fresh without losing the rest. If you are signed in, clearing a lot at once makes the app ask whether to remove it for everyone or put it back, so one device can't wipe the household by accident.</li>
             </ul>
           </div>
         </section>
@@ -602,7 +730,7 @@ export default function HelpPage() {
               },
               {
                 q: 'How do I add my family members?',
-                a: 'Go to Settings (the gear icon in the menu) and tap Household. Look for the People section and tap + Add Person. You can add a name and optional nutrition goals for each person.',
+                a: 'Go to Settings (the gear icon in the menu) and tap Household. Look for the People section and tap + Add Person. You can add a name and optional nutrition goals for each person. (That is for planning meals and portions. Giving someone their own login to the app is a separate thing — an owner does that in Settings → Data → Account.)',
               },
               {
                 q: 'How do I make the grocery list?',
@@ -621,16 +749,32 @@ export default function HelpPage() {
                 a: 'Go to the Grocery page and generate your list. Once the list is showing, look for the "Save as PDF" button at the top. Tap it and your device will save a copy.',
               },
               {
-                q: 'How do I share the app with a family member?',
-                a: 'Send them this link: angelo-meal-planner.netlify.app — they can open it in Chrome on any phone, tablet, or computer. In Chrome, they can tap the share button and choose "Add to Home Screen" to make it work like a regular app.',
+                q: 'How do I use the app on a new phone or tablet?',
+                a: 'Open the household\'s address in the browser (ask an owner for it), then use "Add to Home Screen" so it opens like a regular app. Sign in under Settings → Data → Account with the username and password an owner gave you. If the household already has data, tap "Join — use the household\'s data here" and everything comes over. See Adding a new device under Syncing Between Devices.',
               },
               {
-                q: 'How do I get my data onto my tablet?',
-                a: 'Option 1: Go to Settings → Data → Export, save the file to OneDrive, then on the tablet open the app and go to Settings → Data → Import. Option 2: Set up Cloud Sync and tap "Pull from Cloud" on the tablet.',
+                q: 'Who can see and change what?',
+                a: 'Everyone with an account sees the same household data. Owners can do everything, including adding people. Contributors can add and change recipes, ingredients, plans, and lists. Read-only people can look but not change. See Who can do what under Signing In & Your Account.',
+              },
+              {
+                q: 'I forgot my password. What do I do?',
+                a: 'Ask an owner of your household. They go to Settings → Data → Account → People in this household, tap Reset password under your name, and give you a new one. Sign in with it, then change it to one only you know.',
+              },
+              {
+                q: 'Do I have to sign in to use the app?',
+                a: 'You can use the app without signing in — everything works and is kept on that one device. But nothing is shared with the rest of the household until you sign in, and a device that is not signed in will not get anyone else\'s changes.',
+              },
+              {
+                q: 'Do I have to press a button to sync?',
+                a: 'No. Once you are signed in, it happens by itself: when you sign in, a few seconds after you change something, about once a minute while the app is open, when you come back to the app, and when your internet returns. There is a "Sync now" button in Settings → Data if you want to be sure right away.',
               },
               {
                 q: 'Can I use this app without internet?',
-                a: 'Yes — everything works offline except barcode lookup, USDA search, Gemini lookup, and cloud sync. Your data is saved on your device.',
+                a: 'Yes. Everything works offline except the lookups and photo features (barcode lookup, USDA, Gemini, scanning and importing) and sharing with the household. What you change offline is kept on the device and syncs by itself when you are back online.',
+              },
+              {
+                q: 'Why does the status pill say "Offline — will sync later"?',
+                a: 'The device can\'t reach your household\'s server right now — usually because you are away from home Wi-Fi, or the server is restarting. Nothing is lost. Keep using the app; it catches up on its own.',
               },
               {
                 q: 'How do I log a drink in my macros?',
@@ -641,20 +785,12 @@ export default function HelpPage() {
                 a: 'Create a recipe in the Cookbook tagged Beverages and Homemade. Add your ingredients — water, tea bags, and sugar. The macros calculate automatically. Then log it in the Drinks section of the Macro Tracker.',
               },
               {
-                q: 'Why does my family member not see my prices?',
-                a: 'Prices are only shared through Household Sync (for people in your home). The Family Share feature intentionally leaves out prices because grocery prices vary by location — family in another state shops at different stores with different prices. They fill in their own local prices.',
+                q: 'How do I back up my data?',
+                a: 'Your household\'s server saves its own backup every night. You can also save a file yourself any time: Settings → Data → Export → Full Backup, and keep it somewhere safe like OneDrive. The full backup includes recipes, collections, kitchen reference pages, meal plans, grocery lists, and settings.',
               },
               {
-                q: 'How do I sync between my phone and tablet?',
-                a: 'Set up a free Supabase project (see Setting Up Free Services), enter its URL and key in Settings → Integrations on both devices, then go to Settings → Data → Cloud Sync → Account and sign in with the same account on both (or just set the same Household Sync Code on both, without signing in). Tap "Sync with Cloud" on either device.',
-              },
-              {
-                q: 'Do I have to sign in to use Cloud Sync?',
-                a: 'No. Signing in (Settings → Data → Cloud Sync → Account) adds real per-person access control, but the older method — setting the same Household Sync Code on every device — still works on its own without ever signing in.',
-              },
-              {
-                q: 'How do I disconnect a family member from Family Share?',
-                a: 'Go to Settings → Data → Cloud Sync and tap "Regenerate" next to the Family Share Code. Anyone using the old code will no longer receive your future syncs.',
+                q: 'Can I share recipes with someone outside my household?',
+                a: 'The old "Family Share" feature (a separate code for relatives in another home) has been retired for now. Everyone with an account sees the household\'s whole collection, and there is no separate sharing code any more. To give someone a copy of your recipes, use Settings → Data → Export → Cookbook and send them the file; they can bring it in with Settings → Data → Import. (Prices are part of ingredients, so they would see yours — they can change them after importing.)',
               },
             ].map(({ q, a }, i) => (
               <div key={i} className={styles.faqItem}>
@@ -680,7 +816,7 @@ export default function HelpPage() {
               {
                 title: 'Camera not working for barcode scan',
                 steps: [
-                  'Check that Chrome has camera permission. Tap the lock icon in the address bar (or camera icon), tap Permissions, and make sure Camera is set to Allow.',
+                  'Check that your browser has camera permission. Tap the lock icon in the address bar (or camera icon), tap Permissions, and make sure Camera is set to Allow.',
                   'After changing permissions, refresh the page by tapping the refresh button.',
                   'If the camera starts but does not scan, try holding the barcode about 6 inches from the camera in good lighting.',
                   'If scanning still does not work, type the barcode number manually in the text box on the Barcode Lookup screen.',
@@ -698,27 +834,92 @@ export default function HelpPage() {
               {
                 title: 'Recipe import did not work',
                 steps: [
-                  'Make sure your Gemini free code is entered in Settings → Integrations.',
+                  'Make sure your Gemini free code is entered in Settings → Integrations, and that you are signed in and online.',
                   'Some websites block outside access. Try opening the page in your browser, selecting all the text (Ctrl+A or long-press → Select All), copying it, then pasting it in the Paste Recipe Text tab.',
                   'If the AI parsed the recipe incorrectly, you can edit every field in the recipe editor before saving.',
                 ],
               },
               {
-                title: 'Cloud sync is not working',
+                title: 'A photo or receipt scan says it could not read it',
                 steps: [
-                  'Make sure both devices have the same Supabase URL and Anon Key in Settings → Integrations.',
-                  'Make sure both devices have the same Household Sync Code in Settings → Data → Cloud Sync (or, if using sign-in, that both are signed into the same household).',
-                  'Check that you ran the database setup SQL in your Supabase project (Database → SQL Editor). If you use the Account sign-in feature, the separate "account/sign-in setup SQL" needs to be run too — both buttons are in Settings → Data → Cloud Sync.',
-                  'Try tapping "Pull from Cloud" on one device first to see if connection works before doing a full sync.',
+                  'This is the app being careful rather than guessing — it would rather say so than save wrong numbers.',
+                  'Retake the photo in better light, hold the camera steady, and make sure the whole label, page, or receipt is in the picture and not curled or shadowed.',
+                  'When you crop, drag the box so it is snug around just what you want read.',
+                  'If it keeps failing, type it in by hand — every scanning feature has a manual way to do the same thing.',
                 ],
               },
               {
-                title: 'Signing up or creating a household gives a database error',
+                title: 'The status pill says "Sync problem"',
                 steps: [
-                  'This means the Supabase project is missing the one-time setup for accounts/households — go to Settings → Data → Cloud Sync and tap "Show account/sign-in setup SQL".',
-                  'Copy the whole thing and run it in Supabase under Database → SQL Editor → New Query → Run. It\'s actually four scripts back-to-back — run each one, wait for it to finish, then run the next.',
-                  'Come back and try signing up / creating a household again.',
-                  'You do not need to do any of this to use Household Sync with just a code — signing in is an optional extra layer on top of it.',
+                  'Open Settings → Data. The message under "Sync status" says what went wrong in plain words.',
+                  'Tap ↕ Sync now to try again. Most problems are temporary (a brief outage, or the server restarting) and clear on the next try.',
+                  'Your changes are safe on this device in the meantime — nothing is lost, and everything goes up once it works again.',
+                  'If it keeps happening for more than a few minutes while other devices are fine, tell an owner — the household\'s server may need attention.',
+                  'If the message mentions being signed out, just sign in again (see "I keep getting signed out" below).',
+                ],
+              },
+              {
+                title: 'The status pill says "Offline — will sync later"',
+                steps: [
+                  'The device cannot reach the household\'s server. Check that Wi-Fi or mobile data is on, and that you are using the household\'s address.',
+                  'If the household\'s server is reached over a private connection (such as Tailscale), make sure that app is running on this device.',
+                  'Keep working. What you change is kept on the device and goes up automatically the moment the connection is back.',
+                ],
+              },
+              {
+                title: 'I can\'t sign in',
+                steps: [
+                  'Check the username (not an email address) and the password. Usernames are not case-sensitive; passwords are.',
+                  'After a few wrong tries in a row the app makes you wait a short while (a little longer each time) before the next attempt — wait, then try again carefully.',
+                  'Forgot it? Ask an owner to reset your password: Settings → Data → Account → People in this household → Reset password.',
+                  'If it says your access is off, an owner has turned your account off — ask them to turn it back on.',
+                ],
+              },
+              {
+                title: 'I keep getting signed out',
+                steps: [
+                  'You are signed out on your other devices whenever your password is changed or reset — sign in again with the new one.',
+                  'A sign-in lasts about two months, then you sign in again — that is normal.',
+                  'If it happens on a home-screen app right after opening it, close the app fully and reopen it, then sign in once more.',
+                ],
+              },
+              {
+                title: 'It says "Action needed" and my new device is empty',
+                steps: [
+                  'On a new device, go to Settings → Data and tap "Join — use the household\'s data here". The household\'s ingredients, recipes, and plans are copied onto the device.',
+                  'If the device had things of its own, a copy is saved to a file first. Look in your Downloads folder.',
+                  'If you are an owner and this device genuinely holds the real data (and the household has only starter data on it), there is also a "This device has the real data…" button. Read what it says carefully before using it.',
+                ],
+              },
+              {
+                title: 'A message says this device "removed N items"',
+                steps: [
+                  'The app noticed a lot of items are gone from this device since it last synced, and is asking before it tells everyone else to delete them.',
+                  'If you did not mean to remove them — for example a reset or restore went wrong — tap "No — put them back". They come back from the household and nothing is lost.',
+                  'If you really did mean to clear them out, tap "Yes — remove them for everyone".',
+                ],
+              },
+              {
+                title: 'Changes I made seem to have disappeared, or an item changed back',
+                steps: [
+                  'If two people changed the same thing at nearly the same time, the newer change is kept. The other version is saved in Settings → Data → Changes that overlapped — tap Show, then "Bring back the other version" if the wrong one won.',
+                  'If you have the read-only role, changes you make stay on your device and are not shared — a banner at the top of the page says so. Ask an owner if you should be able to edit.',
+                  'If your changes are not showing on another device, check that device\'s status pill, and tap Sync now there.',
+                ],
+              },
+              {
+                title: 'I see "Same name, different item" or a note about duplicates',
+                steps: [
+                  'Two devices each made an item with the same name, so the app kept both and is asking you which to keep.',
+                  'Go to Settings → Data → Same name, different item and choose for each one — or use Keep all newer for a quick fix. Full steps are under Syncing Between Devices.',
+                  'Nothing is lost while it waits.',
+                ],
+              },
+              {
+                title: 'A page looks out of date',
+                steps: [
+                  'If a note at the top says "Updated with changes from another device", tap Refresh this page.',
+                  'Otherwise, tap Sync now in Settings → Data, then reopen the page.',
                 ],
               },
               {
@@ -727,23 +928,29 @@ export default function HelpPage() {
                   'Try refreshing the page. On a tablet, press and hold the refresh button.',
                   'Try closing the browser tab completely and reopening the app.',
                   'If it still does not load, try a hard refresh: press Ctrl+Shift+R on a computer, or clear the browser cache in your browser settings.',
+                  'If it will not load on any device, the household\'s server may be down — tell an owner.',
                 ],
               },
               {
                 title: 'I think I lost my data',
                 steps: [
-                  'Your data is stored on your device in the browser. Clearing browser data or switching browsers can erase it.',
-                  'If you have a recent export file, go to Settings → Data → Import to restore it.',
-                  'If you set up Cloud Sync, tap Pull from Cloud — your data may be safe in the cloud.',
-                  'Going forward, export a backup at least once a week from Settings → Data → Export Full Backup. Save it to OneDrive.',
+                  'First check that you are signed in (Settings → Data → Account). If you are, and the pill is not "Offline", the household\'s copy is safe on the server — tap Sync now.',
+                  'If this device looks empty, you may have been signed out or this may be a new copy of the app: sign in and tap "Join" if it offers.',
+                  'Your household\'s server saves a backup every night, so an earlier copy can be restored if it is ever needed. You can also keep your own: Settings → Data → Export → Full Backup, saved somewhere safe like OneDrive.',
+                  'If you have an export file, Settings → Data → Import brings it back.',
                 ],
               },
               {
-                title: 'I see a Sign In / Sign Up box — is that required?',
+                title: 'I changed phones or reinstalled the app',
                 steps: [
-                  'No — the whole app works fully offline with no account at all. The Account box in Settings → Data → Cloud Sync, and the occasional popup reminding you about it, are both entirely optional.',
-                  'It only exists to support Cloud Sync — accessing your data from more than one device — see Cloud Sync & Sign In above.',
-                  'To stop the reminder popup, check "Don\'t show this again" on it once, or turn off "Show the sign-in reminder on launch" in Settings → Data → Cloud Sync.',
+                  'Open the household\'s address, add it to your home screen again, and sign in. If the household has data, tap Join and everything comes back.',
+                  'The old copy of the app on the old device can be deleted. Its data is in the household\'s copy.',
+                ],
+              },
+              {
+                title: 'Who do I ask for help with accounts?',
+                steps: [
+                  'An owner of your household. Owners can add people, reset forgotten passwords, change what each person can do, and turn accounts off or on — all from Settings → Data → Account.',
                 ],
               },
             ].map(({ title, steps }, i) => (
@@ -761,7 +968,7 @@ export default function HelpPage() {
 
         {/* ── Footer ───────────────────────────────────────────────────────── */}
         <div className={styles.footer}>
-          <p>Still need help? The app link is <strong>angelo-meal-planner.netlify.app</strong></p>
+          <p>Still need help? Ask an owner of your household — they can also reset a password or add you to the app.</p>
           <button className={styles.footerLink} onClick={() => navigate('/settings')}>
             ⚙️ Go to Settings
           </button>

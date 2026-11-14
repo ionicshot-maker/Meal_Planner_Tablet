@@ -84,6 +84,8 @@
 .navIcon { font-size: 1.1rem; width: 1.5rem; text-align: center; }
 .navLabel { flex: 1; }
 
+.navBottom { display: flex; flex-direction: column; }
+
 .themeBtn {
   display: flex;
   align-items: center;
@@ -137,6 +139,7 @@
   }
 
   .navTop { flex-direction: row; align-items: center; gap: var(--space-2); }
+  .navBottom { flex-direction: row; align-items: center; gap: var(--space-1); }
   .logo { padding: 0; }
   .logoText { display: none; }
   .navList { flex-direction: row; padding: 0; gap: 0; }

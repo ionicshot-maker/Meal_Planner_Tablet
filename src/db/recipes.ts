@@ -131,7 +131,7 @@ type RecipeRepointTx = IDBPTransaction<
 
 // The actual reference-discovery/repointing logic — extracted so it has
 // exactly one implementation, used by resolveRecipeDuplicate()
-// (src/db/supabase.ts) and available for any future recipe-merge feature
+// (src/sync/duplicatePort.ts) and available for any future recipe-merge feature
 // (there is no "mergeRecipes()" today, unlike mergeIngredients()) rather
 // than being reimplemented per-caller. Operates purely on an already-open
 // transaction's store handles and the two ids involved.

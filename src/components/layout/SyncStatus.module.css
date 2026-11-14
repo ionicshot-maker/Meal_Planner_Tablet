@@ -1,0 +1,34 @@
+.pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: none;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text-muted);
+  transition: background-color var(--transition);
+}
+.pill:hover { background-color: var(--color-border); }
+
+.ok   { color: var(--color-success-text); }
+.busy { color: var(--color-text-muted); }
+.warn { color: var(--color-warning); border-color: var(--color-warning); }
+.bad  { color: var(--color-danger); border-color: var(--color-danger); }
+.muted { color: var(--color-text-muted); }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+@media (max-width: 640px) {
+  /* Icon only in the narrow top bar; the full text is in the tooltip/aria-label and in Settings. */
+  .pill { margin: 0; padding: var(--space-2); min-width: var(--tap-min); min-height: var(--tap-min); justify-content: center; }
+  .text { display: none; }
+}
+@media print { .pill { display: none; } }

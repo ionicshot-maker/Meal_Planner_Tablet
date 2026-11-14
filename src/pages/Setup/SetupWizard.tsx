@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import { useSettings } from '@/context/SettingsContext'
+import { useSync } from '@/sync/syncContext'
 import styles from './SetupWizard.module.css'
 
 type Step = 'welcome' | 'name'
 
 export function SetupWizard() {
   const { settings, updateSettings } = useSettings()
+  // True when this copy of the app can reach a household server: then the household may already exist, with a name and data.
+  const { state } = useSync()
+  const hasServer = state !== 'unavailable' && state !== 'checking'
   const [step, setStep] = useState<Step>('welcome')
   const [householdName, setHouseholdName] = useState(settings.householdName)
 
@@ -38,6 +42,12 @@ export function SetupWizard() {
               Give your household a name — it'll appear throughout the app as a personal touch.
               You can always change this later in Settings.
             </p>
+            {hasServer && (
+              <p className={styles.desc}>
+                <strong>Joining a household that already exists?</strong> Leave the name blank and tap Skip for now, then sign in
+                under Settings → Data. Its name and everything in it will come over.
+              </p>
+            )}
             <input
               className={styles.nameInput}
               type="text"

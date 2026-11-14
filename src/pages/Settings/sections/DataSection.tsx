@@ -7,6 +7,8 @@ import { CloudSyncSection } from './CloudSyncSection'
 import { loadSettings } from '@/db/settings'
 import { getAllMealPlanTemplates, getPlannedDayCount } from '@/db/mealPlan'
 import { getAllHouseholdItems } from '@/db/householdItems'
+import { getAllCollections } from '@/db/collections'
+import { getAllReferences } from '@/db/references'
 import { getMacroLogCount } from '@/db/macroLogs'
 import { getDB } from '@/db/schema'
 import { isNativeBackupFormat } from '@/utils/nativeBackupValidation'
@@ -103,6 +105,9 @@ export function DataSection() {
       }
       if (scope === 'cookbook' || scope === 'full') {
         data.recipes = await getAllRecipes(true)
+        // Recipe collections and kitchen reference pages are part of the cookbook; earlier versions of this export left them out.
+        data.collections = await getAllCollections()
+        data.references = await getAllReferences()
       }
       if (scope === 'full') {
         data.settings       = settingsData
@@ -197,8 +202,8 @@ export function DataSection() {
     setImportOpProgress(undefined)
 
     const db = await getDB()
-    const stores: ('ingredients' | 'recipes' | 'mealPlanDays' | 'mealPlanTemplates' | 'macroLogs' | 'groceryLists' | 'householdItems')[] =
-      ['ingredients', 'recipes', 'mealPlanDays', 'mealPlanTemplates', 'macroLogs', 'groceryLists', 'householdItems']
+    const stores: ('ingredients' | 'recipes' | 'mealPlanDays' | 'mealPlanTemplates' | 'macroLogs' | 'groceryLists' | 'householdItems' | 'collections' | 'references')[] =
+      ['ingredients', 'recipes', 'mealPlanDays', 'mealPlanTemplates', 'macroLogs', 'groceryLists', 'householdItems', 'collections', 'references']
     const tx = db.transaction(stores, 'readwrite')
     const messages: string[] = []
 
@@ -264,6 +269,18 @@ export function DataSection() {
         let i = 0
         for (const item of data.householdItems) { await tx.objectStore('householdItems').put(item); report('Importing household items', ++i, data.householdItems.length) }
         messages.push(`${data.householdItems.length} household item${data.householdItems.length !== 1 ? 's' : ''} imported`)
+      }
+      if (Array.isArray(data.collections) && data.collections.length > 0) {
+        report('Importing collections', 0, data.collections.length)
+        let i = 0
+        for (const item of data.collections) { await tx.objectStore('collections').put(item); report('Importing collections', ++i, data.collections.length) }
+        messages.push(`${data.collections.length} collection${data.collections.length !== 1 ? 's' : ''} imported`)
+      }
+      if (Array.isArray(data.references) && data.references.length > 0) {
+        report('Importing kitchen reference pages', 0, data.references.length)
+        let i = 0
+        for (const item of data.references) { await tx.objectStore('references').put(item); report('Importing kitchen reference pages', ++i, data.references.length) }
+        messages.push(`${data.references.length} kitchen reference page${data.references.length !== 1 ? 's' : ''} imported`)
       }
 
       await tx.done

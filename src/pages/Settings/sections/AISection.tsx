@@ -31,8 +31,6 @@ const PROVIDER_HINTS: Record<AIProvider, string> = {
 
 interface FetchedModel { id: string; displayName: string }
 
-const SUPABASE_HINT = 'Get a free account at supabase.com — create a project, then go to Project Settings → API.'
-
 /**
  * Holds a local "draft" copy of a text field that only commits to the real
  * settings (updateSettings) when the user explicitly clicks Save. This gives
@@ -109,8 +107,6 @@ export function AISection() {
   const aiKey = useDraftField(ai.apiKey, v => updateSettings({ ai: { ...ai, apiKey: v } }))
   const usda = useDraftField(usdaApiKey, v => updateSettings({ usdaApiKey: v }))
   const gemini = useDraftField(geminiApiKey, v => updateSettings({ geminiApiKey: v }))
-  const supabaseUrl = useDraftField(settings.supabaseUrl ?? '', v => updateSettings({ supabaseUrl: v }))
-  const supabaseAnonKey = useDraftField(settings.supabaseAnonKey ?? '', v => updateSettings({ supabaseAnonKey: v }))
 
   const availableModelIds = new Set(fetchedModels.map(m => m.id))
 
@@ -312,46 +308,6 @@ export function AISection() {
             <p className={styles.keyStored}>
               Key stored locally on this device only. Also used for recipe import when no other AI provider is set.
             </p>
-          )}
-        </div>
-      </Card>
-
-      <h3 className={styles.subTitle} style={{ marginTop: 'var(--space-4)' }}>Supabase (Cloud Sync)</h3>
-      <p className={styles.desc}>
-        Required for cloud sync between devices and family sharing. Free at <strong>supabase.com</strong>.
-        {' '}After setting up, go to <strong>Settings → Data → Cloud Sync</strong> to configure sync codes.
-      </p>
-
-      <Card>
-        <div className={styles.fieldGroup}>
-          <Input
-            label="Supabase Project URL"
-            value={supabaseUrl.draft}
-            onChange={e => supabaseUrl.setDraft(e.target.value)}
-            placeholder="https://xxxx.supabase.co"
-            hint={SUPABASE_HINT}
-          />
-          <div className={styles.keyRow}>
-            <Input
-              label="Supabase Anon Key"
-              type={showKey ? 'text' : 'password'}
-              value={supabaseAnonKey.draft}
-              onChange={e => supabaseAnonKey.setDraft(e.target.value)}
-              placeholder="eyJ..."
-              hint="Copy the anon/public key from Project Settings → API → Project API keys."
-            />
-            <Button variant="ghost" size="sm" className={styles.showBtn} onClick={() => setShowKey(v => !v)}>
-              {showKey ? 'Hide' : 'Show'}
-            </Button>
-          </div>
-          <SaveRow
-            dirty={supabaseUrl.dirty || supabaseAnonKey.dirty}
-            justSaved={supabaseUrl.justSaved || supabaseAnonKey.justSaved}
-            onSave={() => { supabaseUrl.save(); supabaseAnonKey.save() }}
-            onDiscard={() => { supabaseUrl.discard(); supabaseAnonKey.discard() }}
-          />
-          {settings.supabaseUrl && settings.supabaseAnonKey && (
-            <p className={styles.keyStored}>Supabase credentials stored locally. Never shared with anyone except Supabase.</p>
           )}
         </div>
       </Card>

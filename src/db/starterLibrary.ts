@@ -4,7 +4,7 @@ import type { Ingredient, IngredientUnit } from '@/types'
 
 // Structurally identical to OperationProgress (src/components/ui) — kept as
 // a local type rather than importing it, so the db layer doesn't depend on
-// the UI layer (same precedent as SyncProgressCallback in db/supabase.ts).
+// the UI layer (same db/UI-layer decoupling precedent used elsewhere).
 export interface SeedProgressUpdate { step: string; current?: number; total?: number | null }
 export type SeedProgressCallback = (update: SeedProgressUpdate) => void
 

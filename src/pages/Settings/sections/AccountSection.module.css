@@ -82,3 +82,12 @@
 .createJoinRow { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .inlineForm { display: flex; flex-direction: column; gap: var(--space-2); max-width: 360px; }
 .formActions { display: flex; gap: var(--space-2); }
+
+/* ── People panel (owners) ────────────────────────────────────────────────── */
+.people { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
+.peopleTitle { font-size: var(--text-base); font-weight: 600; color: var(--color-text); margin: 0; }
+.personCard { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }
+.personActions { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.roleHelp { font-size: var(--text-sm); color: var(--color-text-muted); margin: 0; }
+.badge { margin-left: var(--space-2); padding: 0 var(--space-2); border-radius: var(--radius-sm); border: 1px solid var(--color-warning); color: var(--color-warning); font-size: var(--text-xs); font-weight: 600; }
+.confirmRow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); }

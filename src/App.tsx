@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Fragment, Suspense, lazy, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SettingsProvider, useSettings } from '@/context/SettingsContext'
 import { ThemeProvider } from '@/context/ThemeContext'
@@ -7,7 +7,8 @@ import { SetupWizard } from '@/pages/Setup/SetupWizard'
 import { StarterLibraryPrompt } from '@/components/StarterLibraryPrompt'
 import { CloudSyncPrompt } from '@/components/CloudSyncPrompt'
 import { Toast } from '@/pages/IngredientImport/Toast'
-import { isSupabaseConfigured, pingSupabaseKeepAlive } from '@/db/supabase'
+import { SyncProvider } from '@/sync/SyncProvider'
+import { useSync } from '@/sync/syncContext'
 import { repairLegacyIngredientData, repairSodiumUnitBug, fixMiscategorizedIngredients } from '@/db/ingredients'
 import { migrateIngredientCategories } from '@/db/settings'
 
@@ -37,19 +38,14 @@ const CATEGORY_FIX_RULES_VERSION = 8
 function AppRoutes() {
   const { settings, updateSettings, reloadSettings, isLoading } = useSettings()
   const [miscategoryToast, setMiscategoryToast] = useState<string | null>(null)
+  // Bumped when pages should re-read their data (changes from another device arrived, or the person pressed Refresh).
+  const { viewKey } = useSync()
 
   // Text Size setting — device-local, applied as a CSS custom property on the
   // root element so every rem-based --text-* token scales proportionally.
   useEffect(() => {
     document.documentElement.style.setProperty('--font-size-base', `${settings.fontSizePt ?? 14}pt`)
   }, [settings.fontSizePt])
-
-  // Keep the free-tier Supabase project from pausing due to inactivity.
-  useEffect(() => {
-    if (!isLoading && isSupabaseConfigured(settings)) {
-      void pingSupabaseKeepAlive(settings)
-    }
-  }, [isLoading, settings])
 
   // One-time repair for ingredients that landed in the database in a raw,
   // non-app shape (e.g. an Open Food Facts file imported via Settings → Data →
@@ -123,6 +119,7 @@ function AppRoutes() {
         )}
         <AppLayout>
           <Suspense fallback={<PageLoader />}>
+            <Fragment key={viewKey}>
             <Routes>
               <Route path="/" element={<Navigate to="/ingredients" replace />} />
               <Route path="/ingredients" element={<IngredientsPage />} />
@@ -135,6 +132,7 @@ function AppRoutes() {
               <Route path="/help"               element={<HelpPage />} />
               <Route path="/dev-tools"          element={<DevToolsPage />} />
             </Routes>
+            </Fragment>
           </Suspense>
         </AppLayout>
       </BrowserRouter>
@@ -153,7 +151,9 @@ function PageLoader() {
 export default function App() {
   return (
     <SettingsProvider>
-      <AppRoutes />
+      <SyncProvider>
+        <AppRoutes />
+      </SyncProvider>
     </SettingsProvider>
   )
 }
