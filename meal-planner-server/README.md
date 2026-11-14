@@ -4,8 +4,8 @@ Self-hosted backend for Meal Planner: Fastify + SQLite (`node:sqlite`, Node 24+)
 logins. It is a fork of `bill-planner-server` (same auth, sessions, sync protocol, backups and deploy pattern) with Meal Planner's
 tables and an owner / contributor / readonly role on each account.
 
-Status: Phase 1 (server, auth, roles, sync, import, backup, tests). The AI proxy routes (ported from `netlify/functions`) arrive
-in Phase 2; the client sync engine and UI in Phases 3-4.
+Status: server, auth, roles, sync, import, backup and the AI proxy routes (ported from the old `netlify/functions`) are done.
+The client sync engine and UI are separate work in the app itself.
 
 ## Run it
 
@@ -60,6 +60,17 @@ the port (`8791`).
 | `POST /api/admin/import` | one-time bootstrap from a native "Full backup" JSON (owner; refuses a non-empty server unless `?allowNonEmpty=true`) |
 | `POST /api/admin/replace-data` | "make the server match this device" (owner; safety backup first; extras become tombstones) |
 | `GET /api/admin/stats` | revision and per-table live/deleted counts (owner) |
+| `/api/<name>` for the 10 AI / lookup proxies | any signed-in account (see below) |
+
+### AI / lookup proxies
+
+`barcode-lookup`, `gemini-barcode-web-lookup`, `gemini-detect-recipe-boxes`, `gemini-label-scan`, `gemini-nutrition`,
+`gemini-photo-recipe`, `gemini-receipt-scan`, `gemini-recipe-import`, `gemini-reference-scan`, `usda-search` -- the same URLs
+the Netlify functions had, so the app's call sites did not change. They are stateless: the caller's own Gemini / USDA key travels
+in the request and nothing is stored. The handlers in `src/ai/` are the Netlify code unchanged, run through a small adapter
+(`src/ai/index.ts`), with three deliberate differences: they require a sign-in (any role, read-only included, since they write
+nothing), the first 8 characters of the caller's API key are no longer logged, and the Open Food Facts `User-Agent` is a generic
+client name instead of a personal contact address. Their upstream timeouts (8 s page fetch, 20-28 s Gemini) are unchanged.
 
 ### Sync protocol
 
@@ -85,4 +96,5 @@ Not synced (as before): `macroLogs`, `mealPlanTemplates`, `processedReceipts`, a
 `npm test` -- in-memory SQLite only (plus temp folders for backup/static tests). Covers first-run setup, login/throttle/cookies,
 owner-only account management, the last-owner guard, role enforcement on push (including mid-session demotion), the sync
 protocol (conflicts, idempotency, tombstones, validation, atomic pushes, paging, gzip), secret redaction, backup import,
-replace-data, nightly/NAS backups and static serving.
+replace-data, nightly/NAS backups, static serving, and every AI route against a faked network (`test/ai.test.ts`: sign-in rules,
+request/response shapes, fallback model, error mapping, key never logged).

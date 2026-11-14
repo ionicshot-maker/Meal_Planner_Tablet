@@ -8,6 +8,7 @@ import { Store, isRole, type Role, type UserRow } from './store.js';
 import { hashPassword, verifyPassword, DUMMY_HASH, passwordProblem } from './passwords.js';
 import { applyPush, importBackup, replaceAll, BadRequest, Conflict } from './sync.js';
 import { backupNow } from './backup.js';
+import { registerAiRoutes } from './ai/index.js';
 
 const COOKIE = 'mp_session';
 
@@ -279,7 +280,8 @@ export function buildApp(store: Store, config: Config): FastifyInstance {
   });
   app.get('/api/admin/stats', { preHandler: requireOwner }, async () => ({ rev: store.currentRev(), tables: store.countsByTable() }));
 
-  // (Phase 2 registers the AI proxy routes here, behind requireUser.)
+  // ---- AI / lookup proxies (ported from the Netlify functions) ----
+  registerAiRoutes(app, { requireUser });
 
   // ---- the built frontend, same origin as the API (so cookies "just work") ----
   if (config.frontendDir && fs.existsSync(config.frontendDir)) {
