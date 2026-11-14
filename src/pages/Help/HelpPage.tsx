@@ -36,7 +36,7 @@ export default function HelpPage() {
     ['#account',            'Signing In & Your Account'],
     ['#cloud-sync',         'Syncing Between Devices'],
     ['#ai-features',        'Photos, Receipts & AI Helpers'],
-    ['#api-keys',           'Setting Up Free Services'],
+    ['#api-keys',           'Getting Your Free Keys'],
     ['#ingredients',        'Ingredients'],
     ['#ingredient-info',    'Understanding Your Ingredients'],
     ['#json-import',        'JSON Import'],
@@ -114,7 +114,7 @@ export default function HelpPage() {
             <p>
               Before step 3 below, it's worth two minutes to set up a free key or two — they make
               adding ingredients and recipes much faster (auto-filling nutrition facts instead of typing
-              them by hand). See <a href="#api-keys">Setting Up Free Services</a> for exact steps. Everything
+              them by hand). See <a href="#api-keys">Getting Your Free Keys</a> for exact steps. Everything
               in this app also works completely fine without them — you can always add these later.
             </p>
           </div>
@@ -123,7 +123,7 @@ export default function HelpPage() {
               ['⚙️ Set your household name', 'Go to Settings and type your family name, like "The Smith Family". This name appears at the top of the app.'],
               ['👥 Add your family members', 'In Settings → Household, add each person in your home — this is what lets meals and portions be planned per person. (Separate from this, each person who uses the app gets their own login — see Signing In & Your Account.) Nutrition tracking (step 7 below) is a separate, fully optional feature; adding someone here doesn\'t turn tracking on for them.'],
               ['🥕 Add ingredients', 'Go to Ingredients and tap + Add Ingredient. Add everything you cook with. You can also scan barcodes on the Import page — that works right away, no setup required.'],
-              ['📖 Add recipes', 'Go to the Cookbook and tap + New Recipe. Type one in by hand, or import automatically from a URL or pasted recipe text — auto-import needs a free AI key set up first (see Setting Up Free Services below); without one, pasted text still opens as a handy reference to type from.'],
+              ['📖 Add recipes', 'Go to the Cookbook and tap + New Recipe. Type one in by hand, or import automatically from a URL or pasted recipe text — auto-import needs a free AI key set up first (see Getting Your Free Keys below); without one, pasted text still opens as a handy reference to type from.'],
               ['📅 Plan your meals', 'Go to Meal Plan and tap each day to choose recipes for breakfast, lunch, and dinner.'],
               ['🛒 Generate your grocery list', 'Go to Grocery, pick your shopping dates, and tap Generate List. The app figures out everything you need.'],
               ['📊 Track your nutrition (optional)', 'Go to Macros to see your daily nutrition totals and log what you actually ate.'],
@@ -140,9 +140,9 @@ export default function HelpPage() {
           </div>
         </section>
 
-        {/* ── Setting Up Free Services ─────────────────────────────────────── */}
+        {/* ── Getting Your Free Keys ─────────────────────────────────────── */}
         <section id="api-keys" className={styles.section}>
-          <h2 className={styles.sectionTitle}>Setting Up Free Services</h2>
+          <h2 className={styles.sectionTitle}>Getting Your Free Keys</h2>
           <div className={styles.infoBox}>
             <p>
               This app can use a few outside services to save you typing — looking up nutrition facts
@@ -371,9 +371,9 @@ export default function HelpPage() {
             </p>
             <ul className={styles.featureList}>
               <li><strong>Add a recipe manually:</strong> Tap + New Recipe, fill in the name, add ingredients from your list, type the steps, and save.</li>
-              <li><strong>Import from a website:</strong> Tap Import in the Cookbook. Paste the recipe URL and the AI will extract everything automatically — needs an AI Provider or Gemini key set up first, see <a href="#api-keys">Setting Up Free Services</a>; there's no non-AI way to auto-extract from a URL. If the site blocks copying, or you don't have a key set up, open the page in your browser, copy the text, and use the Paste Text tab instead.</li>
-              <li><strong>Import by pasting text:</strong> In the Import screen, switch to the Paste Recipe Text tab. With an AI Provider or Gemini key set up (see <a href="#api-keys">Setting Up Free Services</a>), pasted text gets parsed into structured fields automatically. Without one, it still opens as a side-by-side reference so you can type the recipe in by hand.</li>
-              <li><strong>Import from a photo:</strong> In the Import screen, switch to the Photo tab to photograph a printed or handwritten recipe (a cookbook page, a recipe card, etc.). Requires a Google Gemini key — see <a href="#api-keys">Setting Up Free Services</a>. Review every field afterward, since handwriting and page photos are harder to read perfectly than clean text.</li>
+              <li><strong>Import from a website:</strong> Tap Import in the Cookbook. Paste the recipe URL and the AI will extract everything automatically — needs an AI Provider or Gemini key set up first, see <a href="#api-keys">Getting Your Free Keys</a>; there's no non-AI way to auto-extract from a URL. If the site blocks copying, or you don't have a key set up, open the page in your browser, copy the text, and use the Paste Text tab instead.</li>
+              <li><strong>Import by pasting text:</strong> In the Import screen, switch to the Paste Recipe Text tab. With an AI Provider or Gemini key set up (see <a href="#api-keys">Getting Your Free Keys</a>), pasted text gets parsed into structured fields automatically. Without one, it still opens as a side-by-side reference so you can type the recipe in by hand.</li>
+              <li><strong>Import from a photo:</strong> In the Import screen, switch to the Photo tab to photograph a printed or handwritten recipe (a cookbook page, a recipe card, etc.). Requires a Google Gemini key — see <a href="#api-keys">Getting Your Free Keys</a>. Review every field afterward, since handwriting and page photos are harder to read perfectly than clean text.</li>
               <li><strong>Scale a recipe:</strong> Open any recipe and find the serving size at the top. Change the number and all ingredient amounts adjust automatically.</li>
               <li><strong>Mark as Favorite:</strong> Tap the star icon on any recipe to mark it as a favorite. Filter by favorites to find them quickly.</li>
               <li><strong>Save as Template:</strong> Toggle "Save as Template" when editing a recipe. Templates appear separately and can be copied to create new recipes with the same base.</li>
@@ -612,7 +612,7 @@ export default function HelpPage() {
           <h2 className={styles.sectionTitle}>Photos, Receipts, Barcodes &amp; AI Helpers</h2>
           <div className={styles.infoBox}>
             <p>
-              These features save you typing. Most use a free Google Gemini key (see <a href="#api-keys">Setting Up Free Services</a> — one-time,
+              These features save you typing. Most use a free Google Gemini key (see <a href="#api-keys">Getting Your Free Keys</a> — one-time,
               about two minutes) and every one of them can be skipped: you can always type things in by hand. You'll need to be online
               for any of them. Your key goes through your household's server only to make each request and is never saved there.
             </p>
@@ -689,7 +689,7 @@ export default function HelpPage() {
 
             <h3 className={styles.subFeatureTitle}>Integrations</h3>
             <ul className={styles.featureList}>
-              <li>This is where every API key from <a href="#api-keys">Setting Up Free Services</a> gets pasted in — AI Provider, USDA, and Google Gemini. (Your sign-in and syncing live under Data, not here.)</li>
+              <li>This is where every API key from <a href="#api-keys">Getting Your Free Keys</a> gets pasted in — AI Provider, USDA, and Google Gemini. (Your sign-in and syncing live under Data, not here.)</li>
             </ul>
 
             <h3 className={styles.subFeatureTitle}>Optional Nutrients</h3>

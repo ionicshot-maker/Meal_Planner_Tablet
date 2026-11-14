@@ -1,4 +1,4 @@
-import { useState, ReactNode } from 'react'
+import { ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useSettings } from '@/context/SettingsContext'
 import { useTheme } from '@/context/ThemeContext'
@@ -36,11 +36,12 @@ const FONT_SIZE_PRESETS: { pt: number; label: string }[] = [
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings()
   const { preference, setPreference } = useTheme()
-  const [searchParams] = useSearchParams()
-  const [active, setActive] = useState<Section>(() => {
-    const section = searchParams.get('section') as Section | null
-    return section && SECTIONS.some(s => s.id === section) ? section : 'household'
-  })
+  // The active tab is read from the URL (?section=data), not copied into state once at mount. A link such as the sign-in reminder's
+  // or the sync status pill's can then switch tabs even when Settings is already open, and a refresh stays on the same tab.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requested = searchParams.get('section') as Section | null
+  const active: Section = requested && SECTIONS.some(s => s.id === requested) ? requested : 'household'
+  const setActive = (section: Section) => setSearchParams({ section }, { replace: true })
 
   return (
     <div className={styles.page}>
