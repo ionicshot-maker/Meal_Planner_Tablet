@@ -33,7 +33,8 @@ class LoginThrottle {
   ok(key: string) { this.fails.delete(key); }
 }
 
-export function buildApp(store: Store, config: Config): FastifyInstance {
+export function buildApp(store: Store, config: Config, hooks: { afterWrite?: () => void } = {}): FastifyInstance {
+  const afterWrite = hooks.afterWrite ?? (() => {});
   // 64 MB: recipe/reference photos and the one-time backup import are embedded as base64 in JSON.
   const app = Fastify({ logger: false, trustProxy: config.trustProxy, bodyLimit: 64 * 1024 * 1024 });
   const canonicalSecure = isSecureOrigin(config);
@@ -242,6 +243,7 @@ export function buildApp(store: Store, config: Config): FastifyInstance {
       records: page.map((r) => ({ table: r.tbl, id: r.id, rev: r.rev, deleted: r.deleted, record: r.record })),
       rev: page.length ? page[page.length - 1].rev : since,
       serverRev: store.currentRev(),
+      epoch: store.epoch(),
       more,
     };
   });
@@ -252,6 +254,7 @@ export function buildApp(store: Store, config: Config): FastifyInstance {
     if (b.changes.length > 2000) return reply.code(413).send({ error: 'Too many changes in one push (max 2000).' });
     const deviceId = typeof b.deviceId === 'string' ? b.deviceId.slice(0, 100) : null;
     const results = applyPush(store, { userId: req.user!.id, deviceId }, b.changes);
+    afterWrite();
     return { results, serverRev: store.currentRev() };
   });
 
@@ -261,7 +264,9 @@ export function buildApp(store: Store, config: Config): FastifyInstance {
     if (store.recordCount() > 0 && q.allowNonEmpty !== 'true') {
       return reply.code(409).send({ error: 'The server already holds data. Importing over it is refused unless allowNonEmpty=true.' });
     }
-    return importBackup(store, { userId: req.user!.id }, req.body);
+    const summary = importBackup(store, { userId: req.user!.id }, req.body);
+    afterWrite();
+    return summary;
   });
   // "The device I'm on has the real data; make the server match it." Owner only; a database backup is taken first; refused if the
   // server has changed since the caller looked. Other devices converge through normal sync (the replaced records arrive as
@@ -276,6 +281,7 @@ export function buildApp(store: Store, config: Config): FastifyInstance {
       return reply.code(500).send({ error: `Could not take the safety backup first, so nothing was changed: ${e instanceof Error ? e.message : String(e)}` });
     }
     const summary = replaceAll(store, { userId: req.user!.id, deviceId: typeof b.deviceId === 'string' ? b.deviceId.slice(0, 100) : null }, b.changes, b.expectedRev);
+    afterWrite();
     return { ...summary, backup: backup ? backup.split(/[\\/]/).pop() : null };
   });
   app.get('/api/admin/stats', { preHandler: requireOwner }, async () => ({ rev: store.currentRev(), tables: store.countsByTable() }));

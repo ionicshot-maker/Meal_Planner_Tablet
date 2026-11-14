@@ -4,6 +4,7 @@ import { loadConfig } from './config.js';
 import { Store } from './store.js';
 import { buildApp } from './app.js';
 import { backupNow, pruneBackups, scheduleNightlyBackup } from './backup.js';
+import { ensureEpoch, highWaterRecorder } from './epoch.js';
 
 // Settings come from the environment; for a service, put them in a file instead (ENV_FILE, default ./.env next to where the
 // server is started). Variables already set in the real environment win over the file.
@@ -18,6 +19,7 @@ const config = loadConfig();
 fs.mkdirSync(config.dataDir, { recursive: true });
 const dbFile = path.join(config.dataDir, 'meal-planner.sqlite');
 const store = new Store(dbFile);
+ensureEpoch(store, config.dataDir);
 
 // `node dist/index.js backup` -> take one backup now and exit (for manual use or an external scheduler).
 if (process.argv[2] === 'backup') {
@@ -28,7 +30,7 @@ if (process.argv[2] === 'backup') {
   process.exit(0);
 }
 
-const app = buildApp(store, config);
+const app = buildApp(store, config, { afterWrite: highWaterRecorder(store, config.dataDir) });
 
 // Housekeeping: drop expired sessions now and then; back the database up every night.
 const timer = setInterval(() => store.purgeExpiredSessions(), 6 * 3600_000);

@@ -57,9 +57,22 @@ export class Store {
     this.db = new DatabaseSync(file);
     this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;');
     this.db.exec(SCHEMA);
+    if (!this.db.prepare("SELECT 1 FROM meta WHERE key = 'epoch'").get()) {
+      this.db.prepare("INSERT INTO meta(key, value) VALUES ('epoch', ?)").run(crypto.randomUUID());
+    }
   }
 
   close() { this.db.close(); }
+
+  /** Identifies this incarnation of the database. Changes when the file is replaced (see epoch.ts). */
+  epoch(): string {
+    return (this.db.prepare("SELECT value FROM meta WHERE key = 'epoch'").get() as { value: string }).value;
+  }
+  rotateEpoch(): string {
+    const next = crypto.randomUUID();
+    this.db.prepare("UPDATE meta SET value = ? WHERE key = 'epoch'").run(next);
+    return next;
+  }
 
   /** Runs fn in one IMMEDIATE transaction: all of it lands or none of it does. */
   tx<T>(fn: () => T): T {
