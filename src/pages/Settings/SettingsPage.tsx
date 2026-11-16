@@ -6,6 +6,7 @@ import { Toggle, Card } from '@/components/ui'
 import { AllergenPicker } from '@/components/AllergenChips'
 import { HouseholdSection } from './sections/HouseholdSection'
 import { AISection } from './sections/AISection'
+import { FoodIntelligenceSection } from './sections/FoodIntelligenceSection'
 import { ListsSection } from './sections/ListsSection'
 import { DataSection } from './sections/DataSection'
 import { SetupChecklist } from './sections/SetupChecklist'
@@ -79,7 +80,12 @@ export default function SettingsPage() {
             />
           )}
 
-          {active === 'integrations' && <AISection />}
+          {active === 'integrations' && (
+            <>
+              <AISection />
+              <FoodIntelligenceSection />
+            </>
+          )}
 
           {active === 'nutrients' && (
             <NutrientsSection />

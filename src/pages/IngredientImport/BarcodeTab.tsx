@@ -283,7 +283,7 @@ export function BarcodeTab({ onReview, onExistingFound }: Props) {
         }
       }
 
-      onReview(draft, 'openfoodfacts')
+      onReview(draft, result.source === 'food-intelligence' ? 'foodintelligence' : 'openfoodfacts')
     } catch (err) {
       setError(`Lookup failed: ${err instanceof Error ? err.message : String(err)}`)
     } finally {

@@ -162,6 +162,31 @@ export interface RollupResult {
   skipped: { gtin: string; reason: string }[]
 }
 
+export interface DiscoveryProposal {
+  id: string
+  key: string
+  kind: string
+  retailer: string | null
+  name: string
+  access: 'open' | 'partner_api' | 'manual_provision' | 'user_generated'
+  provides: string[]
+  coverage: Record<string, unknown>
+  reliability: number | null
+  confidence: number | null
+  evidence: string[]
+  missing: string[]
+  status: 'proposed' | 'approved' | 'rejected' | 'needs_configuration' | 'enabled'
+}
+
+export interface DiscoveryRequest {
+  id: string
+  retailers: string[]
+  area: Record<string, unknown>
+  status: string
+  stores: { id: string; name: string; retailer: string; city: string | null; state: string | null; distance_km: number | null }[]
+  proposals: DiscoveryProposal[]
+}
+
 export class FoodIntelligenceError extends Error {
   status: number
   body: unknown
@@ -176,7 +201,11 @@ export class FoodIntelligenceError extends Error {
 export interface ClientConfig {
   baseUrl: string
   getToken?: () => string | undefined | Promise<string | undefined>
+  /** Sent as `X-Household-Id`; the API verifies membership with Supabase as the signed-in user. */
+  householdId?: () => string | undefined | Promise<string | undefined>
   apiKey?: string
+  /** `'include'` sends the Cloudflare Access cookie cross-origin (Access-protected deployments). */
+  credentials?: RequestCredentials
   fetchImpl?: typeof fetch
   timeoutMs?: number
 }
@@ -199,6 +228,8 @@ export class FoodIntelligenceClient {
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     const token = await this.cfg.getToken?.()
     if (token) headers.Authorization = `Bearer ${token}`
+    const household = await this.cfg.householdId?.()
+    if (household) headers['X-Household-Id'] = household
     if (this.cfg.apiKey) headers['X-API-Key'] = this.cfg.apiKey
     const doFetch = this.cfg.fetchImpl ?? fetch
     const ctrl = new AbortController()
@@ -206,6 +237,7 @@ export class FoodIntelligenceClient {
     try {
       const res = await doFetch(url.toString(), {
         method, headers, signal: ctrl.signal, body: body === undefined ? undefined : JSON.stringify(body),
+        ...(this.cfg.credentials ? { credentials: this.cfg.credentials } : {}),
       })
       const text = await res.text()
       const json: unknown = text ? JSON.parse(text) : null
@@ -263,6 +295,40 @@ export class FoodIntelligenceClient {
   resolveIngredient(q: string, limit = 10) {
     return this.request<{ query: string; ingredient: string | null; variants: ApiVariant[] }>(
       'GET', '/catalog/ingredients/resolve', undefined, { q, limit })
+  }
+
+  /** Readiness: database reachable and schema current. Never throws on 503 (returns the body). */
+  async health(): Promise<{ status: string; database?: boolean; migrations?: boolean }> {
+    try {
+      return await this.request('GET', '/health/ready')
+    } catch (err) {
+      if (err instanceof FoodIntelligenceError && err.status === 503) return err.body as { status: string }
+      throw err
+    }
+  }
+
+  listStores() {
+    return this.request<{ id: string; name: string; retailer: string | null; city: string | null; state: string | null }[]>('GET', '/retail/stores')
+  }
+
+  /** Contributor+. Parsed lines become price observations for the store. */
+  importReceipt(input: { storeId: string; text: string; purchasedAt?: string }) {
+    return this.request<{ id: string; matched: number; unmatched: number; total: number }>(
+      'POST', '/acquisition/receipts', { store_id: input.storeId, text: input.text, purchased_at: input.purchasedAt })
+  }
+
+  /** "I shop at these stores" -> ranked acquisition possibilities (contributor+). */
+  createDiscovery(input: { retailers: string[]; area?: { zip?: string; city?: string; state?: string } }) {
+    return this.request<DiscoveryRequest>('POST', '/discovery/requests', { retailers: input.retailers, area: input.area ?? {} })
+  }
+  getDiscovery(id: string) {
+    return this.request<DiscoveryRequest>('GET', `/discovery/requests/${encodeURIComponent(id)}`)
+  }
+  approveProposal(id: string) {
+    return this.request<DiscoveryProposal>('POST', `/discovery/proposals/${encodeURIComponent(id)}/approve`)
+  }
+  rejectProposal(id: string) {
+    return this.request<DiscoveryProposal>('POST', `/discovery/proposals/${encodeURIComponent(id)}/reject`)
   }
 
   /** Needs a user token. 200 = known product; 202 = unknown, a discovery job was queued. */

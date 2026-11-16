@@ -125,6 +125,8 @@ export function normalizedToIngredient(product: NormalizedProduct, categories: s
 export interface BarcodeLookupResult {
   status: 'found' | 'not-found' | 'non-food' | 'error'
   product?: NormalizedProduct
+  /** Set only when the optional Food Intelligence service answered; absent = the original Open Food Facts path. */
+  source?: 'food-intelligence'
   errorMessage?: string
 }
 
@@ -143,7 +145,7 @@ export async function lookupBarcodeProduct(barcode: string): Promise<BarcodeLook
     if (enhanced) {
       const nonFood = isLikelyNonFood(enhanced.categories_tags)
       if (nonFood || !isMacrosIncomplete(enhanced.macros)) {
-        return { status: nonFood ? 'non-food' : 'found', product: enhanced }
+        return { status: nonFood ? 'non-food' : 'found', product: enhanced, source: 'food-intelligence' }
       }
     }
     const res = await fetch(`/api/barcode-lookup?barcode=${encodeURIComponent(barcode)}`)

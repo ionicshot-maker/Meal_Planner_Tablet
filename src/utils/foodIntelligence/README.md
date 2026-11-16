@@ -3,10 +3,12 @@
 Optional enhancement layer. **Meal Planner works fully without it** - these modules return `null` / the
 unchanged input when Food Intelligence is not configured, offline, slow or failing.
 
-These files are copied from the Food Intelligence repository (`clients/meal-planner/`), which is the source
-of truth and has the tests (`node --test clients/meal-planner/`). Do not edit them here; re-copy.
+Files copied from the Food Intelligence repository (`clients/meal-planner/`, the source of truth with the tests):
+`foodIntelligenceClient.ts`, `resilient.ts`, `barcodeAdapter.ts`, `groceryEnrichment.ts`, `receiptSubmit.ts`.
+Do not edit those here; re-copy. `identity.ts` is Meal Planner-specific (Supabase session -> token + household).
 
-Enable: `localStorage.setItem('foodIntelligence.config', JSON.stringify({enabled:true, baseUrl:'https://...'}))`
-or build with `VITE_FOOD_INTELLIGENCE_URL`. Disable: `{enabled:false}` or remove the key.
+Turn it on in the app: Settings -> Integrations -> Food Intelligence (stored on this device only).
+Developer shortcut: build with `VITE_FOOD_INTELLIGENCE_URL` (see `.env.local`, which is git-ignored).
 
-Wired in: `utils/barcodeLookup.ts` (barcode scan) and `pages/GroceryList/GroceryGenerator.tsx` (list enrichment).
+Wired in: `utils/barcodeLookup.ts` (scan), `pages/GroceryList/GroceryGenerator.tsx` (list prices/stores),
+`pages/IngredientImport/ReceiptLineReview.tsx` (price feed), `pages/Settings/sections/FoodIntelligenceSection.tsx`.

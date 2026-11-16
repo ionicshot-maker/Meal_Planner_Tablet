@@ -7,6 +7,8 @@ import { newId, now } from '@/utils/ids'
 import { resolveCandidateSelection, candidateLabel } from '@/utils/receiptMatching'
 import type { LineMatchResult, RankedCandidate, ConfidenceTier } from '@/utils/receiptMatching'
 import { lookupBarcodeProduct } from '@/utils/barcodeLookup'
+import { submitReceiptToFoodIntelligence } from '@/utils/foodIntelligence/receiptSubmit.ts'
+import { fiIdentityDeps } from '@/utils/foodIntelligence/identity.ts'
 import { lookupBarcodeWeb, type WebLookupProduct } from '@/utils/webBarcodeLookup'
 import { scanNutritionLabel, uncertainLabelFields } from '@/utils/labelScanLookup'
 import { GEMINI_PRIMARY_MODEL, type GeminiModelResolution } from '@/utils/geminiModel'
@@ -424,6 +426,25 @@ export function ReceiptLineReview({
           processedAt: now(),
         },
       })
+
+      // OPTIONAL enhancement, fire-and-forget: Meal Planner's own save above has already succeeded and never
+      // waits on or depends on this. Not configured / offline / read-only role / unknown store => silently nothing.
+      void (async () => {
+        try {
+          await submitReceiptToFoodIntelligence({
+            storeName,
+            date: receiptDate,
+            lines: validated
+              .filter(l => pendingRowIds.includes(l.id) && l.itemType !== 'skip')
+              .map(l => ({
+                name: l.editableName.trim(),
+                barcode: l.match.validBarcode ?? currentVariant(l)?.barcode ?? null,
+                unitPrice: l.editableUnitPrice,
+                quantity: l.normalized.isWeightBased ? 1 : l.normalized.effectiveQuantity,
+              })),
+          }, fiIdentityDeps())
+        } catch { /* never surfaces to the user */ }
+      })()
 
       setLines(ls => ls.map(l => (pendingRowIds.includes(l.id) ? { ...l, saved: true, error: '' } : l)))
       for (const line of validated) {

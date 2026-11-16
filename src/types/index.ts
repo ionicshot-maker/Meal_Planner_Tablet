@@ -95,7 +95,7 @@ export interface IngredientDisplayToggles {
 }
 
 // ─── Nutrition Source ────────────────────────────────────────────────────────
-export type NutritionSource = 'openfoodfacts' | 'gemini' | 'usda' | 'manual'
+export type NutritionSource = 'openfoodfacts' | 'foodintelligence' | 'gemini' | 'usda' | 'manual'
 
 // ─── Cloud Sync ───────────────────────────────────────────────────────────────
 export type FamilyShareRole = 'owner' | 'contributor' | 'readonly'

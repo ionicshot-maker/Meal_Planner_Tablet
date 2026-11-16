@@ -51,6 +51,7 @@ interface ToastState {
 
 const SOURCE_LABELS: Record<NutritionSource, string> = {
   openfoodfacts: 'Open Food Facts',
+  foodintelligence: 'Food Intelligence',
   gemini:        'Gemini AI',
   usda:          'USDA FoodData Central',
   manual:        'Manual',
@@ -276,10 +277,10 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
             <strong>⚠️ These nutrition values are an AI-generated estimate, not a verified database record</strong>{' '}
             — Gemini produced this data from its own knowledge, not a scan or lookup of this specific product. Please verify every value against the actual label before saving.
           </div>
-        ) : nutritionSource === 'openfoodfacts' && (
+        ) : (nutritionSource === 'openfoodfacts' || nutritionSource === 'foodintelligence') && (
           <div className={styles.accuracyWarning}>
             <strong>⚠️ Please compare these nutrition values to the label on your product before saving</strong>{' '}
-            — data may not be exact.
+            — {nutritionSource === 'foodintelligence' ? 'this came from your Food Intelligence service (merged from several sources); data may not be exact.' : 'data may not be exact.'}
           </div>
         )}
 
