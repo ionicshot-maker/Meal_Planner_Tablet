@@ -166,6 +166,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
   const [showMissingWarning, setShowMissingWarning] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showImportBanner, setShowImportBanner] = useState(fromImport ?? false)
+  const [confirmClearAll, setConfirmClearAll] = useState(false)
 
   // Photo input ref
   const photoInputRef = useRef<HTMLInputElement>(null)
@@ -228,7 +229,6 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
   }
 
   function clearAll() {
-    if (!confirm('Clear all fields and start over with a blank recipe?')) return
     setName('')
     setServings(4)
     setPrepInput('')
@@ -247,6 +247,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
     setRows([])
     setShowMissingWarning(false)
     setShowImportBanner(false)
+    setConfirmClearAll(false)
   }
 
   // Load ingredient database
@@ -554,7 +555,7 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
                 {isFavorite ? '♥' : '♡'} Favorite
               </button>
               <Toggle label="Template" checked={isTemplate} onChange={setIsTemplate} />
-              <button className={styles.clearBtn} onClick={clearAll} type="button">
+              <button className={styles.clearBtn} onClick={() => setConfirmClearAll(true)} type="button">
                 Clear all
               </button>
             </div>
@@ -961,6 +962,22 @@ export function RecipeEditor({ recipe, prefill, fromImport, importNotice, uncert
       />
     </div>
     <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    {confirmClearAll && (
+      <Modal
+        open
+        onClose={() => setConfirmClearAll(false)}
+        title="Clear All Fields"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmClearAll(false)}>Cancel</Button>
+            <Button variant="danger" onClick={clearAll}>Clear All</Button>
+          </>
+        }
+      >
+        <p>Clear all fields and start over with a blank recipe?</p>
+      </Modal>
+    )}
     </>,
     document.body
   )

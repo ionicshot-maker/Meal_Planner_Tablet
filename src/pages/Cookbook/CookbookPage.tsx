@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Heart, Download, Plus, FolderOpen, BookMarked } from 'lucide-react'
 import {
   getAllRecipes, saveRecipe, deleteRecipe, cloneRecipeFromTemplate,
@@ -10,6 +10,7 @@ import { attachRecipeMacros, buildIngredientMap } from '@/utils/recipeCalculatio
 import type { Recipe, Ingredient, RecipeCollection, KitchenReference } from '@/types'
 import type { AIRecipeResult, UncertainField, DetectedRecipeBox } from '@/utils/aiImport'
 import { detectRecipeBoxes, effectivePhotoGeminiKey } from '@/utils/aiImport'
+import { normalizeDetectionResponse } from '@/components/PhotoCaptureCrop'
 import { RecipeCard } from './RecipeCard'
 import { RecipeEditor, type ImportNotice } from './RecipeEditor'
 import { RecipeDetail } from './RecipeDetail'
@@ -43,6 +44,9 @@ export default function CookbookPage() {
 
   // Modal / panel state
   const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<
+    { kind: 'recipe'; item: Recipe } | { kind: 'reference'; item: KitchenReference } | null
+  >(null)
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null | 'new'>(null)
   const [importPrefill, setImportPrefill] = useState<AIRecipeResult | null>(null)
   const [importNotice, setImportNotice] = useState<ImportNotice | undefined>(undefined)
@@ -57,15 +61,34 @@ export default function CookbookPage() {
   // import path, and is the single condition that gates the offer below.
   const [importSourcePhoto, setImportSourcePhoto] = useState<string | null>(null)
   const [showCropAnotherOffer, setShowCropAnotherOffer] = useState(false)
-  // Phase 2C-1 — AI-suggested crop boxes for recipe #2+ on the same photo.
-  // Populated once per photo (fired from handleImported, the instant recipe
-  // #1's OCR succeeds — see comment there for why this timing, not earlier,
-  // is correct). Consumed one at a time by handleCropAnother into
-  // activeCropBox as the user cycles through "Crop Another"; an empty or
-  // exhausted array is indistinguishable from "detection never ran" to every
-  // consumer, so the fallback to today's default crop is automatic.
-  const [detectedBoxes, setDetectedBoxes] = useState<DetectedRecipeBox[]>([])
+  // Phase 2C-2 — AI-suggested crop boxes, unified across recipe #1 and every
+  // "Crop Another" cycle for recipe #2+ on the same photo. Populated once
+  // per photo, fired from handlePhotoSelected the instant a *new* photo is
+  // acquired (Phase 2C-1 originally fired this from handleImported, after
+  // recipe #1's OCR succeeded — moved earlier so recipe #1's own crop screen
+  // can also receive a suggestion; see handlePhotoSelected's comment).
+  // Index 0 belongs to recipe #1 — consumed opportunistically by the effect
+  // below the moment it's available, whichever crop screen is currently
+  // open. Every later index is consumed one at a time by handleCropAnother
+  // as the user cycles through "Crop Another" — since index 0 is always
+  // claimed (one way or another — see below) before a "Crop Another" cycle
+  // can be reached, `detectedBoxes[0]` at that point is always the *next*
+  // unclaimed box, so handleCropAnother needed no change for this phase. An
+  // empty or exhausted array is indistinguishable from "detection never ran"
+  // to every consumer, so the fallback to today's default crop is automatic.
+  // Elements are already normalizeDetectionResponse()-cleaned by the time
+  // they land here (see runBoundaryDetection) — a `null` entry means that
+  // specific box couldn't be resolved to a sane box and was discarded at
+  // the response level; consuming it must fall back to no suggestion for
+  // that one cycle without disturbing the other (still-valid) boxes.
+  const [detectedBoxes, setDetectedBoxes] = useState<(DetectedRecipeBox | null)[]>([])
   const [activeCropBox, setActiveCropBox] = useState<DetectedRecipeBox | undefined>(undefined)
+  // Guards against a stale, superseded detection call (started for a photo
+  // the user has since moved on from — e.g. Back, then a different photo)
+  // resolving late and overwriting a newer photo's boxes. Set synchronously
+  // at the start of every detection call; a resolving call only commits its
+  // result if it's still the most recently requested one.
+  const detectionPhotoRef = useRef<string | null>(null)
 
   // Kitchen Reference state
   const [editingReference, setEditingReference] = useState<KitchenReference | null | 'new'>(null)
@@ -124,10 +147,10 @@ export default function CookbookPage() {
   }
 
   async function handleDelete(recipe: Recipe) {
-    if (!confirm(`Delete "${recipe.name}"? This cannot be undone.`)) return
     await deleteRecipe(recipe.id)
     setViewingRecipe(null)
     await load()
+    setPendingDelete(null)
   }
 
   async function handleToggleFavorite(recipe: Recipe) {
@@ -159,32 +182,40 @@ export default function CookbookPage() {
     // URL/paste imports always resolve this to null.
     // This box, if any, has now been consumed by the recipe just extracted —
     // clear it regardless of path so a stale suggestion can't leak into some
-    // unrelated later crop.
+    // unrelated later crop. (Detection itself no longer fires from here as of
+    // Phase 2C-2 — see handlePhotoSelected — so there's no re-trigger logic
+    // needed at this point anymore; detectedBoxes is left untouched, exactly
+    // the still-unconsumed queue a later "Crop Another" cycle needs.)
     setActiveCropBox(undefined)
-    // handleImported fires once per recipe, not once per photo — every "Crop
-    // Another" cycle re-enters here too. Only (re)run detection the first
-    // time this exact photo is seen; a later cycle on the *same* photo must
-    // leave detectedBoxes (the still-unconsumed queue) untouched, or the
-    // in-progress "one box per cycle" consumption would be silently reset.
-    const isSamePhotoAsBefore = sourcePhotoDataUrl != null && sourcePhotoDataUrl === importSourcePhoto
-    if (!isSamePhotoAsBefore) {
-      setDetectedBoxes([])
-      if (sourcePhotoDataUrl) void runBoundaryDetection(sourcePhotoDataUrl)
-    }
     setImportSourcePhoto(sourcePhotoDataUrl ?? null)
     setShowCropAnotherOffer(false)
     setEditingRecipe('new')
   }
 
-  // Phase 2C-1 — fires exactly once per new source photo, right when recipe
-  // #1's OCR succeeds (not before crop #1, which is explicitly out of scope;
-  // not from inside RecipeImportModal, which unmounts the instant OCR
-  // succeeds — well before this detection call would resolve — so CookbookPage,
-  // the component whose lifetime already spans the whole review+save+"crop
-  // another" cycle, is the only place that can safely own it). A silent,
-  // best-effort suggestion: any failure already resolves to an empty array
-  // inside detectRecipeBoxes, so there's nothing to catch or surface here.
+  // Phase 2C-2 — fires the instant a *new* photo is acquired (before any
+  // crop screen is shown), not after recipe #1's OCR succeeds (Phase 2C-1's
+  // original timing). Moved earlier so the same call can also seed recipe
+  // #1's own crop screen, not just recipe #2+'s "Crop Another" cycle — this
+  // single call now serves both. Never fires for a "crop another" re-entry
+  // (PhotoCaptureCrop only calls its onPhotoSelected for a genuine new
+  // acquisition — see its own comment), so no "same photo as before" guard
+  // is needed here the way Phase 2C-1's version needed one.
+  function handlePhotoSelected(dataUrl: string) {
+    setDetectedBoxes([])
+    setActiveCropBox(undefined)
+    void runBoundaryDetection(dataUrl)
+  }
+
+  // Fires once per new source photo, from handlePhotoSelected above (not
+  // from inside RecipeImportModal, which stays mounted through capture/crop/
+  // preview/OCR but still unmounts before a later "Crop Another" cycle would
+  // need this same result — CookbookPage, the component whose lifetime
+  // already spans the whole review+save+"crop another" cycle, is the only
+  // place that can safely own it). A silent, best-effort suggestion: any
+  // failure already resolves to an empty array inside detectRecipeBoxes, so
+  // there's nothing to catch or surface here.
   async function runBoundaryDetection(sourcePhotoDataUrl: string) {
+    detectionPhotoRef.current = sourcePhotoDataUrl
     const geminiKey = effectivePhotoGeminiKey(settings)
     if (!geminiKey) return
     const commaIdx = sourcePhotoDataUrl.indexOf(',')
@@ -192,8 +223,40 @@ export default function CookbookPage() {
     const mimeMatch = sourcePhotoDataUrl.slice(0, commaIdx).match(/data:(.*);base64/)
     const mimeType = mimeMatch?.[1] || 'image/jpeg'
     const boxes = await detectRecipeBoxes(base64, mimeType, geminiKey, settings.geminiModel)
-    setDetectedBoxes(boxes)
+    // A later photo selection (e.g. Back, then a different photo) may have
+    // superseded this in-flight call — discard a stale result rather than
+    // overwrite the newer photo's boxes.
+    if (detectionPhotoRef.current !== sourcePhotoDataUrl) return
+    // Bug fix: the deployed model reliably returns these on a 0-1000 scale,
+    // not the requested 0-100 — normalized here, once, at the response level
+    // (the only point where the full box list for this photo exists together;
+    // see normalizeDetectionResponse's own comment for why this can't be done
+    // per-box, later, inside PhotoCaptureCrop). Produces one array slot per
+    // detected box, `null` where that specific box couldn't be resolved to a
+    // sane box — index 0 consumed opportunistically below for recipe #1,
+    // every later index consumed one at a time by handleCropAnother.
+    setDetectedBoxes(normalizeDetectionResponse(boxes))
   }
+
+  // Phase 2C-2 — opportunistically hands a detected box to whichever crop
+  // screen is currently open, the instant one becomes available, unless
+  // something has already claimed a box for it (`activeCropBox` already
+  // set). This is what seeds recipe #1's own crop screen (which has no other
+  // way to receive a box, since nothing calls handleCropAnother for it) and
+  // — only in the rare case where detection was still in flight when
+  // handleCropAnother's own synchronous consumption ran and found the queue
+  // still empty — also covers a "Crop Another" cycle that opened before its
+  // box was ready. PhotoCaptureCrop's own interaction-race guard (never
+  // overwrite a crop the user already touched) is what makes handing this
+  // down as `initialCropBox` at any point — including well after the crop
+  // screen first mounted — safe.
+  useEffect(() => {
+    if (!showImport) return
+    if (activeCropBox !== undefined) return
+    if (detectedBoxes.length === 0) return
+    setActiveCropBox(detectedBoxes[0] ?? undefined)
+    setDetectedBoxes(boxes => boxes.slice(1))
+  }, [detectedBoxes, showImport, activeCropBox])
 
   function handleManualWithReference(text: string) {
     setShowImport(false)
@@ -224,8 +287,11 @@ export default function CookbookPage() {
     // consume it from the queue so it isn't offered again on a later cycle.
     // `detectedBoxes` may still be empty here (detection hasn't resolved yet,
     // or never found anything) — activeCropBox then stays undefined, which
-    // is exactly "no preset crop," today's existing default.
-    setActiveCropBox(detectedBoxes[0])
+    // is exactly "no preset crop," today's existing default. A `null` entry
+    // (a box normalizeDetectionResponse couldn't resolve to a sane box) is
+    // converted to undefined the same way, without disturbing the other
+    // still-queued boxes.
+    setActiveCropBox(detectedBoxes[0] ?? undefined)
     setDetectedBoxes(boxes => boxes.slice(1))
     setShowImport(true) // importSourcePhoto stays set — passed back in as initialPhotoDataUrl below
   }
@@ -279,10 +345,10 @@ export default function CookbookPage() {
   }
 
   async function handleDeleteReference(ref: KitchenReference) {
-    if (!confirm(`Delete "${ref.title}"? This cannot be undone.`)) return
     await deleteReference(ref.id)
     setViewingReference(null)
     await load()
+    setPendingDelete(null)
   }
 
   function openEditReference(ref: KitchenReference) {
@@ -371,7 +437,7 @@ export default function CookbookPage() {
           references={references}
           onView={setViewingReference}
           onEdit={openEditReference}
-          onDelete={handleDeleteReference}
+          onDelete={ref => setPendingDelete({ kind: 'reference', item: ref })}
           onOpenCalculator={() => setShowCalculator(true)}
         />
       ) : filterMode === 'collections' ? (
@@ -414,7 +480,7 @@ export default function CookbookPage() {
               onEdit={() => openEdit(recipe)}
               onToggleFavorite={() => handleToggleFavorite(recipe)}
               onSaveAsTemplate={() => handleSaveAsTemplate(recipe)}
-              onDelete={() => handleDelete(recipe)}
+              onDelete={() => setPendingDelete({ kind: 'recipe', item: recipe })}
               onUseTemplate={() => handleUseTemplate(recipe)}
               onAddToMealPlan={() => setAddToPlanRecipe(recipe)}
               onAddToCollection={(collectionId) => handleAddToCollection(collectionId, recipe.id)}
@@ -430,6 +496,7 @@ export default function CookbookPage() {
           onImported={handleImported}
           onManualWithReference={handleManualWithReference}
           onManualEntry={handleManualEntry}
+          onPhotoSelected={handlePhotoSelected}
           onClose={() => {
             setShowImport(false)
             // Closing the modal outright (not via a completed import) is
@@ -487,6 +554,29 @@ export default function CookbookPage() {
         <p>You just saved a recipe imported from a photo. Want to crop another recipe from that same photo?</p>
       </Modal>
 
+      {/* ── Delete confirmation (recipe or reference, shared) ── */}
+      {pendingDelete && (
+        <Modal
+          open
+          onClose={() => setPendingDelete(null)}
+          title={pendingDelete.kind === 'recipe' ? 'Delete Recipe' : 'Delete Reference'}
+          size="sm"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setPendingDelete(null)}>Cancel</Button>
+              <Button
+                variant="danger"
+                onClick={() => pendingDelete.kind === 'recipe' ? handleDelete(pendingDelete.item) : handleDeleteReference(pendingDelete.item)}
+              >
+                Delete
+              </Button>
+            </>
+          }
+        >
+          <p>Delete "{pendingDelete.kind === 'recipe' ? pendingDelete.item.name : pendingDelete.item.title}"? This cannot be undone.</p>
+        </Modal>
+      )}
+
       {/* ── Detail view ── */}
       {viewingRecipe && (
         <RecipeDetail
@@ -495,7 +585,7 @@ export default function CookbookPage() {
           onEdit={() => openEdit(viewingRecipe)}
           onClose={() => setViewingRecipe(null)}
           onToggleFavorite={() => handleToggleFavorite(viewingRecipe)}
-          onDelete={() => handleDelete(viewingRecipe)}
+          onDelete={() => setPendingDelete({ kind: 'recipe', item: viewingRecipe })}
           onAddToMealPlan={() => setAddToPlanRecipe(viewingRecipe)}
         />
       )}
@@ -522,7 +612,7 @@ export default function CookbookPage() {
         <ReferenceDetail
           reference={viewingReference}
           onEdit={() => openEditReference(viewingReference)}
-          onDelete={() => handleDeleteReference(viewingReference)}
+          onDelete={() => setPendingDelete({ kind: 'reference', item: viewingReference })}
           onClose={() => setViewingReference(null)}
         />
       )}

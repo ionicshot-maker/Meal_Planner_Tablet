@@ -15,6 +15,7 @@ import { NUTRISCORE_DESCRIPTIONS, NOVA_DESCRIPTIONS } from '@/utils/ingredientQu
 import { ScrollHint } from '@/components/ScrollHint'
 import { Toast } from './Toast'
 import type { Ingredient, IngredientVariant, IngredientUnit, Macros, NutritionSource, NutriscoreGrade, NovaGroupNum } from '@/types'
+import type { GeminiModelResolution } from '@/utils/geminiModel'
 import styles from './ReviewScreen.module.css'
 
 const NUTRISCORE_OPTIONS = [
@@ -50,6 +51,7 @@ interface ToastState {
 
 const SOURCE_LABELS: Record<NutritionSource, string> = {
   openfoodfacts: 'Open Food Facts',
+  foodintelligence: 'Food Intelligence',
   gemini:        'Gemini AI',
   usda:          'USDA FoodData Central',
   manual:        'Manual',
@@ -72,9 +74,13 @@ interface Props {
   /** Overrides the default source-based accuracy banner with a specific message, e.g. from
    *  a nutrition label scan that already knows whether the read was confident or partial. */
   notice?: ReviewNotice
+  /** Only ever set when nutritionSource came from a Gemini call that reports resolution
+   *  (currently just the label scan) — used to add a muted fallback clause to the source
+   *  badge, never a new badge/color/dismiss action. */
+  resolution?: GeminiModelResolution
 }
 
-export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchUSDA, nutritionSource, uncertainFields, notice }: Props) {
+export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchUSDA, nutritionSource, uncertainFields, notice, resolution }: Props) {
   const { settings, updateSettings } = useSettings()
   const [draft, setDraft] = useState<Ingredient>(() => ensureVariant(initialDraft))
   const [saving, setSaving] = useState(false)
@@ -266,10 +272,15 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
           <div className={notice.level === 'success' ? styles.successNotice : styles.accuracyWarning}>
             <strong>{notice.level === 'success' ? '✅ ' : '⚠️ '}{notice.message}</strong>
           </div>
-        ) : (nutritionSource === 'openfoodfacts' || nutritionSource === 'gemini') && (
+        ) : nutritionSource === 'gemini' ? (
+          <div className={styles.accuracyWarning}>
+            <strong>⚠️ These nutrition values are an AI-generated estimate, not a verified database record</strong>{' '}
+            — Gemini produced this data from its own knowledge, not a scan or lookup of this specific product. Please verify every value against the actual label before saving.
+          </div>
+        ) : (nutritionSource === 'openfoodfacts' || nutritionSource === 'foodintelligence') && (
           <div className={styles.accuracyWarning}>
             <strong>⚠️ Please compare these nutrition values to the label on your product before saving</strong>{' '}
-            — data may not be exact.
+            — {nutritionSource === 'foodintelligence' ? 'this came from your Food Intelligence service (merged from several sources); data may not be exact.' : 'data may not be exact.'}
           </div>
         )}
 
@@ -426,6 +437,7 @@ export function ReviewScreen({ draft: initialDraft, onSaved, onCancel, onSearchU
           {nutritionSource && nutritionSource !== 'manual' && (
             <div className={styles.sourceBadge}>
               Source: {SOURCE_LABELS[nutritionSource]}
+              {resolution?.didFallback && ' — via fallback model'}
             </div>
           )}
           <p className={styles.verifyNote}>

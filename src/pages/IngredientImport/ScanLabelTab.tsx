@@ -4,6 +4,8 @@ import { PhotoCaptureCrop } from '@/components/PhotoCaptureCrop'
 import { newId, now } from '@/utils/ids'
 import { normalizeUnit } from '@/utils/recipeCalculations'
 import { scanNutritionLabel, uncertainLabelFields, type LabelNutrition } from '@/utils/labelScanLookup'
+import { GEMINI_PRIMARY_MODEL, type GeminiModelResolution } from '@/utils/geminiModel'
+import { recordGeminiCallResult } from '@/utils/geminiModelClient'
 import type { Ingredient, Macros } from '@/types'
 import styles from './ScanLabelTab.module.css'
 
@@ -95,15 +97,16 @@ type Stage = 'capture' | 'lowConfidence'
 interface Notice { level: 'success' | 'warning'; message: string }
 
 interface Props {
-  onReview: (draft: Ingredient, uncertainFields: Set<string>, notice: Notice) => void
+  onReview: (draft: Ingredient, uncertainFields: Set<string>, notice: Notice, resolution?: GeminiModelResolution) => void
 }
 
 export function ScanLabelTab({ onReview }: Props) {
-  const { settings } = useSettings()
+  const { settings, updateSettings } = useSettings()
   const [stage, setStage] = useState<Stage>('capture')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [lowConfidenceReason, setLowConfidenceReason] = useState('')
+  const [reasonIsFromGemini, setReasonIsFromGemini] = useState(false)
 
   const hasKey = Boolean(settings.geminiApiKey)
   const userCategories = settings.ingredientCategories
@@ -113,14 +116,16 @@ export function ScanLabelTab({ onReview }: Props) {
     setError('')
     setLoading(true)
     try {
-      const result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, settings.geminiModel || 'gemini-3.1-flash-lite')
+      const result = await scanNutritionLabel(dataUrl, settings.geminiApiKey, settings.geminiModel || GEMINI_PRIMARY_MODEL)
 
       if (result.status === 'error') {
         setError(result.errorMessage ?? 'Could not read the nutrition label. Try again.')
         return
       }
+      if (result.resolution) await recordGeminiCallResult(updateSettings, result.resolution)
       if (result.status === 'low-confidence' || !result.nutrition) {
         setLowConfidenceReason(result.reason ?? 'The label was unclear.')
+        setReasonIsFromGemini(result.reasonIsFromGemini ?? false)
         setStage('lowConfidence')
         return
       }
@@ -129,7 +134,7 @@ export function ScanLabelTab({ onReview }: Props) {
       const notice: Notice = uncertainFields.size === 0
         ? { level: 'success', message: 'Label scanned successfully — please verify before saving.' }
         : { level: 'warning', message: 'Some values could not be read — please verify highlighted fields against the label before saving.' }
-      onReview(ingredient, uncertainFields, notice)
+      onReview(ingredient, uncertainFields, notice, result.resolution)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not read the nutrition label. Try again.')
     } finally {
@@ -140,6 +145,7 @@ export function ScanLabelTab({ onReview }: Props) {
   function resetScan() {
     setStage('capture')
     setLowConfidenceReason('')
+    setReasonIsFromGemini(false)
     setError('')
   }
 
@@ -202,7 +208,9 @@ export function ScanLabelTab({ onReview }: Props) {
             lit and in focus.
           </p>
           {lowConfidenceReason && (
-            <p className={styles.lowConfidenceReason}>Gemini said: "{lowConfidenceReason}"</p>
+            <p className={styles.lowConfidenceReason}>
+              {reasonIsFromGemini ? `Gemini said: "${lowConfidenceReason}"` : `Reason: ${lowConfidenceReason}`}
+            </p>
           )}
           <div className={styles.lowConfidenceActions}>
             <button type="button" className={styles.btnCancel} onClick={resetScan}>

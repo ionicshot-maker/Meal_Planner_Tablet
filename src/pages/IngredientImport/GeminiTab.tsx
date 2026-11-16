@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Button, Input } from '@/components/ui'
 import { useSettings } from '@/context/SettingsContext'
 import { newId, now } from '@/utils/ids'
+import { GEMINI_PRIMARY_MODEL } from '@/utils/geminiModel'
 import type { Ingredient, IngredientUnit, Macros } from '@/types'
 import styles from './GeminiTab.module.css'
 
@@ -108,7 +109,7 @@ export function GeminiTab({ onReview, initialQuery }: Props) {
           productName: productName.trim(),
           brand: brand.trim(),
           apiKey: settings.geminiApiKey,
-          model: settings.geminiModel || 'gemini-3.1-flash-lite',
+          model: settings.geminiModel || GEMINI_PRIMARY_MODEL,
         }),
       })
       const json = await res.json() as { status: number; nutrition?: GeminiNutrition; error?: string }

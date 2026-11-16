@@ -202,14 +202,29 @@ export default function HelpPage() {
             </div>
             <p className={styles.apiCardBody}>
               Google's AI, used any time this app needs to "read" a photo or understand a product name.
-              Free — Google gives every account a daily allowance that resets every day (the app defaults
-              to the model with the highest free allowance, currently 500 requests/day). <strong>If you skip
+              Free — Google gives every account a daily allowance that resets every day, and the app comes
+              with a sensible default model already selected for a generous free allowance. Google's exact
+              quotas and pricing change over time and vary by model, so rather than restate a number here
+              that could go stale, see{' '}
+              <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noreferrer">
+                Google's own current Gemini rate limits and pricing page
+              </a>. <strong>If you skip
               this:</strong> Scan Label, Receipt Scanner, Kitchen Reference photo-scan, and recipe photo import
               won't work at all — those specifically require this key. Gemini Lookup (packaged products) works
               better with it, but has a manual fallback without it. Recipe import (URL or pasted text) needs
               an AI key from <em>somewhere</em> — this Gemini key, or a different provider set in the AI Provider
               box above, either works. Pasted text still opens as a handy manual-reference without any AI key
               configured; URL import has no non-AI fallback and simply won't work without one.
+            </p>
+            <p className={styles.apiCardBody}>
+              <strong>Choosing a model:</strong> In Settings → Integrations, under Google Gemini, you'll see a
+              row of suggested models — the default is already picked for you, so most people can leave this
+              alone. Tap <strong>"Check available models"</strong> to confirm live, right now, which of these
+              are actually enabled for your account (a green checkmark appears next to each one that is). Tap
+              {' '}<strong>"Browse all models"</strong> to see Google's complete current model list and pick any
+              of them directly, not just the suggested ones — useful if Google releases something new you want
+              to try. Both buttons check live with Google and need your Gemini key entered above first, since
+              what's available can change over time and differs by account.
             </p>
             <div className={styles.apiSteps}>
               {[
@@ -355,7 +370,7 @@ export default function HelpPage() {
               <li><strong>Preview before importing:</strong> After choosing a file, you'll see how many ingredients were found, a brand breakdown, and a preview of the first several items with their name, brand, and calories.</li>
               <li><strong>Filter by brand:</strong> Tap brand chips in the breakdown to import only specific brands from the file — handy when a file has products you don't want.</li>
               <li><strong>Import mode:</strong> Choose <em>Add New Only</em> to skip anything that already exists, <em>Add + Update Existing</em> to also refresh existing ingredients when the imported data is newer, or <em>Replace Existing</em> to overwrite matches unconditionally. This is especially useful when re-importing an updated Open Food Facts file for a brand you've already added.</li>
-              <li><strong>Duplicate detection:</strong> Uses the same smart matching as the rest of the app — barcode match first, then exact name and brand, then fuzzy name matching — so re-imports and near-duplicate names merge in instead of creating copies.</li>
+              <li><strong>Duplicate detection:</strong> Checks barcode match first, then exact name and brand — so re-imports merge in instead of creating copies. Fuzzy near-duplicate matching is intentionally turned off for this import path, to avoid false-positive skips on large files.</li>
               <li><strong>Progress and summary:</strong> A progress bar shows import status on large files, and a final summary reports how many were added, updated, and skipped as duplicates.</li>
             </ul>
           </div>
@@ -423,7 +438,7 @@ export default function HelpPage() {
               <li><strong>Yellow day header:</strong> A yellow dot means you have not planned all meals for that day yet. Once all slots are filled, it turns green.</li>
               <li><strong>Shared vs. individual meals:</strong> When adding a meal, you can mark it as shared (everyone eats it) or assign it to specific people.</li>
               <li><strong>Side dishes and desserts:</strong> You can add multiple recipes to a single meal slot. The first is the main dish; others are sides or desserts.</li>
-              <li><strong>Leftovers:</strong> Tap any recipe in a day and choose "Mark as Leftovers from…" to link it back to an earlier meal so the grocery list does not add duplicate ingredients.</li>
+              <li><strong>Leftovers:</strong> Tap the + Leftover button in any meal slot to add a quick "Leftover" placeholder — it's a standalone label, not linked to any specific earlier meal, and the grocery list automatically skips it since it has no ingredients of its own to add.</li>
               <li><strong>Templates:</strong> Tap the template button to save the current week as a template you can apply to future weeks.</li>
               <li><strong>Dollar icons:</strong> The $ icon on a day shows the estimated food cost for that day based on your ingredient prices.</li>
             </ul>
@@ -951,6 +966,15 @@ export default function HelpPage() {
                 title: 'Who do I ask for help with accounts?',
                 steps: [
                   'An owner of your household. Owners can add people, reset forgotten passwords, change what each person can do, and turn accounts off or on — all from Settings → Data → Account.',
+                ],
+              },
+              {
+                title: 'Family Share sync isn\'t working',
+                steps: [
+                  'If a Family Share sync doesn\'t complete, you\'ll see a clear message explaining what happened — not raw technical text. Common reasons:',
+                  '"You are a read-only member" — you were invited as a Read Only participant, so you can pull shared content but can\'t push changes back. This is expected, not an error with your account.',
+                  'Any other error — the message will tell you what happened and let you know you can safely retry; nothing is lost if a sync doesn\'t finish.',
+                  'If you\'re not sure what to do, check that you\'re signed in, and that the person who invited you hasn\'t changed your Family Share access.',
                 ],
               },
             ].map(({ title, steps }, i) => (

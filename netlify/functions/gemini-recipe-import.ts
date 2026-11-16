@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions'
+import { resolveGeminiModel, buildGeminiResolution, GEMINI_FALLBACK_MODEL } from '../../src/utils/geminiModel'
 
 const NO_CACHE = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
 
@@ -29,8 +30,6 @@ Rules:
 - suggestedTags must be chosen from: Chicken, Beef, Pork, Fish, Shrimp, Turkey, Vegetarian, Vegan, Crockpot, Oven, Stovetop, Grill, Instant Pot, Air Fryer, No-Cook, Easy, Quick, Gluten-Free, Dairy-Free, Kid-Friendly, Meal Prep, Beverages, Homemade, Dessert, Snack, Soup, Salad, Sandwich
 - Return ONLY the JSON object, no explanation, no markdown, no code fences.`
 
-const FALLBACK_MODEL = 'gemini-3-flash'
-
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers: NO_CACHE, body: JSON.stringify({ error: 'Method not allowed' }) }
@@ -53,7 +52,7 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: NO_CACHE, body: JSON.stringify({ error: 'Provide either a url or text to import.' }) }
   }
 
-  const primaryModel = model?.trim() || 'gemini-3.1-flash-lite'
+  const primaryModel = resolveGeminiModel(model)
   const key = apiKey.trim()
 
   console.log(
@@ -146,9 +145,9 @@ export const handler: Handler = async (event) => {
   }
 
   // Model not found → try fallback
-  if (geminiRes.status === 404 && usedModel !== FALLBACK_MODEL) {
-    console.log('[gemini-recipe-import] model not found, trying fallback:', FALLBACK_MODEL)
-    usedModel = FALLBACK_MODEL
+  if (geminiRes.status === 404 && usedModel !== GEMINI_FALLBACK_MODEL) {
+    console.log('[gemini-recipe-import] model not found, trying fallback:', GEMINI_FALLBACK_MODEL)
+    usedModel = GEMINI_FALLBACK_MODEL
     try {
       geminiRes = await callGemini(usedModel)
       console.log('[gemini-recipe-import] fallback Gemini HTTP status:', geminiRes.status)
@@ -229,7 +228,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 200,
       headers: NO_CACHE,
-      body: JSON.stringify({ status: 1, recipe }),
+      body: JSON.stringify({ status: 1, recipe, resolution: buildGeminiResolution(primaryModel, usedModel) }),
     }
   } catch (parseErr) {
     console.error('[gemini-recipe-import] JSON.parse failed:', parseErr instanceof Error ? parseErr.message : String(parseErr))

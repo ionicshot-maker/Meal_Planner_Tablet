@@ -25,11 +25,6 @@ export async function saveMealPlanDay(day: MealPlanDay): Promise<void> {
   await db.put('mealPlanDays', day)
 }
 
-export async function deleteMealPlanDay(date: string): Promise<void> {
-  const db = await getDB()
-  await db.delete('mealPlanDays', date)
-}
-
 export async function getAllMealPlanTemplates(): Promise<MealPlanWeekTemplate[]> {
   const db = await getDB()
   return db.getAll('mealPlanTemplates')

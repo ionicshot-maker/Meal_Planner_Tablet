@@ -11,6 +11,8 @@ import {
   isPhotoImportAvailable, effectivePhotoGeminiKey,
 } from '@/utils/aiImport'
 import type { AIRecipeResult, UncertainField } from '@/utils/aiImport'
+import { GEMINI_PRIMARY_MODEL } from '@/utils/geminiModel'
+import { recordGeminiCallResult } from '@/utils/geminiModelClient'
 import type { ImportNotice } from './RecipeEditor'
 import styles from './RecipeImportModal.module.css'
 
@@ -31,6 +33,14 @@ interface Props {
   onManualEntry: () => void
   onClose: () => void
   /**
+   * Phase 2C-2 — passed straight through to PhotoCaptureCrop's own
+   * onPhotoSelected, so the owner (CookbookPage) can kick off boundary
+   * detection the instant a *new* photo is acquired, before any crop screen
+   * is shown. Never fires for a "crop another" re-entry (that path already
+   * has a photo via initialPhotoDataUrl below, and never re-acquires one).
+   */
+  onPhotoSelected?: (dataUrl: string) => void
+  /**
    * Pre-seeds the Photo tab with an already-acquired photo (Phase 2A —
    * "crop another recipe from this same photo") — selects the Photo tab by
    * default and skips straight to cropping, via PhotoCaptureCrop's own
@@ -48,8 +58,8 @@ interface Props {
   initialCropBox?: CropBoxPercent
 }
 
-export function RecipeImportModal({ onImported, onManualWithReference, onManualEntry, onClose, initialPhotoDataUrl, initialCropBox }: Props) {
-  const { settings } = useSettings()
+export function RecipeImportModal({ onImported, onManualWithReference, onManualEntry, onClose, onPhotoSelected, initialPhotoDataUrl, initialCropBox }: Props) {
+  const { settings, updateSettings } = useSettings()
   const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>(initialPhotoDataUrl ? 'photo' : 'url')
   const [url, setUrl] = useState('')
@@ -78,7 +88,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
   const aiConfigured = isRecipeImportAvailable(settings)
   const aiLabel = recipeAILabel(settings)
   const effectiveAI = effectiveRecipeAI(settings)
-  const geminiModel = settings.geminiModel || 'gemini-3.1-flash-lite'
+  const geminiModel = settings.geminiModel || GEMINI_PRIMARY_MODEL
   const photoConfigured = isPhotoImportAvailable(settings)
 
   function goToSettings() {
@@ -97,6 +107,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
     setLoading(true)
     try {
       const result = await importRecipeFromUrl(url.trim(), effectiveAI, geminiModel)
+      if (result.resolution) await recordGeminiCallResult(updateSettings, result.resolution)
       onImported(result)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Import failed. Try pasting the text instead.')
@@ -111,6 +122,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
     setLoading(true)
     try {
       const result = await importRecipeFromText(pasteText.trim(), effectiveAI, geminiModel)
+      if (result.resolution) await recordGeminiCallResult(updateSettings, result.resolution)
       onImported(result)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Import failed. Check your AI provider settings.')
@@ -162,6 +174,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
             message: 'Some fields could not be read clearly from the photo — highlighted fields below need your attention before saving.',
             subMessage: 'Always verify ingredient quantities carefully — measurement errors in recipes can significantly affect results.',
           }
+      if (outcome.result.resolution) await recordGeminiCallResult(updateSettings, outcome.result.resolution)
       onImported(outcome.result, notice, outcome.uncertainFields, sourcePhotoDataUrl ?? undefined)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Could not read the recipe photo. Try again.')
@@ -334,6 +347,7 @@ export function RecipeImportModal({ onImported, onManualWithReference, onManualE
                   tipsTitle="📸 Tips for best results:"
                   tips={PHOTO_TIPS}
                   onComplete={handlePhotoCaptured}
+                  onPhotoSelected={onPhotoSelected}
                   initialPhotoDataUrl={initialPhotoDataUrl}
                   initialCropBox={initialCropBox}
                 />

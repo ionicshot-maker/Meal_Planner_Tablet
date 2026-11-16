@@ -231,3 +231,28 @@
   color: var(--color-text-muted);
   text-align: center;
 }
+
+/* Phase 2C-2 — recipe #1's suggested crop is tentative, not confirmed
+   (evidence: a 25% misleading rate in the box-quality re-check). Distinct
+   from react-image-crop's own default "marching ants" selection style
+   (already animated/dashed-looking) so it reads as genuinely different, not
+   just the normal active-selection look — a solid amber dashed border, no
+   marching-ants animation. Scoped to only the crop-image wrapper via the
+   conditional .tentativeSuggestion class on <ReactCrop>; :global() reaches
+   the library's own internal class name. !important is needed narrowly here
+   because the library's own rule (.ReactCrop__crop-selection:not(...)) has
+   higher selector specificity than this scoped override on its own. */
+.suggestedBoxLabel {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-accent);
+  text-align: center;
+}
+
+.tentativeSuggestion :global(.ReactCrop__crop-selection) {
+  background-image: none !important;
+  animation: none !important;
+  outline: 3px dashed var(--color-accent) !important;
+  outline-offset: -3px;
+}

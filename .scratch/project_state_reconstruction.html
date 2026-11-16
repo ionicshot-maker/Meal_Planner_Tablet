@@ -1,0 +1,732 @@
+<title>Meal Planner Project Audit</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --bg:#F3F5F7;
+  --surface:#FFFFFF;
+  --surface-2:#EBEEF2;
+  --ink:#1B2430;
+  --ink-muted:#586372;
+  --ink-faint:#8893A1;
+  --border:#DCE1E8;
+  --accent:#2C5F6F;
+  --accent-soft:#DEEAEC;
+  --accent-ink:#1D4550;
+  --good:#2E7D5B;
+  --good-soft:#E1F1E9;
+  --warn:#A8690A;
+  --warn-soft:#FBEDD9;
+  --crit:#B0392F;
+  --crit-soft:#FBE4E1;
+  --neutral-chip:#5B6472;
+  --neutral-chip-soft:#E7E9EE;
+  --code-bg:#EEF1F4;
+  --shadow: 0 1px 2px rgba(20,30,40,.06), 0 8px 24px -12px rgba(20,30,40,.12);
+}
+
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12161C;
+    --surface:#181D25;
+    --surface-2:#1F2530;
+    --ink:#E7EAEF;
+    --ink-muted:#9AA6B4;
+    --ink-faint:#6E7885;
+    --border:#2B323E;
+    --accent:#7FB9C4;
+    --accent-soft:#1C3238;
+    --accent-ink:#B9E1E8;
+    --good:#5FBE93;
+    --good-soft:#173226;
+    --warn:#E2A94B;
+    --warn-soft:#332510;
+    --crit:#E58176;
+    --crit-soft:#361E1B;
+    --neutral-chip:#9AA6B4;
+    --neutral-chip-soft:#232A35;
+    --code-bg:#1B2129;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12161C;
+  --surface:#181D25;
+  --surface-2:#1F2530;
+  --ink:#E7EAEF;
+  --ink-muted:#9AA6B4;
+  --ink-faint:#6E7885;
+  --border:#2B323E;
+  --accent:#7FB9C4;
+  --accent-soft:#1C3238;
+  --accent-ink:#B9E1E8;
+  --good:#5FBE93;
+  --good-soft:#173226;
+  --warn:#E2A94B;
+  --warn-soft:#332510;
+  --crit:#E58176;
+  --crit-soft:#361E1B;
+  --neutral-chip:#9AA6B4;
+  --neutral-chip-soft:#232A35;
+  --code-bg:#1B2129;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+}
+
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Public Sans', ui-sans-serif, system-ui, sans-serif;
+  font-size:16px;
+  line-height:1.6;
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001ms !important; transition-duration:.001ms !important;}
+}
+
+h1,h2,h3{
+  font-family:'Source Serif 4', Georgia, serif;
+  text-wrap:balance;
+  color:var(--ink);
+  margin:0;
+}
+
+.wrap{max-width:920px; margin:0 auto; padding:0 24px 96px;}
+
+/* ---------- Header ---------- */
+header.hero{
+  border-bottom:1px solid var(--border);
+  background:
+    linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+  padding:56px 0 32px;
+}
+.eyebrow{
+  font-family:'JetBrains Mono', ui-monospace, monospace;
+  font-size:.72rem;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--accent-ink);
+  background:var(--accent-soft);
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:4px;
+  margin-bottom:18px;
+}
+h1.title{
+  font-size:clamp(1.9rem, 3.4vw, 2.55rem);
+  font-weight:700;
+  line-height:1.15;
+  max-width:16ch;
+}
+.subtitle{
+  margin-top:14px;
+  color:var(--ink-muted);
+  font-size:1.05rem;
+  max-width:62ch;
+}
+.meta-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px 22px;
+  margin-top:24px;
+  font-family:'JetBrains Mono', ui-monospace, monospace;
+  font-size:.82rem;
+  color:var(--ink-faint);
+}
+.meta-row b{color:var(--ink-muted); font-weight:500;}
+
+/* status strip */
+.strip{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:28px;
+}
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:8px 14px;
+  border-radius:999px;
+  font-size:.82rem;
+  font-weight:600;
+  background:var(--surface);
+  border:1px solid var(--border);
+  box-shadow:var(--shadow);
+}
+.pill .dot{width:8px; height:8px; border-radius:50%; flex:none;}
+.dot.warn{background:var(--warn);}
+.dot.good{background:var(--good);}
+.dot.crit{background:var(--crit);}
+.dot.neutral{background:var(--neutral-chip);}
+
+/* ---------- Nav ---------- */
+nav.toc{
+  position:sticky; top:0; z-index:20;
+  background:color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border);
+}
+nav.toc .inner{
+  max-width:920px; margin:0 auto; padding:10px 24px;
+  display:flex; gap:4px; overflow-x:auto;
+  scrollbar-width:thin;
+}
+nav.toc a{
+  flex:none;
+  font-family:'JetBrains Mono', ui-monospace, monospace;
+  font-size:.74rem;
+  color:var(--ink-muted);
+  text-decoration:none;
+  padding:8px 11px;
+  border-radius:6px;
+  white-space:nowrap;
+}
+nav.toc a:hover, nav.toc a:focus-visible{background:var(--surface-2); color:var(--ink);}
+nav.toc a b{color:var(--accent-ink); font-weight:600;}
+
+/* ---------- Sections ---------- */
+section{padding:52px 0 8px; border-bottom:1px solid var(--border);}
+section:last-of-type{border-bottom:none;}
+.sec-head{
+  display:flex; align-items:baseline; gap:14px;
+  margin-bottom:22px;
+}
+.sec-num{
+  font-family:'JetBrains Mono', ui-monospace, monospace;
+  font-size:.85rem;
+  color:var(--ink-faint);
+  padding-top:5px;
+}
+h2.sec-title{font-size:1.55rem; font-weight:600;}
+.sec-dek{color:var(--ink-muted); margin:-8px 0 24px; max-width:68ch;}
+
+p{margin:0 0 1em; max-width:72ch;}
+.prose > * + *{margin-top:1em;}
+
+/* ---------- Labels: evidence / inference ---------- */
+.tag{
+  display:inline-flex; align-items:center;
+  font-family:'JetBrains Mono', ui-monospace, monospace;
+  font-size:.68rem;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  font-weight:600;
+  padding:2px 7px;
+  border-radius:4px;
+  margin-right:8px;
+  vertical-align:1px;
+}
+.tag-evidence{background:var(--accent-soft); color:var(--accent-ink);}
+.tag-inference{background:var(--neutral-chip-soft); color:var(--neutral-chip);}
+
+/* ---------- Status chips ---------- */
+.chip{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:.72rem; font-weight:700; letter-spacing:.03em;
+  padding:3px 9px; border-radius:5px;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.chip-open{background:var(--warn-soft); color:var(--warn);}
+.chip-resolved{background:var(--good-soft); color:var(--good);}
+.chip-deferred{background:var(--neutral-chip-soft); color:var(--neutral-chip);}
+.chip-blocked{background:var(--crit-soft); color:var(--crit);}
+.chip-accepted{background:var(--neutral-chip-soft); color:var(--neutral-chip);}
+.chip-critical{background:var(--crit-soft); color:var(--crit);}
+
+/* ---------- Item card ---------- */
+.item{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:18px 20px;
+  margin-bottom:14px;
+  box-shadow:var(--shadow);
+}
+.item-head{
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px;
+  margin-bottom:8px;
+}
+.item-title{font-weight:600; font-size:.98rem;}
+.item p{margin:0 0 .6em; font-size:.93rem; color:var(--ink);}
+.item p:last-child{margin-bottom:0;}
+.item .why{color:var(--ink-muted); font-size:.9rem;}
+
+/* quote */
+blockquote{
+  margin:10px 0; padding:12px 14px;
+  background:var(--code-bg);
+  border-left:3px solid var(--accent);
+  border-radius:0 6px 6px 0;
+  font-family:'JetBrains Mono', ui-monospace, monospace;
+  font-size:.82rem;
+  color:var(--ink);
+  overflow-x:auto;
+}
+blockquote + .cite{
+  display:block; margin-top:-6px; margin-bottom:14px;
+  font-size:.76rem; color:var(--ink-faint);
+  font-family:'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* finding card w/ severity rail */
+.finding{
+  position:relative;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-left-width:4px;
+  border-radius:8px;
+  padding:16px 18px;
+  margin-bottom:12px;
+  box-shadow:var(--shadow);
+}
+.finding.sev-crit{border-left-color:var(--crit);}
+.finding.sev-warn{border-left-color:var(--warn);}
+.finding.sev-good{border-left-color:var(--good);}
+.finding.sev-neutral{border-left-color:var(--neutral-chip);}
+.finding-head{display:flex; justify-content:space-between; gap:12px; align-items:baseline; flex-wrap:wrap;}
+.finding-title{font-weight:600;}
+.finding-rank{
+  font-family:'JetBrains Mono', ui-monospace, monospace;
+  color:var(--ink-faint); font-size:.8rem;
+}
+
+/* rank list */
+.ranklist{list-style:none; margin:0; padding:0; counter-reset:rank;}
+.ranklist > li{
+  counter-increment:rank;
+  display:grid;
+  grid-template-columns:34px 1fr;
+  gap:14px;
+  padding:14px 0;
+  border-top:1px solid var(--border);
+}
+.ranklist > li:first-child{border-top:none;}
+.ranklist > li::before{
+  content:counter(rank);
+  font-family:'Source Serif 4', serif;
+  font-weight:700; font-size:1.3rem;
+  color:var(--accent);
+  text-align:center;
+}
+.rank-title{font-weight:600; margin-bottom:3px;}
+.rank-body{color:var(--ink-muted); font-size:.92rem;}
+
+/* table */
+.table-wrap{overflow-x:auto; margin:16px 0;}
+table{border-collapse:collapse; width:100%; font-size:.88rem;}
+th,td{text-align:left; padding:8px 12px; border-bottom:1px solid var(--border); vertical-align:top;}
+th{font-family:'JetBrains Mono', monospace; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); font-weight:600;}
+tr:last-child td{border-bottom:none;}
+code{font-family:'JetBrains Mono', ui-monospace, monospace; font-size:.86em; background:var(--code-bg); padding:1px 5px; border-radius:4px;}
+
+.callout{
+  background:var(--surface-2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:16px 18px;
+  margin:16px 0;
+  font-size:.92rem;
+  color:var(--ink-muted);
+}
+.callout b{color:var(--ink);}
+
+footer{
+  max-width:920px; margin:40px auto 0; padding:24px 24px 0;
+  color:var(--ink-faint); font-size:.8rem;
+  font-family:'JetBrains Mono', ui-monospace, monospace;
+  border-top:1px solid var(--border);
+}
+
+::selection{background:var(--accent-soft); color:var(--accent-ink);}
+a{color:var(--accent-ink);}
+</style>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Reconstruction report · report-only, no changes made</span>
+    <h1 class="title">Angelo Family Meal Planner — Project State Reconstruction</h1>
+    <p class="subtitle">Rebuilt from repository evidence alone — git status/diff, <code>OPEN_ITEMS.md</code>, nine <code>AUDIT_*.md</code> files, <code>MealPlannerApp_Reference.md</code>, and a direct line-by-line read of the RLS policy SQL in <code>src/db/supabase.ts</code>.</p>
+    <div class="meta-row">
+      <span><b>Repo:</b> Meal_Planner_Tablet</span>
+      <span><b>Branch:</b> master</span>
+      <span><b>Last commit:</b> d574415, 2026-07-27</span>
+      <span><b>Reconstructed:</b> 2026-09-16</span>
+    </div>
+    <div class="strip">
+      <span class="pill"><span class="dot neutral"></span>Phase: stabilization / audit remediation</span>
+      <span class="pill"><span class="dot good"></span>Core RLS bridge clause: retired from source</span>
+      <span class="pill"><span class="dot warn"></span>1 confirmed open security gap</span>
+      <span class="pill"><span class="dot crit"></span>~7 weeks of work uncommitted</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Report sections">
+  <div class="inner">
+    <a href="#exec"><b>01</b> Summary</a>
+    <a href="#completed"><b>02</b> Completed</a>
+    <a href="#open"><b>03</b> Open work</a>
+    <a href="#security"><b>04</b> Security</a>
+    <a href="#audit"><b>05</b> Audit status</a>
+    <a href="#priority"><b>06</b> Priorities</a>
+    <a href="#ambiguity"><b>07</b> Ambiguities</a>
+    <a href="#next"><b>08</b> Next step</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<!-- 01 EXECUTIVE SUMMARY -->
+<section id="exec">
+  <div class="sec-head"><span class="sec-num">01</span><h2 class="sec-title">Executive Summary</h2></div>
+  <div class="prose">
+    <p><span class="tag tag-evidence">Evidence</span>Per <code>README.md</code>: <em>"A personal meal planning PWA for tablet and phone. Plan your week, track nutrition, and generate grocery lists automatically — all in one place, offline-capable, with no subscription required."</em> Built for a single family ("Angelo Family Meal Planner"), React 18 + TypeScript + Vite, local-first on IndexedDB, with optional Supabase cloud sync and pluggable AI (Gemini/Anthropic/OpenAI/Ollama) proxied through Netlify Functions. Deployed via direct <code>netlify deploy --prod</code>, not git-triggered CI.</p>
+
+    <p><span class="tag tag-evidence">Evidence</span>Major systems, per <code>README.md</code> and <code>MealPlannerApp_Reference.md</code>: Ingredient Database (barcode/USDA/Gemini lookup), Cookbook (AI recipe import, now multi-recipe photo cropping), Meal Planner, Grocery List, Macro Tracker (with a TDEE/BMR calculator shipped across 4 phases), Cloud Sync (Household Sync + Family Share), Settings, and a built-in Help system. Current documented version: <code>MealPlannerApp_Reference.md</code>'s header reads <strong>v2.37, dated 2026-08-02</strong>.</p>
+
+    <p><span class="tag tag-inference">Inference</span>The evidence points to a project in a <strong>stabilization / audit-remediation phase</strong>, not active feature expansion. A full 8-phase application audit (<code>AUDIT_PHASE0</code>–<code>7</code>, dated 2026-08-01) was followed by roughly ten days of systematic fixes closing nearly every finding it raised, then a separate "Documentation &amp; User Guidance Audit" effort running through 2026-08-11. The one active feature thread — Recipe Import Workflow Improvements — is itself paused mid-sequence (Phases 1, 2A, 2C-1, 2C-2 shipped; Phase 2/3 not started). The most recent git commit (2026-07-27) adds a regression-test corpus rather than new functionality, consistent with a hardening posture.</p>
+
+    <p><span class="tag tag-evidence">Evidence</span>Git shows the branch is 1 commit ahead of <code>origin/master</code>, with <strong>61 tracked files modified</strong> (+2,569/&#8722;488 lines) and <strong>19 untracked files</strong> — including all nine <code>AUDIT_*.md</code> files and a tenth (<code>AUDIT_TIER2_SLICE1...</code>) — sitting uncommitted in the working tree. The last commit touching <code>src/db/supabase.ts</code> predates the entire audit and Family Share remediation effort. See §04 and §07 for what this means for the security posture specifically.</p>
+  </div>
+</section>
+
+<!-- 02 COMPLETED WORK -->
+<section id="completed">
+  <div class="sec-head"><span class="sec-num">02</span><h2 class="sec-title">Completed Work</h2></div>
+  <p class="sec-dek">Selected <code>[x]</code> entries from <code>OPEN_ITEMS.md</code> and resolved findings from the audit files, quoted directly. This is a representative slice of a much longer resolved list — not exhaustive.</p>
+
+  <div class="item">
+    <div class="item-head"><span class="item-title">Phase 3 — RLS bridge clause removed from the live database</span><span class="chip chip-resolved">Resolved 2026-07-25</span></div>
+    <blockquote>"Phase 3 (close legacy household_code bridge) — COMPLETE, executed, committed, and security-validated live, 2026-07-25." Bridge clause removed from all 8 tables' RLS policies; real cross-household access confirmed blocked live via a disposable non-member test account.</blockquote>
+    <span class="cite">OPEN_ITEMS.md</span>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="item-title">Family Share outage — audit Finding #1</span><span class="chip chip-resolved">Resolved 2026-08-07</span></div>
+    <blockquote>"The root cause was not the RLS bridge clause… but a client-side <code>:family</code> code-suffix mismatch, confirmed via live reproduction… This is the mechanism <code>AUDIT_FINAL_SYNTHESIS.md</code> Finding #4 (Phase 5) hypothesized but explicitly could not verify live at audit time — now confirmed and fixed."</blockquote>
+    <span class="cite">AUDIT_CANONICAL.md</span>
+    <p class="why">Fixed via an "Own-Household" redesign: Family Share now issues real <code>households</code>/<code>household_members</code> rows and reuses the existing membership model, with a new role-at-invite token (<code>familyShareInvite.ts</code>) and an <code>AUTH_MIGRATION_FIX4_SQL</code> migration widening <code>join_household_by_code()</code>. No RLS policy changes were required.</p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="item-title">Backup restore silently dropped settings — Finding #2</span><span class="chip chip-resolved">Resolved 2026-08-08</span></div>
+    <blockquote>"Confirmed complete, not partial: the restore gap affects all 35 fields of the <code>AppSettings</code> interface… Implemented, 2026-08-08: see <code>OPEN_ITEMS.md</code> for the shipped fix (21/13 field exclusion policy)."</blockquote>
+    <span class="cite">AUDIT_CANONICAL.md</span>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="item-title"><code>householdSize</code> dead-state removal — Finding #3 (narrowed)</span><span class="chip chip-resolved">Resolved 2026-08-08</span></div>
+    <blockquote>"Disproven: the claimed harm mechanism — '…allowing silent calculation errors' — does not exist in the current codebase… <code>householdSize</code> is confirmed dead state… Implemented, 2026-08-08: <code>householdSize</code> removed entirely (not reconciled)."</blockquote>
+    <span class="cite">AUDIT_CANONICAL.md</span>
+    <p class="why">The divergence mechanism between <code>householdSize</code> and <code>people.length</code> was real, but its claimed consequence wasn't — the finding was corrected rather than simply closed.</p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="item-title">Anthropic/OpenAI recipe-import reliability — Finding #20</span><span class="chip chip-resolved">Resolved 2026-08-08 / 09</span></div>
+    <blockquote>"#20 is now also implemented and verified (both the Anthropic half, 2026-08-08, and the OpenAI half, 2026-08-09) — see <code>OPEN_ITEMS.md</code> for full detail, including the permanent verification limit (no live account access exists for either provider's API)."</blockquote>
+    <span class="cite">AUDIT_FINAL_SYNTHESIS.md</span>
+    <p class="why">This was the one "plausible concern" the audit's own triage escalated into active work rather than accepting as backlog — see §05.</p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="item-title">Data-integrity atomicity sweep</span><span class="chip chip-resolved">Resolved, multiple dates</span></div>
+    <blockquote>"Made <code>mergeIngredients()</code> genuinely atomic — rewrote from 5 separate sequential writes… into one shared <code>db.transaction(...)</code>… Click-verified live in production."</blockquote>
+    <span class="cite">OPEN_ITEMS.md</span>
+    <p class="why">Same fix pattern applied across <code>mergeIngredients()</code>, <code>performReset()</code>, <code>applyReceiptSaveBatch()</code>, and both <code>resolveIngredientDuplicate()</code>/<code>resolveRecipeDuplicate()</code> — explicitly scoped as one body of work rather than fixed piecemeal, per the file's own stated "scope by root cause" methodology.</p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="item-title">Local credential scrub</span><span class="chip chip-resolved">Resolved 2026-07-28</span></div>
+    <blockquote>"The 5 matching permission-cache entries… were removed from the file's <code>permissions.allow</code> array… the file re-parses as valid JSON, zero occurrences of the key's JWT-shaped pattern remain."</blockquote>
+    <span class="cite">OPEN_ITEMS.md</span>
+    <p class="why">A real, local-only <code>service_role</code> key exposure in <code>.claude/settings.local.json</code>'s tool-permission cache — confirmed never committed to git, and removed. Distinct from the later Phase 5 credential re-hit in the same file, which was reclassified as an intentional non-issue (see §04).</p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="item-title">Dev Tools access-control fix</span><span class="chip chip-resolved">Resolved</span></div>
+    <blockquote>"Dev Tools access control — fixed case-sensitivity bug in owner detection, then removed an over-broad fallback that reopened a security hole."</blockquote>
+    <span class="cite">OPEN_ITEMS.md</span>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="item-title"><code>window.confirm()</code> → Modal migration, all 5 phases</span><span class="chip chip-resolved">Resolved</span></div>
+    <blockquote>"Ran the critical rapid-sequential-delete test empirically… confirmed step-by-step that the second click hit the first Modal's own backdrop rather than ever reaching a second item, proving the Phase 2C-2 incident's root cause structurally cannot recur… final repo-wide re-grep confirmed zero native <code>confirm()</code> calls remain anywhere in the app."</blockquote>
+    <span class="cite">OPEN_ITEMS.md</span>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="item-title">Operation Feedback &amp; Trust rollout, Phases 1–3</span><span class="chip chip-resolved">Resolved</span></div>
+    <p>Formalized as <code>OPERATION_FEEDBACK_STANDARD.md</code> and wired into Cloud Sync, Backup Import, JSON Import, Bulk Entry, and Starter Library loading — catching a real live bug along the way ("Starter Library's done-state dismiss… the modal wasn't actually closing after a successful load — fixed, redeployed, and re-verified").</p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><span class="item-title">Documentation &amp; User Guidance Audit — Tier 2, Slices 1–4</span><span class="chip chip-resolved">Resolved 2026-08-11</span></div>
+    <p>Slice 1 corrected two misleading AI-privacy claims in <code>AISection.tsx</code>; Slices 2–4 addressed photo/scan warning gaps, duplicate/merge guidance, and added a confirmation gate to TemplateModal's "Copy Week." One item from Slice 3 and one from Slice 4 were left open by decision (see §03).</p>
+  </div>
+</section>
+
+<!-- 03 ACTIVE OPEN WORK -->
+<section id="open">
+  <div class="sec-head"><span class="sec-num">03</span><h2 class="sec-title">Active Open Work</h2></div>
+  <p class="sec-dek">Every open item found, categorized by why it's still open.</p>
+
+  <h3 style="font-size:1.05rem; margin:28px 0 10px;">Open backlog</h3>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-open">Open</span><span class="item-title">Migrate to Supabase's decoupled key system and deactivate legacy <code>service_role</code>/anon keys</span></div>
+    <p>Fully investigated 2026-07-28, a complete rotation/verification plan exists, but execution has not started. <span class="why">"Not urgent by app risk (zero deployed exposure confirmed), but low-cost to close out given the investigation is complete."</span></p>
+  </div>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-open">Open</span><span class="item-title">Owner self-removal has no safeguard — Finding #4</span></div>
+    <p>Re-confirmed fresh, unresolved, as of 2026-08-08: <span class="why">"No change: the RLS policy still permits unconditional self-removal, <code>removeMember()</code> and… <code>AccountSection.tsx</code> still contain no last-owner safeguard… Finding stands as originally written."</span></p>
+  </div>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-open">Open</span><span class="item-title">Recipe Import Workflow Improvements — Phases 2 &amp; 3</span></div>
+    <p>Phases 1/2A/2C-1/2C-2 shipped and live-verified; multi-recipe OCR (Phase 2) and cross-page continuation detection (Phase 3) not started, though a 2026-07-27 research check found the continuation-detection technique "already works" via the existing 2-image Gemini call — cheap to pick up.</p>
+  </div>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-open">Open</span><span class="item-title">Documentation &amp; User Guidance Audit — remaining scope</span></div>
+    <p>4 of an unspecified number of slices against a stated "21-surface Tier 2 inventory" are done. One item inside the completed slices remains explicitly unfixed: the TemplateModal/CollectionsTab template-deletion consequence-text gap.</p>
+  </div>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-open">Open</span><span class="item-title">Unscoped idea</span></div>
+    <p>"Export Cookbook + Ingredients for bulk recipe-ingredient linking" — not investigated.</p>
+  </div>
+
+  <h3 style="font-size:1.05rem; margin:28px 0 10px;">Deferred by decision <span style="font-weight:400; color:var(--ink-muted); font-size:.85rem;">(with the stated reason)</span></h3>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-deferred">Deferred</span><span class="item-title"><code>join_household_by_code()</code> has no rate limit or owner approval</span></div>
+    <p class="why">"This is a private family meal-planning app with no public discoverability and no realistic attacker population… Owner approval… would impose permanent UX friction… for a threat that doesn't realistically exist at this scale." Explicit revisit conditions recorded: the app is ever shared outside the family, an unrecognized join attempt is observed, or usage patterns change.</p>
+  </div>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-deferred">Deferred</span><span class="item-title">Case-insensitive membership RLS helpers (Option B)</span></div>
+    <p class="why">"Unsafe to implement standalone if ever picked up" — would need a matching case-insensitive uniqueness constraint on <code>households.code</code> first, to prevent a case-folded household-code collision from granting cross-household access. No current collision existed among the 7 real households at last check.</p>
+  </div>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-deferred">Deferred</span><span class="item-title">Name-Matching Consolidation (unify 3 ingredient-matching implementations)</span></div>
+    <p class="why">"Deliberately deferred (not abandoned) as a larger architectural initiative needing ground-truth validation first."</p>
+  </div>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-deferred">Decided against</span><span class="item-title">Bill due-date awareness relative to payday; standalone PLU lookup for Receipt Scanner</span></div>
+    <p class="why">Both formally closed as "decided against," recorded as historical decisions rather than left ambiguous.</p>
+  </div>
+
+  <h3 style="font-size:1.05rem; margin:28px 0 10px;">Blocked <span style="font-weight:400; color:var(--ink-muted); font-size:.85rem;">(lacking access, not lacking a plan)</span></h3>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-blocked">Blocked</span><span class="item-title">Live confirmation of production <code>pg_policies</code> state</span></div>
+    <p class="why">"No live Supabase dashboard/SQL session was available in this environment across three separate attempts (Phase 0, Phase 5, and the Family Share follow-up)." An exact verification query was handed to the user; no confirmation it has been run.</p>
+  </div>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-blocked">Blocked</span><span class="item-title">Destructive verification paths (Anthropic/OpenAI success case, DevTools merge-confirm dialog)</span></div>
+    <p class="why">"No isolated test/dev Supabase backend exists separate from production" — recorded as an observation, no remediation proposed.</p>
+  </div>
+
+  <h3 style="font-size:1.05rem; margin:28px 0 10px;">Accepted limitations <span style="font-weight:400; color:var(--ink-muted); font-size:.85rem;">(low-observed-risk, consciously not scheduled)</span></h3>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-accepted">Accepted</span><span class="item-title">Zero crash/interruption recovery on Receipt Scanner, Bulk Entry, and RecipeEditor</span></div>
+    <p class="why">"A user interrupted mid-entry… sees no recovery prompt on return, only a blank/reset state, with no indication anything was lost… Not resolved; not escalated; no active work scheduled."</p>
+  </div>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-accepted">Accepted</span><span class="item-title">"Trusted, not verified" validation gaps (sodium heuristic, Gemini macro fields, oz→g heuristic, person-profile numeric bounds, nested-settings reconciliation, import/backup numeric validation)</span></div>
+    <p class="why">Each investigated individually 2026-08-09, each found to have zero real-world matches against current data, each mitigated in practice by an editable review step. "Classification: low-observed-risk… Not resolved; not escalated; no active work scheduled," per an explicit 2026-08-08 triage decision.</p>
+  </div>
+  <div class="item">
+    <div class="item-head"><span class="chip chip-accepted">Accepted</span><span class="item-title"><code>kitchenReferencePhotoPolicy</code>'s Family Share sync classification</span></div>
+    <p class="why">Resolved after being examined three times — noted here because two of those three passes closed with "examined twice, resolved neither time," an unusually long-lived open question before it was finally settled.</p>
+  </div>
+</section>
+
+<!-- 04 SECURITY -->
+<section id="security">
+  <div class="sec-head"><span class="sec-num">04</span><h2 class="sec-title">Security &amp; Data Integrity Status</h2></div>
+  <p class="sec-dek">Independently inspected directly against the current working-tree <code>src/db/supabase.ts</code> — not taken on the audit documents' word.</p>
+
+  <div class="callout">
+    <b>Bottom line:</b> the pre-Phase-3 bridge/legacy-access clause is <strong>fully retired from executable SQL</strong> — confirmed by reading the actual policy bodies, not by trusting <code>AUDIT_CANONICAL.md</code>'s claim that it was. Two cosmetic remnants (a stale comment, and policy names that still contain the word "legacy") remain, and are documentation artifacts, not functioning access paths.
+  </div>
+
+  <h3 style="font-size:1.1rem; margin:26px 0 10px;">The membership check, as it exists in the file today</h3>
+  <blockquote>is_member_of_code(p_code): select exists (
+  select 1 from households h
+  join household_members hm on hm.household_id = h.id
+  where h.code = p_code and hm.user_id = auth.uid()
+);
+is_writable_member_of_code(p_code): — identical, plus
+  "and hm.role != 'readonly'"</blockquote>
+  <span class="cite">src/db/supabase.ts, AUTH_MIGRATION_FIX_SQL — no OR clause, no literal household code, no bridge of any kind</span>
+
+  <p style="margin-top:18px;">All 8 data-table RLS policies in the current (superseding) <code>AUTH_MIGRATION_FIX_SQL</code> call these two functions directly, with no additional disjunct. The original <code>AUTH_MIGRATION_SQL</code> script was itself edited in place to remove the same clause from its own policy bodies.</p>
+
+  <div class="finding sev-neutral">
+    <div class="finding-head"><span class="finding-title">Stale comment — not a functional gap</span><span class="chip chip-deferred">Cosmetic</span></div>
+    <p style="margin-top:8px;"><code>AUTH_MIGRATION_FIX_SQL</code>'s own header comment still reads: <em>"this only replaces the policy logic, using the same bridge (legacy code OR real membership) as before"</em> — but the policy bodies beneath it contain no bridge. The comment was never updated when the bridge was retired from this script's body. The SQL itself is bridge-free; only the comment describing it is wrong.</p>
+  </div>
+
+  <div class="finding sev-neutral">
+    <div class="finding-head"><span class="finding-title">Policy naming artifact — not a functional gap</span><span class="chip chip-deferred">Cosmetic</span></div>
+    <p style="margin-top:8px;">Policy names such as <code>"select: legacy code or member"</code> still contain the word "legacy," carried forward from prior <code>drop policy if exists</code> statements for continuity. The name doesn't reflect what the policy body actually checks.</p>
+  </div>
+
+  <h3 style="font-size:1.1rem; margin:30px 0 10px;">Genuinely open security items</h3>
+
+  <div class="finding sev-warn">
+    <div class="finding-head"><span class="finding-title">Owner self-removal — no last-owner safeguard</span><span class="finding-rank">Confirmed open</span></div>
+    <blockquote>"owners remove members or self leave" → is_household_owner(household_id) or user_id = auth.uid()</blockquote>
+    <p>Re-confirmed fresh 2026-08-08: no safeguard exists in the RLS policy, <code>removeMember()</code>, or <code>AccountSection.tsx</code>. A household's sole owner can remove their own membership and leave the household ownerless.</p>
+  </div>
+
+  <div class="finding sev-warn">
+    <div class="finding-head"><span class="finding-title">Legacy <code>service_role</code>/anon keys still active in parallel</span><span class="finding-rank">Planned, not executed</span></div>
+    <p>Zero deployed dependency confirmed by repo-wide search; the real anon key has already migrated to the new <code>sb_publishable_</code> format. The old keys have not yet been formally deactivated.</p>
+  </div>
+
+  <div class="finding sev-good">
+    <div class="finding-head"><span class="finding-title"><code>AUTH_MIGRATION_FIX4_SQL</code> (Family Share) role guard</span><span class="finding-rank">Present, reviewed</span></div>
+    <p><code>join_household_by_code()</code>'s new optional role parameter guards against privilege escalation: any value other than <code>'contributor'</code>/<code>'readonly'</code> — including an attempt to pass <code>'owner'</code> — silently falls back to <code>'contributor'</code>. A re-join never overwrites an existing role. No RLS policy changes accompany this migration; it only extends the RPC function.</p>
+  </div>
+
+  <div class="finding sev-neutral">
+    <div class="finding-head"><span class="finding-title">Credential scan of <code>.claude/settings.local.json</code></span><span class="finding-rank">Two distinct items</span></div>
+    <p><strong>Item A (real, fixed 2026-07-28):</strong> a live <code>service_role</code> key value sat in plaintext across 5 permission-cache entries — confirmed never committed to git — and was scrubbed. <strong>Item B (explained, not an exposure):</strong> a later Phase 5 scan re-hit the same file for <code>sb_secret_</code>/JWT-shaped fragments and initially flagged it as a new exposure; the user confirmed this was "intentional, local-only, git-ignored, retained for audit and database-access work," and it was formally reclassified <em>Explained / Non-Issue</em>, removed from the ranked findings.</p>
+  </div>
+
+  <h3 style="font-size:1.1rem; margin:30px 0 10px;">Is the remediation plan complete?</h3>
+  <p><span class="tag tag-evidence">Evidence</span>For the bridge clause specifically: yes, fully closed — confirmed directly against source, not just documentation ("Thread A," dated 2026-08-07). For the household-isolation model generally: the <em>functional</em> correctness has real live evidence — Phase 3's disposable non-member account got a genuine 403/0-rows result, and Family Share's fix was live-verified end to end. But the literal live <code>pg_policies</code> text on the production database has <strong>never been directly diffed against this source file</strong> — three separate attempts to get dashboard/SQL access all failed, and the exact verification query was left for the user to run. This is an evidence gap in how the plan was closed out, not a sign that anything is actually wrong.</p>
+
+  <p><span class="tag tag-inference">Inference</span>None of the RLS rewrite, the casing fix, or the Family Share migration exists in git history — the last commit touching <code>src/db/supabase.ts</code> predates all of it. Since this project deploys via a manual <code>netlify deploy --prod</code> step independent of git, the code quoted above being "live" (as <code>OPEN_ITEMS.md</code> repeatedly claims, MD5-hash-confirmed against fetched production bundles) is plausible but cannot be independently confirmed from git alone. See §07.</p>
+</section>
+
+<!-- 05 AUDIT STATUS -->
+<section id="audit">
+  <div class="sec-head"><span class="sec-num">05</span><h2 class="sec-title">Audit Status</h2></div>
+
+  <p><code>AUDIT_CANONICAL.md</code> is the current authoritative summary (dated 2026-08-01), superseding <code>AUDIT_FINAL_SYNTHESIS.md</code>. It sits atop eight phase reports (<code>AUDIT_PHASE0</code> through <code>AUDIT_PHASE7</code>), all dated 2026-08-01, all marked complete, all explicitly investigation-only — no code was changed during the audit itself.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Finding</th><th>Status</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td>#1 — Family Share non-functional</td><td><span class="chip chip-resolved">Resolved</span></td><td>Most corroborated finding of the audit; root cause corrected mid-remediation (client-side code-suffix bug, not the bridge)</td></tr>
+        <tr><td>#2 — Backup restore drops settings</td><td><span class="chip chip-resolved">Resolved</span></td><td>Scope confirmed larger than first thought — all 35 fields, not a sample</td></tr>
+        <tr><td>#3 — <code>householdSize</code>/<code>people.length</code> divergence</td><td><span class="chip chip-resolved">Corrected then resolved</span></td><td>Harm mechanism disproven; divergence itself real, field removed entirely</td></tr>
+        <tr><td>#4 — Owner self-removal</td><td><span class="chip chip-open">Open</span></td><td>Re-confirmed 2026-08-08, unchanged</td></tr>
+        <tr><td>Credential scan (initially ranked #2)</td><td><span class="chip chip-deferred">Explained / non-issue</span></td><td>Withdrawn from ranking after user clarification</td></tr>
+        <tr><td>#6–#13, #15 (dead code, doc drift, feedback-quality gaps)</td><td><span class="chip chip-resolved">Resolved</span></td><td>Nearly all closed 2026-08-07–09</td></tr>
+        <tr><td>#14/#25 — no crash recovery on 3 high-effort screens</td><td><span class="chip chip-accepted">Accepted limitation</span></td><td>Confirmed real, no fix scheduled</td></tr>
+        <tr><td>#16–#19, #21–#23 — "trusted, not verified" pattern</td><td><span class="chip chip-accepted">Accepted limitation</span></td><td>Each investigated individually, zero real-data occurrences found</td></tr>
+        <tr><td>#20 — Anthropic/OpenAI CORS reliability</td><td><span class="chip chip-resolved">Resolved</span></td><td>The one plausible concern escalated into active work, not left as backlog</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <b>A second, separate audit thread exists:</b> <code>AUDIT_TIER2_SLICE1_AI_CONFIG_MESSAGING.md</code> is not part of the Phase 0–7 sequence and is not listed among <code>AUDIT_CANONICAL.md</code>'s source documents. It's the first of four slices of a broader, self-tracked "Documentation &amp; User Guidance Audit" against a stated 21-surface inventory. Its own file still ends with the placeholder <em>"Pending disposition review"</em> — but <code>OPEN_ITEMS.md</code> shows disposition actually happened on 2026-08-11, with all three Slice-1 items implemented. The file itself is simply stale relative to the newer, more authoritative <code>OPEN_ITEMS.md</code> entry.
+  </div>
+
+  <p>Audit coverage gaps, stated plainly by the audit's own final synthesis: performance, accessibility, cross-browser/cross-device behavior, and live production RLS-state verification via dashboard were never evaluated.</p>
+</section>
+
+<!-- 06 PRIORITY -->
+<section id="priority">
+  <div class="sec-head"><span class="sec-num">06</span><h2 class="sec-title">Highest-Priority Remaining Work</h2></div>
+  <p class="sec-dek">Ranked by security risk, data-loss potential, user impact, and implementation urgency — as the evidence itself supports, not by outside assumption.</p>
+
+  <ol class="ranklist">
+    <li>
+      <div>
+        <div class="rank-title">Add a last-owner safeguard to household removal</div>
+        <div class="rank-body">The single confirmed, unaddressed security/data-integrity defect left in the audit trail. Root-caused down to one RLS policy and two code paths (<code>removeMember()</code>, <code>AccountSection.tsx</code>); a household can currently be left permanently ownerless.</div>
+      </div>
+    </li>
+    <li>
+      <div>
+        <div class="rank-title">Commit or branch the ~7 weeks of uncommitted working-tree changes</div>
+        <div class="rank-body">Not a bug in the app — a continuity risk in how the work is held. The RLS rewrite, the casing fix, and the entire Family Share migration exist only in an uncommitted working directory with no git safety net.</div>
+      </div>
+    </li>
+    <li>
+      <div>
+        <div class="rank-title">Run the handed-off <code>pg_policies</code> verification query against production</div>
+        <div class="rank-body">Closes the one remaining evidence gap in an otherwise functionally-verified security posture — cheap, and the query was already prepared for the user three separate times.</div>
+      </div>
+    </li>
+    <li>
+      <div>
+        <div class="rank-title">Deactivate the legacy Supabase key pair</div>
+        <div class="rank-body">Fully investigated, zero-risk by the project's own analysis, a complete execution plan already exists. Purely a matter of doing it.</div>
+      </div>
+    </li>
+    <li>
+      <div>
+        <div class="rank-title">Draft-recovery for Receipt Scanner, Bulk Entry, and RecipeEditor</div>
+        <div class="rank-body">The audit's own words: these are "the highest-effort-to-redo surfaces," currently with zero interruption protection of any kind.</div>
+      </div>
+    </li>
+    <li>
+      <div>
+        <div class="rank-title">Resume the paused feature and documentation threads</div>
+        <div class="rank-body">Recipe Import Phases 2/3, and the remaining slices of the Documentation &amp; User Guidance Audit — lower severity, no urgency signal in the evidence.</div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- 07 AMBIGUITIES -->
+<section id="ambiguity">
+  <div class="sec-head"><span class="sec-num">07</span><h2 class="sec-title">Ambiguities &amp; Missing Context</h2></div>
+
+  <div class="item">
+    <div class="item-title">A five-to-six-week activity gap</div>
+    <p>The latest dated content anywhere in the repository — <code>OPEN_ITEMS.md</code>'s Tier-2 documentation slices — is 2026-08-11. The reconstruction date given for this report is 2026-09-16. Nothing in the repository explains this gap: it can't be determined whether work paused, continued somewhere untracked, or simply hadn't resumed yet.</p>
+  </div>
+
+  <div class="item">
+    <div class="item-title">Uncommitted security-critical work with no independent deploy confirmation</div>
+    <p>The RLS rewrite, casing fix, and Family Share migration in <code>src/db/supabase.ts</code> exist only in the working tree — no commit touches this file since before any of it was written. <code>OPEN_ITEMS.md</code> repeatedly asserts these were deployed and "MD5-confirmed live," which is architecturally possible given this project's git-independent Netlify deploy step — but no Netlify deploy log or CI history was available to this reconstruction to verify that claim directly.</p>
+  </div>
+
+  <div class="item">
+    <div class="item-title"><code>OPEN_ITEMS.md</code>'s own header is stale</div>
+    <p>Its changelog line states <em>"Last updated 2026-08-08,"</em> while the file's body contains dated entries through 2026-08-11 (the Tier-2 documentation slices). The header itself was never bumped after that later work landed.</p>
+  </div>
+
+  <div class="item">
+    <div class="item-title"><code>MealPlannerApp_Reference.md</code> contradicts itself on Phase 3's status</div>
+    <p>An early "Outstanding security note" and its own §13 "Known Gaps" describe the bridge clause as "not yet closed" and Cloud Sync's security work as "deliberately deferred" — while a later subsection in the <em>same document</em> documents Phase 3 as fully executed and live-validated on 2026-07-25. This reads as a section that was never revisited after Phase 3 shipped, but the file itself doesn't say so.</p>
+  </div>
+
+  <div class="item">
+    <div class="item-title">Scope of the Documentation &amp; User Guidance Audit is unclear</div>
+    <p>It references a "21-surface Tier 2 inventory," of which 4 slices are confirmed done. No file reviewed states how many slices are planned in total or names the remaining surfaces, so the fraction of this initiative still open cannot be determined from the repository alone.</p>
+  </div>
+
+  <div class="item">
+    <div class="item-title"><code>README.md</code>'s function list is stale</div>
+    <p>It names 4 Netlify functions; the actual <code>netlify/functions/</code> directory contains at least 8, including two (<code>anthropic-recipe-import.ts</code>, <code>openai-recipe-import.ts</code>) that are untracked and clearly newer than the README's last edit. Not a required source for this report, but another instance of the same documentation-drift pattern the audit itself names as a recurring issue.</p>
+  </div>
+
+  <div class="item">
+    <div class="item-title">The "7 real households, no collision" fact may be stale</div>
+    <p>The deferral of case-insensitive membership checks rests on a live count taken at the time of the casing fix. No live query was available to this reconstruction to re-confirm that count still holds today.</p>
+  </div>
+</section>
+
+<!-- 08 NEXT STEP -->
+<section id="next">
+  <div class="sec-head"><span class="sec-num">08</span><h2 class="sec-title">Recommended Next Step</h2></div>
+  <div class="prose">
+    <p><span class="tag tag-inference">Inference</span>Taking this over cold, two things stand out above everything else in §06: one is urgent because it's unprotected (a single confirmed, well-understood security gap), and the other is urgent because it's fragile (weeks of security-critical work sitting outside version control).</p>
+    <p><strong>First, commit or branch the current working tree before touching anything else.</strong> It costs nothing, and it's the only step that protects the RLS rewrite, the casing fix, and the entire Family Share migration against being lost to a bad checkout or a wiped machine — none of it exists anywhere else.</p>
+    <p><strong>Second, close the owner-self-removal gap.</strong> It's the last standing item from a genuinely thorough, adversarial eight-phase audit that resolved almost everything else it found, the fix surface is narrow and already root-caused, and — unlike the accepted-limitation items in §03 — nothing about it has been deliberately deferred. It's simply the one thing nobody has gotten to yet.</p>
+    <p>Everything else — the legacy-key deactivation, the draft-recovery gap, the remaining documentation-audit slices, the paused Recipe Import phases — is lower-urgency by the project's own prior analysis or explicitly deferred by a decision already on record. There's no evidence in this repository that any of it needs to jump the queue.</p>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  Reconstructed from repository evidence only — OPEN_ITEMS.md, nine AUDIT_*.md files, MealPlannerApp_Reference.md, src/db/supabase.ts, git status/diff. No files modified.
+</footer>

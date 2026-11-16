@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { getMealPlanDays } from '@/db/mealPlan'
 import { getAllRecipes } from '@/db/recipes'
 import { getAllIngredients } from '@/db/ingredients'
+import { enrichGroceryList } from '@/utils/foodIntelligence/groceryEnrichment.ts'
 import { getAllHouseholdItems } from '@/db/householdItems'
 import { buildIngredientMap } from '@/utils/recipeCalculations'
 import { consolidateIngredients, aggToGroceryItem } from '@/utils/groceryUtils'
@@ -107,16 +108,16 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
     if (aoh.length > 0 || aohHousehold.length > 0 || dangling.length > 0) {
       setStep('aoh')
     } else {
-      generateList(aggregated, new Set(), new Set())
+      void generateList(aggregated, new Set(), new Set())
     }
   }
 
   function handleAohYesAll() {
-    generateList(allAggregated, new Set(), new Set())
+    void generateList(allAggregated, new Set(), new Set())
   }
 
   function handleAohConfirm() {
-    generateList(allAggregated, aohMissing, aohHouseholdMissing)
+    void generateList(allAggregated, aohMissing, aohHouseholdMissing)
   }
 
   function toggleAohMissing(key: string) {
@@ -137,7 +138,7 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
     })
   }
 
-  function generateList(aggregated: AggregatedItem[], missingAohKeys: Set<string>, missingHouseholdIds: Set<string>) {
+  async function generateList(aggregated: AggregatedItem[], missingAohKeys: Set<string>, missingHouseholdIds: Set<string>) {
     const ingredientItems: GroceryItem[] = aggregated
       .filter(a => {
         if (!a.alwaysOnHand) return true
@@ -160,7 +161,9 @@ export function GroceryGenerator({ onGenerated, onClose }: Props) {
       remainderItems: [],
       status: 'active',
     }
-    onGenerated(list)
+    // OPTIONAL enhancement: fills only EMPTY category/store/price from Food Intelligence. Returns the very same
+    // list (no database read, no network) when it is not configured, and never throws.
+    onGenerated(await enrichGroceryList(list, getAllIngredients))
   }
 
   const nonAohCount = allAggregated.filter(a => !a.alwaysOnHand).length

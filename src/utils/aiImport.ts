@@ -3,6 +3,7 @@ import { normalizeUnit } from './recipeCalculations'
 import { parseTimeToMinutes } from './units'
 import { parseFraction } from './fractionInput'
 import { fetchPageAsText } from './recipeParse'
+import { GEMINI_PRIMARY_MODEL, type GeminiModelResolution } from './geminiModel'
 import type { CropBoxPercent } from '@/components/PhotoCaptureCrop'
 
 export interface AIRecipeResult {
@@ -16,6 +17,9 @@ export interface AIRecipeResult {
   ingredients: AIIngredientLine[]
   steps: string[]
   suggestedTags?: string[]
+  // Set only when this result came from a Gemini call — other providers never
+  // have a fallback to report.
+  resolution?: GeminiModelResolution
 }
 
 export interface AIIngredientLine {
@@ -80,53 +84,55 @@ export function recipeAILabel(settings: AppSettings): string {
   return ''
 }
 
-async function callAI(prompt: string, config: AIConfig, geminiModel?: string): Promise<string> {
+// Returns the raw text plus, for the gemini provider only, the resolution the
+// server-side function reported (which actual model ran). Other providers
+// never have a fallback to report, so resolution stays undefined for them.
+interface AICallResult {
+  text: string
+  resolution?: GeminiModelResolution
+}
+
+async function callAI(prompt: string, config: AIConfig, geminiModel?: string): Promise<AICallResult> {
   const { provider, apiKey, ollamaBaseUrl, ollamaModel } = config
 
   if (provider === 'anthropic') {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    // Route through Netlify function to avoid CORS — mirrors the Gemini pattern below.
+    const res = await fetch('/api/anthropic-recipe-import', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: prompt }],
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: prompt, apiKey }),
     })
-    if (!res.ok) throw new Error(`Anthropic API error: ${res.status}`)
-    const data = await res.json() as { content: Array<{ text: string }> }
-    return data.content[0].text
+    const json = await res.json() as { status?: number; recipe?: unknown; error?: string }
+    if (!res.ok || !json.recipe) {
+      throw new Error(json.error ?? `Anthropic recipe import error: ${res.status}`)
+    }
+    return { text: JSON.stringify(json.recipe) }
 
   } else if (provider === 'openai') {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Route through Netlify function to avoid CORS — mirrors the Anthropic/Gemini pattern.
+    const res = await fetch('/api/openai-recipe-import', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: prompt, apiKey }),
     })
-    if (!res.ok) throw new Error(`OpenAI API error: ${res.status}`)
-    const data = await res.json() as { choices: Array<{ message: { content: string } }> }
-    return data.choices[0].message.content
+    const json = await res.json() as { status?: number; recipe?: unknown; error?: string }
+    if (!res.ok || !json.recipe) {
+      throw new Error(json.error ?? `OpenAI recipe import error: ${res.status}`)
+    }
+    return { text: JSON.stringify(json.recipe) }
 
   } else if (provider === 'gemini') {
     // Route through Netlify function to avoid CORS/key-exposure issues and get URL-fetch support
     const res = await fetch('/api/gemini-recipe-import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: prompt, apiKey, model: geminiModel || 'gemini-3.1-flash-lite' }),
+      body: JSON.stringify({ text: prompt, apiKey, model: geminiModel || GEMINI_PRIMARY_MODEL }),
     })
-    const json = await res.json() as { status?: number; recipe?: unknown; error?: string }
+    const json = await res.json() as { status?: number; recipe?: unknown; error?: string; resolution?: GeminiModelResolution }
     if (!res.ok || !json.recipe) {
       throw new Error(json.error ?? `Gemini recipe import error: ${res.status}`)
     }
-    return JSON.stringify(json.recipe)
+    return { text: JSON.stringify(json.recipe), resolution: json.resolution }
 
   } else if (provider === 'ollama') {
     const base = ollamaBaseUrl ?? 'http://localhost:11434'
@@ -146,7 +152,7 @@ async function callAI(prompt: string, config: AIConfig, geminiModel?: string): P
     })
     if (!res.ok) throw new Error(`Ollama API error: ${res.status}`)
     const data = await res.json() as { message: { content: string } }
-    return data.message.content
+    return { text: data.message.content }
   }
 
   throw new Error('No AI provider configured.')
@@ -178,8 +184,10 @@ function parseAIResponse(raw: string): AIRecipeResult {
 
 export async function importRecipeFromText(text: string, config: AIConfig, geminiModel?: string): Promise<AIRecipeResult> {
   const prompt = `Parse this recipe:\n\n${text}`
-  const raw = await callAI(prompt, config, geminiModel)
-  return parseAIResponse(raw)
+  const { text: raw, resolution } = await callAI(prompt, config, geminiModel)
+  const result = parseAIResponse(raw)
+  if (resolution) result.resolution = resolution
+  return result
 }
 
 // For Gemini, URL fetch happens server-side in the Netlify function.
@@ -189,22 +197,24 @@ export async function importRecipeFromUrl(url: string, config: AIConfig, geminiM
     const res = await fetch('/api/gemini-recipe-import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, apiKey: config.apiKey, model: geminiModel || 'gemini-3.1-flash-lite' }),
+      body: JSON.stringify({ url, apiKey: config.apiKey, model: geminiModel || GEMINI_PRIMARY_MODEL }),
     })
-    const json = await res.json() as { status?: number; recipe?: unknown; error?: string }
+    const json = await res.json() as { status?: number; recipe?: unknown; error?: string; resolution?: GeminiModelResolution }
     if (!res.ok || !json.recipe) {
       throw new Error(json.error ?? `Gemini recipe import error: ${res.status}`)
     }
     const result = parseAIResponse(JSON.stringify(json.recipe))
     result.sourceUrl = url
+    if (json.resolution) result.resolution = json.resolution
     return result
   }
   // Non-Gemini providers: fetch page client-side and pass text to AI
   const pageText = await fetchPageAsText(url)
   const prompt = `The recipe is from this URL: ${url}\n\nPage content:\n${pageText}`
-  const raw = await callAI(prompt, config, geminiModel)
+  const { text: raw, resolution } = await callAI(prompt, config, geminiModel)
   const result = parseAIResponse(raw)
   result.sourceUrl = url
+  if (resolution) result.resolution = resolution
   return result
 }
 
@@ -249,9 +259,9 @@ export async function importRecipeFromPhoto(
   const res = await fetch('/api/gemini-photo-recipe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64Image, mimeType, apiKey: geminiApiKey, model: geminiModel || 'gemini-3.1-flash-lite' }),
+    body: JSON.stringify({ image: base64Image, mimeType, apiKey: geminiApiKey, model: geminiModel || GEMINI_PRIMARY_MODEL }),
   })
-  const json = await res.json() as { status?: number; recipe?: PhotoRecipeRaw; lowConfidence?: boolean; reason?: string; error?: string }
+  const json = await res.json() as { status?: number; recipe?: PhotoRecipeRaw; lowConfidence?: boolean; reason?: string; error?: string; resolution?: GeminiModelResolution }
 
   if (json.lowConfidence) {
     return { lowConfidence: true, reason: json.reason ?? 'The photo was unclear.' }
@@ -284,6 +294,7 @@ export async function importRecipeFromPhoto(
     notes: raw.notes ? String(raw.notes) : undefined,
     ingredients,
     steps: (raw.steps ?? []).map(s => String(s)),
+    resolution: json.resolution,
   }
 
   return { lowConfidence: false, result, uncertainFields }
@@ -309,7 +320,7 @@ export async function detectRecipeBoxes(
     const res = await fetch('/api/gemini-detect-recipe-boxes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: base64Image, mimeType, apiKey: geminiApiKey, model: geminiModel || 'gemini-3.1-flash-lite' }),
+      body: JSON.stringify({ image: base64Image, mimeType, apiKey: geminiApiKey, model: geminiModel || GEMINI_PRIMARY_MODEL }),
     })
     if (!res.ok) {
       console.error('[detectRecipeBoxes] non-ok response:', res.status, await res.text().catch(() => ''))

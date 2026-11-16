@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { saveHouseholdItem, deleteHouseholdItem } from '@/db/householdItems'
 import { BrandCombobox } from '@/components/BrandCombobox'
-import { ConfirmDiscardDialog } from '@/components/ui'
+import { Button, Modal, ConfirmDiscardDialog } from '@/components/ui'
 import { useConfirmClose } from '@/hooks/useConfirmClose'
 import { useSettings } from '@/context/SettingsContext'
 import type { HouseholdItem, GroceryItem, IngredientUnit } from '@/types'
@@ -42,6 +42,7 @@ export function HouseholdModal({ items, hasActiveList, onItemsChange, onAddToLis
   const [editingItem, setEditingItem] = useState<HouseholdItem | null>(null)
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
   const [aohPendingId, setAohPendingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   // Quick Add is pure picker/browse — safe to close instantly. Manage Items has
   // real unsaved typing whenever the add-form has a name or an item is mid-edit.
@@ -79,9 +80,9 @@ export function HouseholdModal({ items, hasActiveList, onItemsChange, onAddToLis
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Remove this household item?')) return
     await deleteHouseholdItem(id)
     onItemsChange(items.filter(i => i.id !== id))
+    setConfirmDeleteId(null)
   }
 
   function handleQuickAdd(item: HouseholdItem) {
@@ -234,7 +235,7 @@ export function HouseholdModal({ items, hasActiveList, onItemsChange, onAddToLis
                           </div>
                           <div className={styles.manageActions}>
                             <button className={styles.editBtn} onClick={() => setEditingItem({ ...item })}>Edit</button>
-                            <button className={styles.deleteBtn} onClick={() => handleDelete(item.id)}>✕</button>
+                            <button className={styles.deleteBtn} onClick={() => setConfirmDeleteId(item.id)}>✕</button>
                           </div>
                         </>
                       )}
@@ -248,6 +249,22 @@ export function HouseholdModal({ items, hasActiveList, onItemsChange, onAddToLis
       </div>
     </div>
     <ConfirmDiscardDialog open={confirming} onKeepEditing={cancelDiscard} onDiscard={confirmDiscard} />
+    {confirmDeleteId && (
+      <Modal
+        open
+        onClose={() => setConfirmDeleteId(null)}
+        title="Remove Item"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => handleDelete(confirmDeleteId)}>Remove</Button>
+          </>
+        }
+      >
+        <p>Remove this household item?</p>
+      </Modal>
+    )}
     </>,
     document.body
   )

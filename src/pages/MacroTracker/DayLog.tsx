@@ -15,7 +15,6 @@ interface Props {
   date: string
   nutrientToggles: NutrientToggles
   unitSystem: UnitSystem
-  householdSize: number
 }
 
 const MEAL_SLOTS: { key: keyof DayMeals; label: string }[] = [

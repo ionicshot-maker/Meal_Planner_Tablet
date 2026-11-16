@@ -4,7 +4,7 @@ import { useSettings } from '@/context/SettingsContext'
 import { useAuth } from '@/hooks/useAuth'
 import { getAllIngredients } from '@/db/ingredients'
 import { getAllRecipes } from '@/db/recipes'
-import { getDB } from '@/db/schema'
+import { getPlannedDayCount } from '@/db/mealPlan'
 import styles from './SetupChecklist.module.css'
 
 interface Props {
@@ -19,16 +19,16 @@ interface Counts {
 
 export function SetupChecklist({ onSwitchSection }: Props) {
   const navigate = useNavigate()
-  const { settings } = useSettings()
+  const { settings, updateSettings } = useSettings()
   const [counts, setCounts] = useState<Counts>({ hasIngredients: false, hasRecipes: false, hasMealPlan: false })
   const [loaded, setLoaded] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const collapsed = settings.setupChecklistHidden
 
   useEffect(() => {
     Promise.all([
       getAllIngredients().then(items => items.length > 0),
       getAllRecipes().then(items => items.length > 0),
-      getDB().then(db => db.count('mealPlanDays')).then(n => n > 0),
+      getPlannedDayCount().then(n => n > 0),
     ]).then(([hasIngredients, hasRecipes, hasMealPlan]) => {
       setCounts({ hasIngredients, hasRecipes, hasMealPlan })
       setLoaded(true)
@@ -115,7 +115,7 @@ export function SetupChecklist({ onSwitchSection }: Props) {
             <div className={styles.progressMsg}>{progressMessage()}</div>
           </div>
         </div>
-        <button className={styles.collapseBtn} onClick={() => setCollapsed(v => !v)}>
+        <button className={styles.collapseBtn} onClick={() => updateSettings({ setupChecklistHidden: !collapsed })}>
           {collapsed ? 'Show' : 'Hide'}
         </button>
       </div>

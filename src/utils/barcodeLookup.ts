@@ -1,4 +1,5 @@
 import { newId, now } from './ids'
+import { lookupViaFoodIntelligence } from './foodIntelligence/barcodeAdapter.ts'
 import type { Ingredient, IngredientUnit, Macros, NutriscoreGrade, NovaGroupNum } from '@/types'
 
 export const DEFAULT_CATEGORIES = [
@@ -124,6 +125,8 @@ export function normalizedToIngredient(product: NormalizedProduct, categories: s
 export interface BarcodeLookupResult {
   status: 'found' | 'not-found' | 'non-food' | 'error'
   product?: NormalizedProduct
+  /** Set only when the optional Food Intelligence service answered; absent = the original Open Food Facts path. */
+  source?: 'food-intelligence'
   errorMessage?: string
 }
 
@@ -134,6 +137,17 @@ export interface BarcodeLookupResult {
 // soap.
 export async function lookupBarcodeProduct(barcode: string): Promise<BarcodeLookupResult> {
   try {
+    // OPTIONAL enhancement: Food Intelligence (when configured and reachable) may know this barcode with
+    // richer, de-duplicated data. It resolves null on ANY problem - not configured, offline, timeout,
+    // unknown barcode, incomplete nutrition - and then the existing Open Food Facts lookup below runs
+    // exactly as before.
+    const enhanced = await lookupViaFoodIntelligence(barcode)
+    if (enhanced) {
+      const nonFood = isLikelyNonFood(enhanced.categories_tags)
+      if (nonFood || !isMacrosIncomplete(enhanced.macros)) {
+        return { status: nonFood ? 'non-food' : 'found', product: enhanced, source: 'food-intelligence' }
+      }
+    }
     const res = await fetch(`/api/barcode-lookup?barcode=${encodeURIComponent(barcode)}`)
     const json = await res.json() as { status: number; product?: NormalizedProduct; error?: string }
     if (!res.ok || json.status !== 1 || !json.product) {
